@@ -1,0 +1,4 @@
+interface:
+  display_name: "CloudSend Flutter Engineer"
+  short_description: "Maintain CloudSend Flutter UI, state, and bridges"
+  default_prompt: "Use $cloudsend-flutter-engineer to handle this Flutter task."

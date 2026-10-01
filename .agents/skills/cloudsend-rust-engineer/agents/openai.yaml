@@ -1,0 +1,4 @@
+interface:
+  display_name: "CloudSend Rust Engineer"
+  short_description: "Maintain CloudSend Rust core, FFI, and unsafe code"
+  default_prompt: "Use $cloudsend-rust-engineer to analyze this Rust or FFI task."

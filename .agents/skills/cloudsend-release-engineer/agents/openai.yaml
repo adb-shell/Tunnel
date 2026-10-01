@@ -1,0 +1,4 @@
+interface:
+  display_name: "CloudSend Release Engineer"
+  short_description: "Plan reproducible CloudSend builds and guarded releases"
+  default_prompt: "Use $cloudsend-release-engineer to prepare this build or release plan."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "CloudSend Network Engineer"
+  short_description: "Maintain CloudSend relay, protocol, and authentication"
+  default_prompt: "Use $cloudsend-network-engineer to analyze this network protocol task."

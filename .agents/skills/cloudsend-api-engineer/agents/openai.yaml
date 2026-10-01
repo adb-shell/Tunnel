@@ -1,0 +1,4 @@
+interface:
+  display_name: "CloudSend API Engineer"
+  short_description: "Maintain CloudSend account, HTTP, sync, and API contracts"
+  default_prompt: "Use $cloudsend-api-engineer to analyze this API or backend-contract task."

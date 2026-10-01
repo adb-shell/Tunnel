@@ -1,0 +1,4 @@
+interface:
+  display_name: "CloudSend Security Engineer"
+  short_description: "Threat-model and review CloudSend security boundaries"
+  default_prompt: "Use $cloudsend-security-engineer to perform this security review safely."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "CloudSend Master Engineer"
+  short_description: "Coordinate safe cross-domain CloudSend engineering"
+  default_prompt: "Use $cloudsend-master to scope and coordinate this CloudSend task."

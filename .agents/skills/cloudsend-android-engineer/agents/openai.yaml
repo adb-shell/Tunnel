@@ -1,0 +1,4 @@
+interface:
+  display_name: "CloudSend Android Engineer"
+  short_description: "Maintain CloudSend Android runtime and capture pipeline"
+  default_prompt: "Use $cloudsend-android-engineer to handle this Android runtime task."

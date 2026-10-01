@@ -1,0 +1,5 @@
+interface:
+  display_name: "CloudSend Safe Superpowers"
+  short_description: "Safely brainstorm, plan, debug, verify, and review CloudSend"
+  default_prompt: "Use $cloudsend-superpowers-safe to review this CloudSend task read-only and stop before any edit, build, Git write, or release action."
+
