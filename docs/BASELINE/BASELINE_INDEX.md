@@ -1,5 +1,14 @@
 # CloudSend Engineering Baseline Index
 
+## 当前与历史 Baseline
+
+| Baseline ID | 记录 | 使用边界 |
+|---|---|---|
+| `CS-BL-2026-10-02-5cee692` | [2026-10-02_SOURCE_BASELINE.md](2026-10-02_SOURCE_BASELINE.md) | 当前源码、库存、hash/EOL 与历史缺口；V0，正式运行未验证 |
+| `CS-BL-2026-07-12-77062b4` | 以下四份旧快照 | 历史 baseline；当前本地 Git 无旧对象，不可宣称仍是当前 HEAD |
+
+以下正文保留 2026-07-12 的冻结记录；不将其当作 2026-10-02 的工作树状态。
+
 基线日期：2026-07-12  
 Baseline ID：`CS-BL-2026-07-12-77062b4`  
 Source HEAD：`77062b4d8b63eae9a31afe288e3ac00a4f89e009`  

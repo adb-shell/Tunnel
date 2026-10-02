@@ -1,7 +1,7 @@
 # CloudSend 项目总览 / Project Overview
 
-接管基线：2026-07-12  
-源码基线：`HEAD 77062b4`  
+最近源码复核：2026-10-02
+源码基线：`HEAD 5cee692` / `CS-BL-2026-10-02-5cee692`
 接管角色：CloudSend Principal Engineer
 
 > 本文是新 AI 工程体系的入口。结论分为源码已证实（`verified`）、静态推断（`inferred`）、仓外依赖（`external`）和待正式环境验证（`verification-required`）。源码永远高于本文。
@@ -26,28 +26,29 @@ CloudSend 是 RustDesk 的深度二次开发产品，Android 可见名称为 `�
 
 ## 2. 来源与可追溯性
 
-- 当前 Git 不是多年完整历史。仓库只有 59 个提交、无 tag、无 merge commit；根提交 `96a9c7c` 于 2026-04-13 以 `DaXianDesk` 为题一次性导入完整源码。
-- 代码布局、协议、依赖和 README 明确来自 RustDesk；但当前仓库无法证明导入前的精确 upstream commit、补丁序列和 DaXian 阶段作者历史。
-- 远端 `Super-Build/Cloudsend` 当前由 GitHub 元数据标记为 public。远端没有 PR 或 Issue 记录；开发历史主要表现为直接提交到 `main`。
+- 当前本地 Git 非 shallow，仅 1 个可达提交、无 tag；HEAD/root 为 `5cee6921ec10971bb4654bc010f9328d7f70d02b`（2026-10-01），无 parent。初始 detached HEAD、clean。
+- 旧文档的 59 commits、`96a9c7c` 导入与 `77062b4` 基线是 7 月历史记录；旧对象在当前本地仓不可解析，不能重放或据此证明新旧源码一致。
+- 代码布局、协议、依赖和 README 支持 RustDesk 派生关系；精确 upstream commit、补丁序列和原始作者历史仍待补材料。
+- 本轮未联网核验远端 public/private、PR、Issue、Release 或分支保护；旧远端观察保持 `historical`。
 - 在没有上游基线 commit 前，只能称为“RustDesk 深度分支”，不能声称与某个官方版本存在可重放的 fork ancestry。
 
 ## 3. 资产规模
 
 静态清点结果：
 
-- Git 跟踪文件：901；跟踪内容约 14.47 MiB。
-- 主源码约 232k 行：Rust 135,562，Dart 80,376，Kotlin 8,836，C/C++ 约 9,591，protobuf 1,196。
+- HEAD Git tree 跟踪文件：975；blob 总计 15,605,939 bytes。
+- tracked 代码/头文件/协议合计 235,596 文本行（含 generated/vendor/空行）：Rust 135,562，Dart 80,377，Kotlin 8,836，Java 34，C/C++/headers 9,591，protobuf 1,196。
 - Rust workspace：根 crate + 8 个成员 crate。
-- 跟踪 Markdown：39 个，约 9,813 行。
+- HEAD 跟踪 Markdown：104 个；逐份用途与处理见 [本轮文档登记](audits/2026-10-02/DOCUMENT_REGISTER.md)。
 - 高复杂度文件：`generated_bridge.dart` 13,740 行、`src/server/connection.rs` 4,835 行、`flutter/lib/common.dart` 4,243 行、`src/client.rs` 4,058 行、`flutter/lib/models/model.dart` 3,976 行。
 
-本机还有不进入 Git 的重要资产：
+旧接管记录列出的 ignored 资产，在当前工作区的存在性如下：
 
 | 本地目录 | 规模 | 状态与风险 |
 |---|---:|---|
-| `ADB-CODE/` | 198 文件 / 31.4 MiB | 被 `.gitignore` 排除，含研究、反编译和二进制材料；来源 revision 不可复现 |
-| `LADB/` | 79 文件 / 19.45 MiB | 被排除的参考源码；许可证包含 Play Store 分发限制 |
-| `flutter/android/app/src/main/jniLibs/` | 4 文件 / 13.66 MiB | 被 `flutter/.gitignore` 排除；含 3 ABI `libadb.so` 与许可证 |
+| `ADB-CODE/` | 当前不存在 | 7 月记为 local-only；来源/revision/内容需资产 owner 补充 |
+| `LADB/` | 当前不存在 | 旧参考源码及许可结论是历史材料，不能视为当前已验收资产 |
+| `flutter/android/app/src/main/jniLibs/` | 当前不存在 | `libadb.so` 所需 ABI、provenance、license、获取方式未闭环 |
 
 因此，干净 clone 不能独立重建当前 Android ADB 资产。必须建立受控的 binary provenance、hash、license 和获取流程。
 
@@ -97,9 +98,11 @@ CloudSend 是 RustDesk 的深度二次开发产品，Android 可见名称为 `�
 6. ZEGO 是独立 RTC 媒体旁路；旧 RustDesk `audio_service` 不承担当前语音媒体。
 7. 产品账号 API 与远控会话认证是两套边界，不能混为一个“登录”。
 
-## 6. 2026-04—07 二开时间线
+## 6. 2026-04—07 二开时间线（historical）
 
-| 阶段 | 已确认演进 |
+下表保留旧文档的演进记录；当前本地 Git 无对应历史对象，本轮未独立证明其日期、归因或完整性。
+
+| 阶段 | 旧文档记载的演进 |
 |---|---|
 | 2026-04-13 | DaXianDesk/RustDesk 快照导入 |
 | 04-14—04-22 | 工程文档初建；Android 黑屏、独立防触、状态监测、双通道与无障碍守卫 |
@@ -112,14 +115,14 @@ CloudSend 是 RustDesk 的深度二次开发产品，Android 可见名称为 `�
 
 ## 7. 当前最高风险
 
-1. public 仓库中存在字面生产凭据/客户端 key，并已进入 Git 历史；本报告不复制其值。
+1. 当前 tracked 源码/部署资料存在 credential 类型字面量；有效性、生产用途、远端公开性和历史传播本轮未核验；不复制其值。
 2. API、sync、ZEGO Token 默认使用明文 HTTP。
 3. transport secure handshake 存在 fail-open 降级；secretbox nonce/key 使用需要独立密码学复核。
 4. Android raw frame 存在 direct `ByteBuffer` 与 `Image.close()` 生命周期疑点；JNI 还有跨线程 `static mut` data-race 风险。
 5. Android 已授权连接的输入/自定义命令缺少完整服务端 permission gate；Dev UI 密码不是协议鉴权。
 6. Windows privacy/driver/injection 是高权限面，且部分 WinAPI 初始化和快速显示器切换有 UB/崩溃风险。
 7. ADB binary、参考源码和部分构建依赖是本地/外部资产，干净 clone 不可复现。
-8. CI 全部改为手动触发；Flutter/Android 自动化测试极薄，文档与代码漂移缺少门禁。
+8. CI均含manual dispatch，部分另有workflow_call，无push/PR自动gate；Flutter/Android自动化测试薄，文档与代码漂移缺少持续证据。
 
 详见 `10_SECURITY_MODEL.md`、`11_ROADMAP.md` 和 `DOCUMENT_AUDIT_REPORT.md`。
 
@@ -138,4 +141,6 @@ CloudSend 是 RustDesk 的深度二次开发产品，Android 可见名称为 `�
 
 ## 9. 接管限制
 
-本轮没有编译、测试、发布、删除、版本修改、Git 写操作或上传。所有运行时判断均来自静态源码、Git 历史与只读 GitHub 元数据；需要动态证据的事项统一列入《编译验证需求》。
+本轮没有编译、测试、发布、删除、版本修改、Git 写操作或上传，也未联网访问服务。结论来自当前本地源码、文件和 Git 元数据；不是逐行安全证明、设备验证或全系统接管。需要动态证据的事项统一列入《编译验证需求》。
+
+本轮结果与待接管边界见 [2026-10-02 接管索引](audits/2026-10-02/README.md)；按产品功能定位后续修改见 [功能与对接地图](12_FEATURE_MAP.md)。

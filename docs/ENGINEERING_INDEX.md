@@ -5,7 +5,7 @@
 
 > 2026-07-12 封版说明：所有 AI 先从根目录 `PROJECT_START_HERE.md` 进入，再读 `.codex/AI_RULES.md` 与 `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`；开发使用 `TASK_TEMPLATE.md` + `docs/BASELINE/`，长期决定查 `docs/ADR/`，验证查 `TEST_MATRIX.md`。新的当前架构真相层是 `docs/AI_ENGINEERING/`；本文件保留为旧主索引与历史细节，不删除。
 
-> 这是 **Codex / Claude Code / 人工开发者** 在进入本仓库后的第一份文档。
+> 历史定位：本文件曾是 **Codex / Claude Code / 人工开发者** 的第一入口；当前唯一第一入口是根目录 `PROJECT_START_HERE.md`。2026-10-02 的源码复核与文档登记见 [接管索引](AI_ENGINEERING/audits/2026-10-02/README.md)。
 > 目标不是替代源码，而是提供**稳定、可检索、不会被中文措辞歧义污染**的工程记忆层。
 > 本文件中的中文叙述用于解释；**文件名、类名、函数名、常量名、协议字段名、命令名一律保留英文原文**。
 

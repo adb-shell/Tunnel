@@ -1,11 +1,14 @@
 # CloudSend 构建系统 / Build System
 
 接管基线：2026-07-12  
+最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
 状态：`verified` + `verification-required`
 
 > 本轮只完成静态接管，没有运行任何 Rust、Flutter、Gradle、Android、Windows 或 Docker 构建/测试命令。下列命令是正式环境入口和待验证说明，不代表已通过。
 
 版本、依赖、lock hashes 与正式 host contract 的当前冻结值见 `docs/BASELINE/`；正式验证 case 和 evidence schema 见根目录 `TEST_MATRIX.md`。本文解释构建链路，不替代 baseline snapshot。
+
+本轮核验记录见 [API / Security / Release Audit](audits/2026-10-02/API_SECURITY_RELEASE_AUDIT.md)。旧 Git 演进与本机二进制盘点不能直接继承到当前 worktree。
 
 ## 1. 版本与工具链锚点
 
@@ -50,10 +53,11 @@
 | `src/bridge_generated.rs` | Flutter Rust Bridge codegen |
 | `src/bridge_generated.io.rs` | Flutter Rust Bridge codegen |
 | `flutter/lib/generated_bridge.dart` | Flutter Rust Bridge codegen |
+| `flutter/lib/generated_bridge.freezed.dart` / `flutter/macos/Runner/bridge_generated.h` | Dart generator / FRB C header；同属需要核对的生成契约 |
 | protobuf Rust output | `.proto` + build script/tooling |
 | `src/version.rs` | 构建期生成/忽略，不是 tracked source |
 
-FRB 文件带 1.80.1 生成标记，且 Git 历史显示 Rust FFI 后续仍有修改。任何 `src/flutter_ffi.rs` 签名变更都必须执行正式 codegen 并检查三方 diff；手工编辑 generated file 只能作为紧急诊断，不能作为最终方案。
+FRB 文件带 1.80.1 生成标记；当前本地只有单个 root commit，不能重证旧文档所说“FFI 后续修改”的历史时序。生成标记和文件存在都不能证明内容同步：Android `maybe_generate_bridge()` 主要检查文件缺失，Windows 入口只等待生成文件存在。任何 `src/flutter_ffi.rs` 签名变更都必须在获准正式环境执行 codegen 并审查 Rust/Dart/header diff，不能用手工修改 generated file 作为最终方案。
 
 ## 4. Android 正式入口
 
@@ -79,13 +83,15 @@ FRB 文件带 1.80.1 生成标记，且 Git 历史显示 Rust FFI 后续仍有�
 
 ### 不可复现资产
 
-当前工作树 `flutter/android/app/src/main/jniLibs/` 下的 `libadb.so` 为 ignored/local-only binary。`ADB-CODE/`、`LADB/` 研究目录也被忽略。干净 clone 不能仅凭 tracked source 复现 ADB packaging，必须补充：
+2026-10-02 当前 worktree 中 `flutter/android/app/src/main/jniLibs/`、`ADB-CODE/`、`LADB/` 均不存在；ignore 规则仍在。旧文档的三个 `libadb.so` 和参考目录是历史机器观察，当前资产应标 `MISSING / historical local-only`。源码的 ADB runner 仍依赖该 binary；不能仅凭 tracked source 复现 ADB packaging，必须补充：
 
 - binary provenance 与 source revision。
 - license mapping。
 - hash/checksum manifest。
 - 受控下载或内部 artifact registry。
 - 支持 ABI 清单。
+
+`build.sh` 不是只编译的入口：它可能写全局 Git `safe.directory`、patch Flutter SDK、安装 Rust targets/Cargo tools、`flutter pub get`、codegen、fetch/checkout vcpkg、清理旧目录/产物并签名 APK。逐项副作用必须进入正式执行授权，不能把“允许 build”推断为全部动作已批准。
 
 ## 5. Windows 正式入口
 
@@ -109,18 +115,20 @@ new-build.cmd
 
 `PC-Build.md` 包含大量历史/环境搭建材料，其中仍有上游 RustDesk 名称和旧命令；当前入口以 `new-build.cmd` 源码为准。
 
+`new-build.cmd` 执行 `rustup default` 改变用户默认 toolchain、安装 target、解析 Flutter dependencies 并复制/重建 staging 和 portable 产物；它没有强制核对 Flutter/LLVM/vcpkg/native cache 的完整版本与 hash，也未见完整 Authenticode stage。正式执行前须冻结这些外部输入及副作用。
+
 ## 6. 其他平台
 
 通用历史入口包括：
 
 ```bash
-python3 build.py --flutter --release
+python3 build.py --flutter
 cd flutter && flutter pub get
 cd flutter && flutter build apk --release
 cargo build --release --features flutter
 ```
 
-但 `build.py` 的 macOS/Linux 分支仍有 `librustdesk` 等上游命名残留，未在本轮验证。iOS、Linux、macOS、Web 的源码存在不等于 CloudSend 当前发布矩阵已经覆盖这些平台。
+`build.py::make_parser()` 没有 `--release` 选项，旧文档中的 `python3 build.py --flutter --release` 不是当前有效参数组合；release flag 由脚本内部的 Cargo/Flutter 子命令使用。`build.py` 的 macOS/Linux 分支仍有 `librustdesk` 等上游命名残留，未在本轮验证。iOS、Linux、macOS、Web 的源码存在不等于 CloudSend 当前发布矩阵已经覆盖这些平台。
 
 发布支持矩阵必须由产品 owner 明确：
 
@@ -130,7 +138,7 @@ cargo build --release --features flutter
 
 ## 7. CI/CD 现状
 
-仓库的 GitHub Actions workflow 当前均只保留 `workflow_dispatch`，没有 push/PR 自动 gate。由此导致：
+当前 12 个 GitHub Actions workflow 都含 `workflow_dispatch`，其中 `bridge.yml`、`flutter-build.yml`、`third-party-RustDeskTempTopMostWindow.yml` 还含 `workflow_call`；未见 push/PR/schedule 自动触发。旧文档“均只保留 workflow_dispatch”过于绝对。源码配置不能证明远端 required checks/实际执行记录。由此存在：
 
 - 普通提交可能未经过格式、lint、unit test 或 platform build。
 - generated bridge 与 FFI drift 无自动检测。
@@ -144,6 +152,7 @@ cargo build --release --features flutter
 风险点：
 
 - 多个 Cargo Git dependency 在 manifest 中未固定 `rev`，尽管 `Cargo.lock` 固定当前 snapshot。
+- `flutter/pubspec.yaml` 声明 `zego_express_engine: ^3.24.1`，tracked `flutter/pubspec.lock` 没有 ZEGO entry；这是可直接核实的 manifest/lock 不一致，实际解析版本仍未验证。
 - Flutter/Gradle/vcpkg/下载脚本形成多套 dependency resolver。
 - ignored native binary 无可复现来源。
 - Windows driver、DLL injection helper 和 virtual display driver 属于高权限第三方资产。
@@ -169,8 +178,9 @@ cargo build --release --features flutter
 3. `workspace.exclude` 引用不存在目录。
 4. FRB generated files 与最近 FFI 修改可能不同步。
 5. 非 Windows/Android build naming 尚有 RustDesk 残留。
-6. ignored `libadb.so` 破坏 clean-clone reproducibility。
-7. workflow 全手动，当前没有可证明的 required check。
+6. 当前缺失的 `libadb.so` 与外部 driver/helper 阻止 clean-clone reproducibility。
+7. workflow 手动入口与 reusable calls 没有提供本轮正式运行证据，远端 required check 状态未核查。
+8. `flutter/test/cm_test.dart` 是带 `main()` / `runApp()` 的手工 CM UI harness；未见 `test` / `testWidgets` 断言，`pubspec.yaml` 的 `flutter_test` 被注释。不能把目录或文件名当成有效自动化测试覆盖。
 
 ## 11. 发布交付清单
 

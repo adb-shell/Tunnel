@@ -1,6 +1,6 @@
 # CloudSend Project Memory
 
-最后更新：2026-07-12  
+最后更新：2026-10-02
 用途：AI 会话的稳定入口，不替代源码和完整工程文档。
 
 ## 1. Entry and Source of Truth
@@ -20,13 +20,15 @@
 3. `docs/ENGINEERING_*` 与 `docs/TASK_ENTRYPOINTS.md`，作为旧主套件和历史细节。
 4. 本目录、`AGENTS.md`、`CLAUDE.md` 只作为规则、摘要和入口，不覆盖源码。
 
-开发任务执行 `DEVELOPMENT_WORKFLOW.md`；仓外服务、database、driver 或 binary 查询 `EXTERNAL_ASSET_REGISTRY.md`。安全 Superpowers 只通过 `cloudsend-superpowers-safe` 的五项只读 allowlist 使用，外部包未安装。冲突时以源码为准；构建/运行行为只有正式环境验证后才能从 `verification-required` 提升为已验证。
+开发任务执行 `DEVELOPMENT_WORKFLOW.md`；仓外服务、database、driver 或 binary 查询 `EXTERNAL_ASSET_REGISTRY.md`。安全 Superpowers 只通过 `cloudsend-superpowers-safe` 的五项只读 allowlist 使用；外部包安装状态不是本次观察内容。冲突时以源码为准；构建/运行行为只有正式环境验证后才能从 `verification-required` 提升为已验证。
+
+当前接管索引：`docs/AI_ENGINEERING/audits/2026-10-02/README.md`；功能定位：`docs/AI_ENGINEERING/12_FEATURE_MAP.md`；当前baseline：`CS-BL-2026-10-02-5cee692`。最新task/event状态从 `PROJECT_STATE.md` / `CURRENT_WORK.md`读取，不依赖旧聊天记忆。
 
 ## 2. Stable Identity
 
 - 产品/runtime：`CloudSend`。
 - Android 显示名：`云计划`。
-- 来源：RustDesk 深度二次开发；本地 Git 只能追溯到 2026-04-13 的一次性 `DaXianDesk` 导入，导入前 upstream commit 未确认。
+- 来源：RustDesk 深度二次开发；当前本地Git非shallow，仅`5cee692`单root（2026-10-01），旧`77062b4`及导入历史不可重放；旧演进文档保持historical。
 - Rust crate/library：`cloudsend`。
 - Flutter package：`flutter_hbb`。
 - Android applicationId：`com.cloudsend.app`。
@@ -59,11 +61,13 @@
 - Android ADB 是设备本地 LADB 子系统，不是 PC remote ADB protocol。
 - ZEGO 媒体不走原 RustDesk audio service；peer protocol 只传 invitation/control state。
 - `verify_login()` 的 legacy UI bypass 不等于产品 API、hbbs 或 endpoint authentication bypass。
+- terminal已实现进程内persistent registry与service-ID reattach；不等于跨重启耐久化，peer-owner隔离仍待验证。
+- PC waiting不得切ignore与Android screen-off/projection-stop有条件fallback同时成立；MethodChannel/JNI的同名`start_capture`语义不同。
 
 ## 5. Highest Risks
 
-- Public repository/history 中存在真实 credential 类型的字面值；值不得复制到文档或对话。
-- 构建内置共享远控密码可由公开源码获知，permanent-password setter 不真正更新；需要每设备高熵凭据迁移。
+- 当前tracked源码/部署资料存在credential类型字面值；有效性、远端公开性和历史传播未在本轮核验；值不得复制。
+- 构建内置共享远控密码可从客户端源码/产物提取，permanent-password setter 不真正更新；需要每设备高熵凭据迁移。
 - Android ImageReader DirectBuffer ownership 可能失效；JNI `static mut` 存在 data-race/UB 风险。
 - Android input/custom command 在受控端的 permission enforcement 不完整。
 - Android custom-scheme config import 可改写 rendezvous/API/trust key；update/plugin 缺完整 signature/hash/containment gate。
@@ -71,7 +75,8 @@
 - peer secure handshake、secretbox nonce 和本地 password protection 需密码学专项审计。
 - 产品 HTTP/sync 路径存在 plaintext/auth boundary 风险。
 - Windows privacy/injection/virtual display 是高权限、崩溃恢复敏感区。
-- ignored `libadb.so` 和 driver/helper assets 破坏 clean-clone reproducibility。
+- 当前缺失的`libadb.so`及external driver/helper assets使clean-clone reproducibility未闭环。
+- 新增静态风险：认证前PortForward outbound connect、敏感参数日志、Android MultiClipboards permission、terminal owner绑定、privacy hook/restore失败顺序；详见Security Model，不视为已复现。
 
 风险详情见 `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`。
 
@@ -90,11 +95,12 @@
 
 ## 7. Open Asset Gaps
 
-- 2026-04-13 之前的 upstream/DaXianDesk history。
+- 当前快照之前的完整Git/upstream/DaXianDesk history，包括旧文档所引用对象。
 - hbbs/hbbr source、version、config 和部署拓扑。
 - 产品 backend/OpenAPI/DB/schema/migration/backup。
 - ZEGO broker 独立受控 project/commit、dependency lock、production provenance 和 credential ownership；当前 deployment script 只内嵌了部分 Go server source。
 - ADB binary、Windows driver/helper 的 source revision、license 和 hashes。
+- 当前`ADB-CODE/`、`LADB/`、`flutter/android/app/src/main/jniLibs/`均不存在；旧本机hash不等于当前资产已取得。
 - 正式 Android/Windows build 与 regression evidence。
 
 这些缺口未补齐前，不得宣称全系统接管或发布就绪。

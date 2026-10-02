@@ -1,7 +1,10 @@
 # CloudSend API 系统 / API System
 
 接管基线：2026-07-12  
+最近源码复核：2026-10-02，`5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
 状态：`verified` + `external` + `verification-required`
+
+本轮证据、契约矩阵和未执行项见 [API / Security / Release Audit](audits/2026-10-02/API_SECURITY_RELEASE_AUDIT.md)。`verified` 仅表示本地源码支持，不表示服务端或运行验证通过。
 
 ## 1. 结论先行
 
@@ -30,6 +33,7 @@
 | Flutter address book | 设备、地址簿、共享和写权限 | `flutter/lib/models/ab_model.dart` |
 | Flutter group | accessible device groups 与缓存 | `flutter/lib/models/group_model.dart` |
 | Flutter HTTP common | API server、Bearer header、proxy bridge | `flutter/lib/common.dart` |
+| Flutter HTTP transport | 无 proxy 时 Dart HTTP；有 proxy 时 Rust bridge | `flutter/lib/utils/http_service.dart` |
 | Rust account | OIDC/account auth state | `src/hbbs_http/account.rs` |
 | Rust sync | heartbeat、sysinfo、config、disconnect | `src/hbbs_http/sync.rs` |
 | Rust downloader | async download job lifecycle | `src/hbbs_http/downloader.rs` |
@@ -50,13 +54,15 @@ login form
   -> refresh address book and groups
 ```
 
-`UserModel` 同时执行产品定制校验，包括 network time 与设备 UUID 相关逻辑。该校验属于客户端 policy，不可替代服务端认证与授权。
+`UserModel.validateUser()` 对 admin 直接通过；其他用户把非空 `email` 字段拆成到期时间与可选 machine code，后者与 `mainGetUuid()` 比较。`ChinaNetworkTimeService.getTime()` 先用 5 分钟缓存，再尝试 NTP、HTTP Date，最后退回本机时间。这些是客户端 policy，不可替代服务端认证与授权；`email` 在此承担的业务语义需要后端契约明确。
+
+当前顺序存在本地状态问题：`login()` 先调用 `getLoginResponseFromAuthBody()`，其中 `_parseAndUpdateUser()` 已写入 `userName`、`user_info`、`user_email`，随后才执行资格校验。`login.dart` 的普通登录失败处理显示错误，但该路径未见对上述状态执行 `reset()`。这是静态确认的写入顺序与潜在陈旧登录状态，不是服务端授权绕过证明；验证选 `API-01`、`API-02`、`E2E-03`。
 
 `getHttpHeaders()` 从本地 option 中取得 access token 并构造 Bearer header。任何日志、异常上报和诊断导出都必须对该 header 全量脱敏。
 
 ### 与 `verify_login()` 的区别
 
-`src/common.rs::verify_login()` 当前近似绕过，只影响 legacy/custom UI 的局部 gate。它不是：
+`src/common.rs::verify_login()` 当前直接返回 `true`，只影响使用它的 legacy/custom UI gate。它不是：
 
 - 产品账号 API 登录。
 - hbbs ID 注册。
@@ -66,7 +72,7 @@ login form
 
 ## 4. 地址簿、设备与分组
 
-`AbModel` 和 `GroupModel` 直接通过 Flutter `http` 调用外部 API，提供：
+`AbModel` 和 `GroupModel` 导入 `utils/http_service.dart`，经统一 wrapper 调用外部 API：无 proxy 时使用 Dart `http`，有 proxy 时转入 Rust。它们提供：
 
 - 地址簿加载与缓存。
 - 设备/peer 元数据。
@@ -75,6 +81,8 @@ login form
 - 创建、更新、删除和共享类操作。
 
 当前业务模型跨 `UserModel`、`AbModel`、`GroupModel`、`PeerModel` 和 `PeerTabModel` 分散，服务端 contract 未以 OpenAPI/JSON Schema 纳入仓库。字段变化主要依赖运行时 JSON 解析，存在 silent default 与 client/server drift 风险。
+
+地址簿同时保留 legacy `/api/ab` GET/POST 整体同步与新 `/api/ab/peers`、`/api/ab/peer/*/{guid}`、`/api/ab/tag/*/{guid}` 分项操作；settings/personal 的 404 可回退 legacy。分组页通过 `/api/device-group/accessible`、`/api/users`、`/api/peers` 分页读取。客户端可写判定与缓存隔离只是客户端控制，server ACL、幂等、版本冲突与跨租户隔离仍为 `external`。
 
 建议未来将以下资产纳入独立契约包：
 
@@ -86,7 +94,9 @@ login form
 
 ## 5. Rust OIDC/account
 
-`src/hbbs_http/account.rs` 管理 OIDC/account auth 流程、取消和结果状态。它与 Flutter 产品账号链共存，但不是同一个状态机。
+`src/hbbs_http/account.rs` 管理 OIDC/account auth 流程、取消和结果状态：POST `/api/oidc/auth`，随后每秒 GET `/api/oidc/auth-query`，外层查询窗口为 180 秒。这里没有为每次 blocking request 设置独立 timeout；取消只修改 `keep_querying`，仍要等待当前请求结束，不能把 180 秒视为全部 I/O 的硬上限。
+
+OIDC 与普通账号链不是同一个状态机，但 `remember_me` 会写入同一 `LocalConfig` 的 `access_token` / `user_info`，Flutter 的 OIDC 回调也复用 `getLoginResponseFromAuthBody()`。因此“身份域分开分析”不等于“当前 token storage 完全隔离”；issuer、logout、资格校验顺序需要共同验证。
 
 维护时必须明确当前 UI 入口调用哪一条链，并避免：
 
@@ -107,6 +117,8 @@ login form
 
 静态审计显示 heartbeat/sysinfo 会携带设备、系统和连接相关信息；部分请求未观察到与产品 Bearer 一致的认证 header。需要后台 contract 与抓包共同确认实际鉴权方式。
 
+具体源码：`sync.rs::start_hbbs_sync_async()` 每 3 秒 tick，无连接时 heartbeat 最多每 15 秒发送；sysinfo 失败重试使用 120 秒窗口。`/api/sysinfo_ver`、`/api/sysinfo`、`/api/heartbeat` 调用 `post_request(..., "")`，后者设 12 秒 timeout 和 JSON header，未加产品 Bearer。响应 `disconnect` 发布内部 signal，`strategy.config_options` 经 `handle_config_options()` 合并/删除配置项，未见客户端 key allowlist。当前可证明的是客户端缺少可见的响应身份/完整性校验，不能仅凭这些调用断言外部服务器没有任何认证。
+
 该链路风险：
 
 - 明文 HTTP 时泄露设备和连接元数据。
@@ -121,7 +133,9 @@ login form
 - 下载到文件或内存。
 - 查询进度与结果。
 - cancel/remove。
-- 可选自动删除。
+- 可选 job-map 自动移除参数；不是自动删除下载文件的完整保证。
+
+`download_file()` 用 URL 作为 job ID；同 URL 再调用直接返回已有 ID，即使目标路径不同。`do_download()` 先要求 HEAD 成功且存在 `Content-Length`，再 GET；GET 后未检查 HTTP status，没有显式总大小/内存上限、hash 或签名 gate。普通错误只写 `error`，取消分支才尝试移除 partial file。延迟移除 task 在该函数私有 `current_thread` runtime 上 `tokio::spawn` 后函数立即返回，其实际清理时机需专门验证，不能当作可靠 TTL。
 
 正式安全审计需要验证：
 
@@ -136,7 +150,7 @@ login form
 
 ## 8. Record Upload
 
-`src/hbbs_http/record_upload.rs` 存在上传 loop，但 `ENABLE` 默认 false，仓库内未发现启用 setter/path。当前应分类为 dormant subsystem，而不是已上线能力。
+`src/hbbs_http/record_upload.rs` 存在上传 loop，但私有 `ENABLE` 默认 false，仓库内未发现启用 setter/path。`src/server/video_service.rs::get_recorder()` 仅在 `is_enable()` 为 true 时连接上传 channel；录制与上传是不同能力。当前上传应分类为 dormant subsystem，而不是已上线能力。
 
 若未来启用，必须先定义：
 
@@ -152,7 +166,11 @@ login form
 
 - token endpoint 使用明文 HTTP。
 - client credential 硬编码在源码/二进制可提取位置。
-- repository 和部署资料中存在真实 credential 类型的字面值。
+- repository 和部署资料中存在 credential 类型的字面值。
+
+本轮只确认 credential 类型字面值存在于 tracked 文件，不验证其有效性、生产用途、当前公网可达性或历史传播范围。静态暴露仍需 owner 处置。
+
+`scripts/deploy_zego_token_service.sh` 内嵌的 Go `/api/v1/voice-call/create`（兼容根路径 POST）已有静态 Bearer 比较、4 KiB request cap、ID 字符清洗和非空检查；默认 TTL 3600 秒，配置接受不小于 60 秒的值，未见上限。`GenerateToken04(..., "")` 的 payload 为空；创建 room/user/stream ID 不等于 token 已绑定 room privilege，也未见向产品后端核验 `pcPeerId` / `androidPeerId` / `cloudsendSessionId`、replay 或 rate-limit。脚本是 partial server evidence，不能证明生产部署与它一致。
 
 客户端不应持有可签发任意 token 的高权限 secret。目标设计应是：
 
@@ -203,7 +221,7 @@ broker 必须校验当前 CloudSend 用户、peer、room、用途、TTL 与 repl
 
 ## 12. HTTP Proxy Bridge 风险
 
-Flutter 与 Rust 间存在以 URL 作为 async result key 的 HTTP proxy/bridge 机制。相同 URL 的并发请求可能覆盖结果或错配 waiter，需验证 request correlation 是否唯一。
+`HttpService.sendRequest()` 在 proxy 开启时调用 `mainHttpRequest()`，`src/ui_interface.rs::http_request()` 将占位符和最终结果都写入 `ASYNC_HTTP_STATUS[url]`；Dart 每 100ms 用同一 URL 查询。相同 URL 的并发请求会共享同一槽位，存在覆盖/错配风险；读取未移除该槽位。Rust bridge 单请求设 12 秒 timeout，Dart 直接 HTTP 分支没有统一 timeout，poll loop 本身也没有 deadline。`http_client.rs` 在 proxy 配置/构建失败时回退直接 `Client::new()`，不能宣称严格遵循代理或统一网络策略。
 
 未来应使用独立 request ID，并记录：method、normalized endpoint、timeout、status class、retry count；不得记录 token 或完整 body。
 

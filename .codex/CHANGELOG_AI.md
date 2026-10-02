@@ -2,7 +2,7 @@
 
 Schema Version：`1.0`  
 Coverage Start：2026-07-12  
-Last Updated：2026-07-12T06:45:42+08:00  
+Last Updated：2026-10-02（Asia/Shanghai）
 Mode：`append-only task-level index`
 
 > 本文件记录可由 `.codex/TASK_HISTORY.md` 和交付物证明的 AI-assisted engineering task 结果。它不是产品 changelog、Git history、Decision Log 或逐文件修改日志。2026-07-12 之前的提交没有可靠 AI attribution，因此不补猜；精确修改事件在本日志建立前不可重建，统一标记为 retrospective/backfill。
@@ -54,6 +54,22 @@ Mode：`append-only task-level index`
 - Residual Risk：file-based memory is as-of and cooperative, not a lock or production telemetry；每个新会话仍须重查 HEAD/dirty state 和当前授权。
 - Next Gate：下一个用户任务从 Session Start Protocol + T0 开始；无 standing C2/C3。
 - Detailed Record：`TASK_HISTORY.md` 的同 Task ID。
+
+## T-2026-10-02-001：当前源码复核与接管文档整理
+
+- Record Type：contemporaneous。
+- Status：completed — repository inventory / key-path V0 / documentation only。
+- Source：detached HEAD `5cee6921ec10971bb4654bc010f9328d7f70d02b`，初始clean；`CS-BL-2026-10-02-5cee692`。
+- Scope：三个领域agent源码核验及交叉复核；975文件/104份原有Markdown登记；canonical文档定点更正、功能/对接地图、baseline、memory同步。
+- Outcome：旧HEAD/单root历史漂移、terminal进程内persistence、Android桥/帧/owner、API wrapper/状态、CI/build入口、缺失原生资产等事实修正；新增SEC-017—019条件性静态风险。
+- Persistent Changes：8份新文档及相关既有Markdown；精确路径见`CE-20261002-T001-02`。
+- Business Behavior Change：none；未改源码/配置/协议/依赖/脚本/版本。
+- Highest Verification：V0；本地引用/路径/围栏、diff、敏感新增内容、scope及指针复核；独立复算9个HEAD blob hashes一致。V1—V5 NOT_RUN。
+- Decision / ADR：N/A — no decision delta；既有ADR与D-014不变。
+- Change Events：`CE-20261002-T001-01`、`CE-20261002-T001-02`。
+- Residual Risk：不是逐行全仓审计；完整其他OS、外部API/DB/hbbs/hbbr/RTC、native资产、正式运行与发布仍缺证据。
+- Next：从`12_FEATURE_MAP.md`定位用户后续具体需求；按Task/TEST_MATRIX规划实现与验证；无C3授权。
+- Detailed Record：`TASK_HISTORY.md`及`docs/AI_ENGINEERING/audits/2026-10-02/TAKEOVER_TASK.md`。
 
 ## Update Rules
 

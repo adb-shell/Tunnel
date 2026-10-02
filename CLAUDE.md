@@ -227,7 +227,7 @@ new-build.cmd
 ### Desktop / Flutter（通用）
 
 ```bash
-python3 build.py --flutter --release
+python3 build.py --flutter
 cd flutter && flutter pub get
 cd flutter && flutter build apk --release
 ```

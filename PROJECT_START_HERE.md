@@ -1,6 +1,6 @@
 # CloudSend Project Start Here
 
-最后更新：2026-07-12  
+最后更新：2026-10-02
 适用对象：所有 AI、sub-agent、人工开发者、审查者和发布负责人  
 定位：进入 CloudSend 仓库后的唯一第一入口
 
@@ -54,7 +54,7 @@
 
 - 产品/runtime：`CloudSend`。
 - Android 显示名：`云计划`。
-- 来源：RustDesk 深度二次开发；当前 Git 不能证明 2026-04-13 之前的完整 fork history。
+- 来源：RustDesk 深度二次开发；当前本地 Git 只有 `5cee692` 单个根提交，旧 baseline/history 对象不可用，无法重放既有文档的演进时间线。
 - Rust crate/library：`cloudsend`。
 - Flutter package：`flutter_hbb`。
 - Android applicationId：`com.cloudsend.app`。
@@ -170,15 +170,17 @@
 
 ## 10. 当前接管状态
 
+2026-10-02 已针对当前 HEAD 重新完成仓内关键功能链 V0 接管，并修正历史/当前状态混用。优先读 [本轮接管索引](docs/AI_ENGINEERING/audits/2026-10-02/README.md)、[功能与对接地图](docs/AI_ENGINEERING/12_FEATURE_MAP.md) 和 [当前 baseline](docs/BASELINE/2026-10-02_SOURCE_BASELINE.md)。此结论不覆盖仓外系统或运行可用性；深查/仅盘点/未验证范围在报告中逐项注明。
+
 - Repository-side architecture、文档和 Skills 已完成第一轮接管。
 - ADR、Baseline、Task Template、Test Matrix 和 safe Superpowers profile 已完成最终治理封版。
 - Global memory、multi-session current-work registry、AI changelog、change-event ledger 和 session recovery protocol 已建立。
 - External backend、hbbs/hbbr、database、token service、driver/binary provenance 尚未闭环。
 - 正式 Android/Windows build/device evidence 尚未回填。
-- 公开 credential、transport、update/plugin 和高权限平台风险仍是 release blockers。
+- tracked credential-type literals、transport、update/plugin 和高权限平台风险仍是 release blockers；有效性、远端公开性与历史传播未在本轮验证。
 
-本轮体系状态见 [`CLOUDSEND_AI_ENGINEERING_STRENGTHENING_REPORT.md`](docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_STRENGTHENING_REPORT.md)。
+2026-07-12 体系状态快照见 [`CLOUDSEND_AI_ENGINEERING_STRENGTHENING_REPORT.md`](docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_STRENGTHENING_REPORT.md)。
 
-最终封版状态见 [`CLOUDSEND_AI_ENGINEERING_FINAL_SEAL_REPORT.md`](docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_FINAL_SEAL_REPORT.md)。
+2026-07-12 治理封版快照见 [`CLOUDSEND_AI_ENGINEERING_FINAL_SEAL_REPORT.md`](docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_FINAL_SEAL_REPORT.md)，不代表当前 release readiness。
 
 如对权限、状态层或真相来源有疑问：停在修改前，回到 `.codex/AI_RULES.md` 和任务协议。

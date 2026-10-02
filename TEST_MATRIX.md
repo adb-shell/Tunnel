@@ -4,6 +4,8 @@
 Baseline：`CS-BL-2026-07-12-77062b4`  
 当前执行状态：本次封版只完成 V0 文档/源码静态盘点；下列 V1—V5 cases 均未执行
 
+2026-10-02 复核：当前源码 baseline 为 `CS-BL-2026-10-02-5cee692`，复用本矩阵 case IDs；本轮仍未执行 V1—V5。Oracle 是目标验收条件，并不说明当前实现满足（如 voice consent、input permission、fail-closed transport）。新增风险与 case 对应见 [本轮接管索引](docs/AI_ENGINEERING/audits/2026-10-02/README.md)。
+
 > 本矩阵定义覆盖和证据，不授权 build、test、analyze、codegen、device、network、production 或 release。V1—V4 需要独立 C3 + G2；V5 另需 G3、staging/production 和 rollout 授权。
 
 ## 1. Result and Evidence Rules

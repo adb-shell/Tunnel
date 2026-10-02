@@ -1,7 +1,10 @@
 # CloudSend 调试与验证体系 / Debug System
 
 接管基线：2026-07-12  
+最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
 状态：`verified` + `verification-required`
+
+本轮只执行 V0；[API / Security / Release Audit](audits/2026-10-02/API_SECURITY_RELEASE_AUDIT.md) 记录本次证据。下面的测试条目是需要执行的验证，不是已通过结果。
 
 ## 1. 调试原则
 
@@ -37,6 +40,8 @@ CloudSend 的故障通常跨 Flutter、Rust、JNI、Kotlin、驱动和外部服�
 - 未脱敏的生产地址、设备 UUID、peer ID、IP 或用户名。
 
 统一采用 session correlation ID；peer/device/address 只保留不可逆短 hash 或受控脱敏值。诊断包生成前必须执行 secret/PII redaction。
+
+当前源码存在需要先处理的日志点：`mobile/pages/server_page.dart::androidChannelInit()` 在分流前输出全部 MethodChannel `arguments`，`zego_voice_call_ready` 的 payload 含 RTC token；`src/port_forward.rs::run_rdp()` 输出含 `/pass` 的参数列表；OIDC `auth_task()` 的结果日志包含授权 code/URL 类型数据。排障时不能把整段日志直接复制进聊天或报告。源码只证明输出路径存在，当前构建是否保留、采集及谁能访问日志仍需正式验证（`SEC-018`）。
 
 ## 4. 通用会话分段
 
@@ -109,6 +114,8 @@ process start
 - Multi-window：确认 window ID 复用、关闭和跨窗口 event routing。
 - HTTP：用唯一 request ID，避免以 URL 作为并发结果 key。
 
+API 专项还需检查：资格校验失败后 `UserModel.isLogin`/本地 option 是否回滚；OIDC 取消时 blocking I/O 能否有界退出；proxy 切换后同 URL 并发是否串结果；下载 HEAD/GET 不一致、普通错误遗留 partial file、job TTL；详见 `API-01`—`API-08`。
+
 当前需验证的 lifecycle debt：`ServerModel` 500ms periodic timer 无保存/取消，以及 StatelessWidget 中 `TextEditingController.dispose()` 不会被框架调用。
 
 ## 7. Windows 调试树
@@ -129,6 +136,8 @@ process start
 - API 记录 method、endpoint label、status class、latency、timeout/retry；不记录 URL query/token/body。
 - heartbeat/config/disconnect 必须验证 server authentication。
 - ZEGO 分开检查 control invitation、token broker、room join、publish、play 和 first audio frame。
+
+`NET-04` / `NET-06` 增补负向 oracle：未完成 endpoint authentication 前不能建立用户指定 PortForward 目标连接；Android clipboard permission 关闭时 MultiClipboards 必须被拒绝；已登录但不同 peer 不得仅凭已知 terminal `service_id` 重连他人的 persistent terminal。`WIN-03/04/06` 需注入 hook/unhook 失败，确认 UI 不虚报保护成功且 topology 能恢复。上述均为源码待验证路径，不是已执行攻击。
 
 ## 9. 最小回归矩阵
 
@@ -164,6 +173,8 @@ process start
 
 本轮未执行任何下列命令。请在正式环境由项目负责人批准后执行并回传完整、已脱敏日志。
 
+授权需覆盖入口的真实副作用。`build.sh` 可安装/解析依赖、改 Git 全局配置与 SDK/vcpkg checkout、生成 bridge、清理临时/旧产物、签名；`new-build.cmd` 可改变默认 Rust toolchain、解析依赖、复制/重建 staging 与 package。不能只批准“编译”就自动执行这些全部步骤。`env.sh` 和 ZEGO deployment script 也不是只读诊断命令。
+
 ### 11.1 Rust workspace
 
 命令：
@@ -190,7 +201,7 @@ flutter analyze
 flutter test
 ```
 
-环境要求：项目锁定 Flutter/Dart 版本与 plugin dependencies。当前仓库只有极少 Dart test，且 test dependency 状态需先确认。
+环境要求：项目锁定 Flutter/Dart 版本与 plugin dependencies。当前唯一 `flutter/test/cm_test.dart` 是可运行的手工 CM UI harness，未见 `test` / `testWidgets` 断言；`pubspec.yaml` 的 `flutter_test` 被注释。需先获准建立/恢复实际 test target 后，再把 `flutter test` 纳入有效 oracle。
 
 执行目录：`CloudSend/flutter`。
 
@@ -205,7 +216,7 @@ flutter test
 ./build.sh 2
 ```
 
-环境要求：项目规定 Linux Android 构建机、`/opt/rustdesk-toolchain` 等价受控环境、Rust/Flutter/JDK、Android SDK/NDK 27.2、vcpkg、签名环境、ZEGO SDK、受控 `libadb.so` artifacts；Android 10/13/14/15 真机。
+环境要求：项目规定 Linux Android 构建机、`/opt/rustdesk-toolchain` 等价受控环境、Rust/Flutter/JDK、Android SDK/NDK 27.2、vcpkg、签名环境、ZEGO SDK、受控 `libadb.so` artifacts；Android 10/13/14/15 真机。2026-10-02 当前 worktree 没有 `jniLibs` / `libadb.so`；`pubspec.lock` 也未锁定已声明的 ZEGO dependency，这两项不能用历史本机存在记录替代。
 
 执行目录：CloudSend 仓库根目录。
 

@@ -1,6 +1,6 @@
 # CloudSend 完整架构 / Architecture
 
-基线：2026-07-12，`HEAD 77062b4`
+最近关键链路复核：2026-10-02，`HEAD 5cee692` / V0。详细覆盖与未验证边界见 [本轮审计](audits/2026-10-02/README.md)。
 
 ## 1. 运行体与信任边界
 
@@ -12,13 +12,14 @@ flowchart LR
     HBBR --> Endpoint["Controlled Rust Connection"]
     HBBS --> Endpoint
     Endpoint --> Services["Video / Input / Clipboard / File / Terminal"]
-    Services --> AndroidJNI["Android Rust JNI"]
+    Services -->|"Android capture/input/clipboard subset"| AndroidJNI["Android Rust JNI"]
     AndroidJNI --> AndroidKotlin["MainService + AccessibilityService"]
     PCUI --> ProductAPI["External Product API"]
     Endpoint --> ProductAPI
     PCBridge --> ZegoToken["External ZEGO Token service"]
     PCUI --> ZegoRTC["ZEGO SDK media"]
-    AndroidKotlin --> ZegoRTC
+    AndroidKotlin --> AndroidFlutter["Android Flutter ZegoVoiceCallModel"]
+    AndroidFlutter --> ZegoRTC
 ```
 
 必须分开的信任域：
@@ -58,7 +59,7 @@ flowchart LR
 
 - 视频：capture → codec → `VideoFrame` → relay stream → decoder → texture/RGBA。
 - 音频：普通远控音频仍走 RustDesk `AudioFrame`；当前 1v1 语音走 ZEGO SDK。
-- 输入：Flutter → Rust message → endpoint `input_service` → OS/Accessibility。
+- 输入：Flutter → Rust message → endpoint `Connection`；desktop 经 `input_service` 到 OS，Android 分支直接经 JNI → MainService → Accessibility，不能用 desktop gate 推断 Android 已检查相同权限。
 - 文件：`FileAction`/`FileResponse` + `TransferJob` block/digest/compression。
 - 终端：`TerminalAction`/`TerminalResponse` + PTY service。
 - Android raw frame：Kotlin direct buffer → JNI `FrameRaw` → Rust video service。
@@ -86,7 +87,7 @@ Flutter 使用混合状态方案：
 - 大量全局 singleton/registry 位于 `common.dart`、`model.dart`、`server_model.dart`。
 - desktop 使用 `desktop_multi_window`，remote/file/terminal/port-forward 等窗口拥有独立 Flutter engine；plugin 注册必须在每个 runner/engine 完整执行。
 
-此混合模型可运行，但状态所有权分散，容易产生 timer、stale client、dialog overlay 和跨 engine 生命周期问题。
+源码采用此混合模型，运行表现待验证；状态所有权分散，存在 timer、stale client、dialog overlay 和跨 engine 生命周期风险。
 
 ## 6. Android 四层状态架构
 
@@ -111,11 +112,13 @@ core service 在线不等于投屏；projection 丢失不等于 relay 断开；�
 
 ## 8. 仓外 API 架构
 
-Flutter 普通产品登录和资源 API多为 Dart 直接 HTTP；Rust `account.rs` 主要提供 OIDC device auth；`sync.rs` 提供 endpoint heartbeat/strategy；`downloader.rs` 提供下载；`record_upload` 休眠。仓库没有后端数据库实现。
+Flutter 产品登录和资源 API 经 `utils/http_service.dart` wrapper，可走 Dart HTTP 或 Rust proxy；Rust `account.rs` 提供独立 OIDC device auth；`sync.rs` 提供 endpoint heartbeat/strategy；`downloader.rs` 提供下载；`record_upload` 休眠。仓库没有产品 backend/数据库实现；ZEGO deployment script 内嵌部分 Go broker source，不等于独立受控后端或已部署版本。
 
 详见 `07_API_SYSTEM.md`。
 
 ## 9. 架构不变量
+
+以下包含维护要求，不代表现有代码全部满足。例如 endpoint permission、Windows privacy失败恢复、credential与日志边界存在已记录缺口；当前实现与目标差异见 `10_SECURITY_MODEL.md`。waiting不得自动切ignore的规则只针对PC waiting/reconnect，不否认Android锁屏等平台事件的有条件fallback。
 
 - 源码与运行时状态必须分层，不用 UI 文案代替真实状态。
 - Android hidden recovery 不得弹 `MediaProjection` 授权。
@@ -130,7 +133,7 @@ Flutter 普通产品登录和资源 API多为 Dart 直接 HTTP；Rust `account.r
 
 ## 10. 架构债务
 
-- 根历史被压成单次导入，缺少可重放 upstream strategy。
+- 当前本地仅单root快照，旧历史无法重放，缺少可验证upstream strategy；不推断是谁或如何改变历史。
 - 大型 God files 与 global/static state 形成高耦合。
 - Android raw buffer 和 `static mut` 横跨语言/线程安全边界。
 - transport crypto、HTTP 与 fail-open 行为缺少正式 threat model。

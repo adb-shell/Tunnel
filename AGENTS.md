@@ -3,6 +3,8 @@
 最后一次与全仓源码对齐：2026-07-12
 最近一次文档分层整理：2026-07-12
 
+2026-10-02 当前 HEAD 复核与覆盖边界见 `docs/AI_ENGINEERING/audits/2026-10-02/README.md`；按后续需求定位功能见 `docs/AI_ENGINEERING/12_FEATURE_MAP.md`。本文件仍是速查，不替代源码和领域文档。
+
 > 本文件是 **Codex** 的项目入口说明。
 > 它是补充导航，不是最终真相层。
 > 每次会话开始时请优先阅读：
@@ -233,7 +235,7 @@ new-build.cmd
 ### Desktop / Flutter（通用）
 
 ```bash
-python3 build.py --flutter --release
+python3 build.py --flutter
 cd flutter && flutter pub get
 cd flutter && flutter build apk --release
 ```

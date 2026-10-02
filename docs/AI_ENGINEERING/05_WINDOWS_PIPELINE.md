@@ -1,6 +1,10 @@
 # CloudSend Windows 完整链路 / Windows Pipeline
 
-基线：2026-07-12，`HEAD 77062b4`
+原始基线：2026-07-12，`HEAD 77062b4`（historical）
+
+源码复核：2026-10-02，`HEAD 5cee692`，V0
+
+详细证据：[RUST_NETWORK_WINDOWS_AUDIT.md](audits/2026-10-02/RUST_NETWORK_WINDOWS_AUDIT.md)
 
 > 本文只记录本仓库源码可证明的 Windows capture、input、privacy、Amyuni virtual display 和 printing 路径。`verified` 表示源码直接证实；`inferred` 表示跨文件静态推断；`external` 表示实现位于仓外 DLL/driver；`verification-required` 表示必须在正式 Windows 环境确认。本文不把第三方二进制的预期行为冒充源码事实。
 
@@ -250,6 +254,8 @@ Amyuni virtual-display privacy 被视为 async：
 
 超时或任一步失败时 `TurnOnGuard` 尝试关闭并恢复。
 
+这个 guard 不覆盖成功标记后的所有失败：当前 virtual-display 实现在 `guard.succeeded = true` 后才用 `allow_err!(win_input::hook())` 安装输入 hook，hook 报错仍返回 `Ok(true)`。因此“屏幕 topology 已切换”和“本地输入已成功阻断”不能合并成已验证的单一成功状态，见第 10 节。
+
 ## 6. Topmost / exclude-from-capture privacy
 
 `win_exclude_from_capture.rs` 只做两件事：
@@ -324,7 +330,7 @@ enumerate active displays
   -> install local input hook
 ```
 
-如果没有 physical display，代码认为无需 privacy，拔出刚加的 virtual display 并返回 `NO_PHYSICAL_DISPLAYS`。
+如果 `set_displays()` 未找到归类为 physical 的 display，代码在调用 `ensure_virtual_display()` 之前返回 `NO_PHYSICAL_DISPLAYS`，本次调用不会因此新增 virtual display。
 
 ### 8.2 关闭/恢复
 
@@ -441,6 +447,14 @@ const IDD_IMPL: &str = IDD_IMPL_AMYUNI;
 - CloudSend marker 是固定 `dwExtraInfo`，其他本机 process 理论上可伪造；它不是强身份认证。
 - Ctrl+P 是本机 emergency escape，不能无意删除或改成远端不可达组合。
 
+2026-10-02 确认的恢复差距（V0）：
+
+- `win_virtual_display::PrivacyModeImpl::turn_on_privacy()` 在成功标记后忽略 `hook()` 错误，可能向上层返回成功而未建立本地 input block。
+- 同类型的 `turn_off_privacy()` 在 `self.restore()` 和 `restore_reg_connectivity()` 前使用 `win_input::unhook()?`；unhook 返回 error 时，本次调用会提前退出显示恢复。
+- `win_topmost_window::PrivacyModeImpl::turn_off_privacy()` 也先 `unhook()?`，失败会跳过后面的 hide window。
+
+这些是源码的错误传播顺序，不是本轮已重现的系统故障。后续修复应让独立资源恢复尽力全部执行并汇总错误；在 C2 方案获准前本轮只记录差距。WIN-03/04/06 应增加 hook/unhook failure injection 的观察点。
+
 ## 11. Remote printing
 
 ### 11.1 Driver/setup
@@ -464,7 +478,7 @@ const IDD_IMPL: &str = IDD_IMPL_AMYUNI;
 
 仅 `windows + flutter`：
 
-1. `Server::new()` 动态加载 `printer_driver_adapter.dll`。
+1. `src/server.rs::new()` 调用 `printer_service::init()`，动态加载 `printer_driver_adapter.dll`。
 2. adapter `init(app_name)` 成功后注册 `remote-printer` service。
 3. service 每 300ms 请求最近 1000ms 生成的 XPS raw PRN data。
 4. 收到数据后调用 `server::on_printer_data()`。
@@ -545,6 +559,8 @@ Controller Windows 收到 Printer job：
 | P1 | Portable shared-memory trust | raw pointer/length/counter 跨进程读取 | `verified`，需 corruption tests |
 | P1 | Printer full-buffer memory pressure | PRN data 和 transfer 均可整块驻留 memory | `verified` |
 | P1 | Privacy endpoint permission 再检查不明确 | handler ownership明确，但无本地 `self.keyboard` gate | `verification-required` |
+| P1 | Virtual privacy hook 失败仍报告成功 | `win_virtual_display::turn_on_privacy()` 在成功标记后 `allow_err!(hook())` | `verified` error ordering；runtime impact unverified |
+| P1 | Unhook error 提前阻断恢复 | virtual-display 的 restore 与 topmost 的 hide 均在 `unhook()?` 后 | `verified` control flow；failure injection required |
 | P2 | SetupAPI handle leak | 未见 `SetupDiDestroyDeviceInfoList` | `inferred` |
 | P2 | Printer handle leak | `AddPrinterW` handle 未关闭 | `verified` |
 | P2 | `STARTUPINFOW.cb=0` | helper process create path | `verified`，运行影响待确认 |
@@ -552,6 +568,8 @@ Controller Windows 收到 Printer job：
 | P2 | Legacy RustDesk naming | privacy window、driver、fake path、error log | `verified` compatibility debt |
 
 ## 14. 维护不变量
+
+下列条目是维护/验收要求，不能据此推断当前全部满足；第 10/13 节保留了实现差距，尤其是 hook failure 与恢复顺序。
 
 1. DXGI 是主 capture，GDI 是可恢复 fallback；不能删除 fallback 而没有 GPU/driver 矩阵。
 2. Portable-service status 改动必须同时回归 capture 和 input。

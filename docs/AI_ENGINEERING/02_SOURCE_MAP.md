@@ -1,6 +1,6 @@
 # CloudSend 源码地图 / Source Map
 
-基线：2026-07-12，`HEAD 77062b4`
+最近关键路径复核：2026-10-02，`HEAD 5cee692` / V0。按功能和接口定位见 [12_FEATURE_MAP.md](12_FEATURE_MAP.md)，覆盖边界见 [本轮审计](audits/2026-10-02/README.md)。
 
 ## 1. 状态标签
 
@@ -9,6 +9,7 @@
 - `DORMANT`：实现存在但默认不可达或 feature-gated。
 - `GENERATED`：由工具生成，不应手工维护。
 - `LOCAL-ONLY`：存在于当前机器但不受 Git 管理。
+- `MISSING`：当前工作区没有所需文件；不能从 ignore 规则推断为本机存在。
 - `EXTERNAL`：本仓只有 client/contract，没有实现。
 
 ## 2. 根目录
@@ -19,10 +20,11 @@
 | `build.rs` | PRIMARY | 生成 `src/version.rs`、native link/build |
 | `build.sh`, `env.sh` | PRIMARY/Android | Linux Android 环境与构建编排 |
 | `new-build.cmd` | PRIMARY/Windows | 当前 `C:\DevEnv` + `C:\DevTool` PC 构建 |
-| `build.cmd`, `build.py` | COMPAT | 旧环境和跨平台包装；部分命名已漂移 |
-| `.github/workflows/` | COMPAT | 上游多平台 Actions；当前全部手动触发 |
+| `build.cmd` | COMPAT | 旧Windows环境入口 |
+| `build.py` | PRIMARY Windows sub-orchestration / conditional other platforms | `new-build.cmd`会调用；其他平台分支保留，部分命名漂移待验证 |
+| `.github/workflows/` | COMPAT | 上游多平台 Actions；manual dispatch，部分还有 workflow_call；无 push/PR 自动 gate |
 | `res/`, `appimage/`, `flatpak/`, `fastlane/` | PLATFORM | installer、driver、icons、store metadata |
-| `.info` | PRIMARY config | 跟踪的基础设施 endpoint 文件；高变更/泄露面 |
+| `.info` | PRIMARY build config | `new-build.cmd` 读取的配置输入；具体值不进入接管文档 |
 
 `src/version.rs` 不是跟踪源码，由 `hbb_common::gen_version()` 在 build script 阶段生成。
 
@@ -115,6 +117,8 @@
 
 ### Kotlin/Java
 
+除特别说明外，下表业务类位于 `flutter/android/app/src/main/kotlin/com/cloudsend/app/`；`pkg2230.kt` 和 `ffi.kt` 实际位于 `flutter/android/app/src/main/kotlin/` 根目录。
+
 | 文件 | 角色 |
 |---|---|
 | `oFtTiPzsqzBHGigp.kt` | `FlutterActivity`、MethodChannel、deep link、ADB handler |
@@ -139,17 +143,18 @@
 - `CloudSendAdbDnsDiscover.kt`：NSD discovery/fallback。
 - `CloudSendAdbState.kt`：snapshot。
 - `flutter/lib/mobile/pages/adb_page.dart`：UI。
-- `jniLibs/*/libadb.so`：LOCAL-ONLY ignored binary，干净 clone 缺失。
+- `jniLibs/*/libadb.so`：当前 MISSING；旧接管曾记为 LOCAL-ONLY，当前整个 `jniLibs/` 目录不存在。provenance 与获取方式见 External Asset Registry。
 
 ### Rust JNI
 
 - `libs/scrap/src/android/mod.rs` 只导出 `pkg2230`。
 - `pkg2230.rs` 是 PRIMARY；`ffi.rs` 未编译且不是精确镜像。
-- 两文件约 2,380 行，仍有 68 行结构差异。
+- core JNI 另位于 `src/flutter_ffi.rs::server_side`，包括 `xt4P9mWE`、`G4yQ9OYY`、`qR9Ofa6G` 的 exports；不能把所有 active JNI 都局限在 scrap 模块。
+- 两文件不是精确镜像；显式 JNI context destroy 等逻辑有差异，不能依据旧 diff 行数判断是否同步。具体 active exports 与差异见本轮 Android/Flutter 审计。
 
 ## 7. Windows 地图
 
-- capture：`libs/scrap/src/dxgi/`, `gdi.rs`。
+- capture：`libs/scrap/src/dxgi/`，包括 `gdi.rs` 和 `mag.rs`。
 - platform：`src/platform/windows.rs`, `windows.cc`。
 - input：`src/server/input_service.rs`, `libs/enigo/src/win/`。
 - privacy：`src/privacy_mode.rs`, `src/privacy_mode/win_*`。
@@ -182,6 +187,6 @@
 
 - 不手改 generated bridge；改 `flutter_ffi.rs` 后在正式环境重新生成并检查 diff。
 - `src/version.rs` 必须由 build script 生成。
-- LOCAL-ONLY ADB/driver/assets 必须先进入受控 artifact manifest，不能依赖个人机器。
+- MISSING/LOCAL-ONLY/EXTERNAL ADB、driver、assets 必须先进入受控 artifact manifest，不能依赖个人机器或旧 hash 记录。
 - Git dependency 应同时记录 manifest source 与 lock revision。
 - clean clone 复现是 release gate；当前尚未满足。

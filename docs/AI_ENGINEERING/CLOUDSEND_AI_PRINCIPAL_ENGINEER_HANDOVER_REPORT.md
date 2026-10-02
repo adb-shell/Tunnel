@@ -1,5 +1,7 @@
 # 《CloudSend AI总工程师接管报告》
 
+> 2026-10-02 补注：本文件保留7月交付快照；当前HEAD、源码纠偏和接管边界以 [本轮接管索引](audits/2026-10-02/README.md) 为准。旧Git/远端/本机资产观察未自动继承为当前事实。
+
 接管日期：2026-07-12  
 源码基线：`HEAD 77062b4`，branch `main`  
 接管角色：CloudSend Principal Engineer  

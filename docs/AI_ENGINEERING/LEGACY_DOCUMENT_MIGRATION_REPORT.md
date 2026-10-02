@@ -1,5 +1,7 @@
 # CloudSend 旧文档迁移报告 / Legacy Document Migration Report
 
+> 2026-10-02 补注：以下保留旧迁移记录，不代表当前可重放Git历史或库存。旧commit对象本地不可得；terminal已存在进程内persistent registry/reattach，不能把全部持久化归为未来设计。当前事实、更正和104份文档处理见 [接管索引](audits/2026-10-02/README.md)；本轮未恢复或删除旧文件。
+
 报告日期：2026-07-12  
 源码基线：Git <code>HEAD 77062b4</code>  
 迁移方式：知识提取和映射，不移动、不删除、不恢复现有或历史文件。

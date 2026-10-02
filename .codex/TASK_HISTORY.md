@@ -82,6 +82,25 @@
 - Change Events：`CE-20260712-T004-01`—`CE-20260712-T004-06`。
 - Related decisions/docs：D-014、ADR-0011、ADR-0012、ADR-0013、`.codex/SESSION_START_PROTOCOL.md`。
 
+## T-2026-10-02-001：源码复核与接管文档整理
+
+- 状态：completed — 本轮repository inventory、关键链V0接管与文档整理；全系统/运行/发布未验收。
+- 请求者/批准者：当前项目用户；明确要求深入接管、修订项目文档/地图/记忆并允许多agent。
+- Source：detached HEAD `5cee6921ec10971bb4654bc010f9328d7f70d02b`，initial clean；新Baseline `CS-BL-2026-10-02-5cee692`。旧`77062b4`不存在，本地非shallow且单root，不猜测历史改变原因。
+- 授权：C0本地调查+C1文档；业务实现留待后续具体需求；未继承旧授权。
+- 方案：沿用既有治理/00—11；三个agent独占领域文档，主agent整合全仓库存/地图/记忆并做第二轮交叉复核。
+- 实际变化：8份新文档（Task、接管索引、文档登记、三个领域审计、12功能地图、新Baseline）；既有canonical、入口、historical补注、External Registry、TEST_MATRIX边界与memory更新。全部Markdown，逐项路径见CE-20261002-T001-02。
+- 关键纠偏：当前Git/库存与旧快照分开；terminal已有进程内persistence；Android开/关/refresh及JNI状态分层；API双传输/先写状态；broker既有控制与缺口；native资产MISSING；build.py参数与workflow_call。
+- 安全：保留既有风险并补SEC-017认证前PortForward connect、SEC-018敏感日志、SEC-019terminal owner条件路径；没有漏洞复现或credential有效性测试。新文档不含secret、生产endpoint或用户绝对路径。
+- 验证：源码锚点/guard/owner检查；3域交叉复核；9个blob hashes由独立agent重算一致；文档local links/fences/literal paths、diff whitespace、仅Markdown范围、无删除/staging、memory IDs复核。V0发现的引用/语义/尾随空格已校正。
+- 《编译验证需求》：本轮仅文档不需编译；后续正式命令/脚本副作用/环境/cases登记在本轮README及09，V1—V5均NOT_RUN。
+- 未覆盖：全源码逐行、Linux/macOS/iOS/Web完整运行、所有widget/codec/unsafe路径、仓外infra/DB、正式签名产物与发布。
+- Rollback：后续获准文档patch修正；旧历史/ADR/Baseline保留，未移动删除。
+- Decision / ADR：reviewed-no-change；N/A — no decision delta。External Registry已按当前存在性更新，未取得资产。
+- Global memory：Project State、Project/Architecture Memory、Task/Changelog/Event已同步，Current Work最后关闭；本轮记录替代旧snapshot的当前性，不抹去旧事件。
+- Git/build/test/analyze/codegen/device/delete/move/version/sign/package/external/release actions：none。
+- Events：`CE-20261002-T001-01`、`CE-20261002-T001-02`；交付`docs/AI_ENGINEERING/audits/2026-10-02/README.md`。
+
 ## 任务记录规则
 
 每个未来任务必须记录：

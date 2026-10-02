@@ -1,7 +1,7 @@
 # CloudSend External Asset Registry
 
-最后更新：2026-07-12  
-状态：repository-side inventory complete；owner/provenance onboarding incomplete  
+最后更新：2026-10-02，Task `T-2026-10-02-001`
+状态：repository-side inventory rechecked at `HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`；owner/provenance onboarding incomplete
 范围：不在 Git tracked source 中，或不能由 clean clone 独立复现的 service、database、driver、binary、signing/build/release infrastructure 和历史 provenance
 
 > 本登记表不保存 credential、token、password、private key、生产 IP/domain、连接串或 PII。发现这类值时只记录资产类型、所在路径和处置状态。
@@ -22,7 +22,7 @@
 
 Owner 为空时统一写 `OWNER-REQUIRED`，不能由 AI 推断个人或组织。
 
-2026-07-12 只读基线：Git tracked files 中按 `.dll/.exe/.sys/.cat/.so/.aar/.jks/.keystore/.p12/.zip` 扩展名盘点为 0。该结果只说明 binary 没有随当前 source snapshot 跟踪，不代表运行时不依赖它们，也不代表可安全重新下载。
+2026-10-02 只读复核：Git tracked files 中按 `.dll/.exe/.sys/.cat/.so/.aar/.jks/.keystore/.p12/.zip` 扩展名盘点为 0；与旧盘点一致。该结果只覆盖这些扩展名，不是所有二进制格式的普查，也不代表运行时不依赖它们或可安全重新下载。本轮没有访问外部资产、服务器或下载 artifact。
 
 ## 2. 登记要求
 
@@ -48,29 +48,29 @@ Owner 为空时统一写 `OWNER-REQUIRED`，不能由 AI 推断个人或组织�
 | `EXT-SVC-002` | `hbbs` rendezvous server | `EXTERNAL/MISSING` | `src/rendezvous_mediator.rs`, `libs/hbb_common/protos/rendezvous.proto`, config clients | `OWNER-REQUIRED` | source/version、production config、topology、key management、logs/monitoring | ID registration/handshake/compatibility 验证 `BLOCKING` |
 | `EXT-SVC-003` | `hbbr` relay server | `EXTERNAL/MISSING` | `src/client.rs::{request_relay, create_relay}`, rendezvous protocol | `OWNER-REQUIRED` | source/version、relay policy、capacity、TLS/key、logs/monitoring、DR | relay-only product path 的 integration evidence `BLOCKING` |
 | `EXT-DATA-001` | Product database | `MISSING` | client models/contracts only；仓库无 schema/migration | `OWNER-REQUIRED` | engine/version、schema/migration、tenant ACL、backup/restore、RPO/RTO、retention/audit | account/device/data security 与恢复能力 `BLOCKING` |
-| `EXT-SVC-004` | ZEGO token broker | `PARTIAL`：deployment script 内嵌 Go module/server source，但没有独立受控 project、`go.sum`、tests、CI/IaC 或生产部署证据 | `src/client/helper.rs`, `scripts/deploy_zego_token_service.sh`, ZEGO docs | `OWNER-REQUIRED` | 独立 source repo/commit、dependency lock、tests/SBOM、HTTPS/auth/rate limit、deploy/logs、credential ownership | 已发现 credential-type material 的暴露面；不得在本文复述其值。Incident response 与 token abuse control 为 P0 `BLOCKING` |
+| `EXT-SVC-004` | ZEGO token broker | `PARTIAL`：deployment script 内嵌 Go module/server source，但没有独立受控 project、`go.sum`、tests、CI/IaC 或生产部署证据 | `src/client/helper.rs`, `scripts/deploy_zego_token_service.sh`, ZEGO docs | `OWNER-REQUIRED` | 独立 source repo/commit、dependency lock、tests/SBOM、HTTPS/session auth/rate limit、deploy/logs、credential ownership | tracked credential 类型字面值存在，有效性与当前生产使用未测试；脚本的静态 Bearer/4 KiB cap 不证明业务授权。Incident response 与 token abuse control `BLOCKING` |
 | `EXT-SVC-005` | ZEGO RTC account/service and SDK distribution | `EXTERNAL/UNVERIFIED`；dependency 被声明，但 tracked `pubspec.lock` 未找到对应 ZEGO entry | `flutter/lib/models/zego_voice_call_model.dart`, Flutter dependency config | `OWNER-REQUIRED` | account owner、exact SDK lock/artifact hash、native binary provenance/license、quota/SLA、data region/retention、incident logs | clean clone dependency drift、voice media/privacy 与 release validation `BLOCKING` |
 | `EXT-SVC-006` | Firebase/Google client project | `PARTIAL/UNVERIFIED` | `flutter/ios/Runner/GoogleService-Info.plist` 等 client configuration | `OWNER-REQUIRED` | 是否仍 active、project owner、bundle/SHA restriction、API scope/quota、privacy purpose | 旧 upstream ownership 或滥用风险；采用前必须确认 |
 | `EXT-OPS-001` | DNS、TLS certificates、load balancer、production endpoint routing | `EXTERNAL` | endpoint/config consumers；具体值不在本表 | `OWNER-REQUIRED` | inventory、certificate owner/expiry、environment split、change/rollback/runbook | endpoint migration 和 HTTPS availability `BLOCKING` |
 | `EXT-OPS-002` | Monitoring、logging、alerting、incident/on-call | `MISSING` | repository 只有 local logs/diagnostic behavior | `OWNER-REQUIRED` | metrics/log pipeline、redaction、retention、alerts、SLO/SLA、incident process | 生产可观测性和安全响应 `BLOCKING` |
 
-## 4. Android Local-only Assets
+## 4. Android Missing / Historical Local-only Assets
 
 | ID | 资产 | 当前存在性 | 仓内消费/证据锚点 | Owner | 主要缺口 | 影响 |
 |---|---|---|---|---|---|---|
-| `EXT-BIN-ADB-001` | `libadb.so` for arm64-v8a / armeabi-v7a / x86_64 | `LOCAL-ONLY`：位于 ignored `flutter/android/app/src/main/jniLibs/` | `CloudSendAdbRunner.kt`, Android packaging | `OWNER-REQUIRED` | upstream/source commit、reproducible build recipe、per-ABI hash、signature、version、license mapping、artifact registry | clean clone 不能复现 ADB packaging；Android release `BLOCKING` |
-| `EXT-REF-ADB-002` | `ADB-CODE/` research/decompiled materials | `LOCAL-ONLY`：ignored | `docs/ADB_LADB_INTEGRATION_MEMORY.md` 的研究背景 | `OWNER-REQUIRED` | origin、revision、legal/provenance、是否仅研究使用、保留策略 | 研究不可复现；不得直接进入 release source |
-| `EXT-REF-ADB-003` | `LADB/` reference source | `LOCAL-ONLY`：ignored | ADB integration memory 与实现设计背景 | `OWNER-REQUIRED` | upstream URL/commit、license obligations、Play Store restriction mapping、修改清单 | license/distribution 风险；不得等同 bundled binary source |
+| `EXT-BIN-ADB-001` | `libadb.so` for arm64-v8a / armeabi-v7a / x86_64 | `MISSING`：2026-10-02 当前 `jniLibs/` 不存在；旧记录为 ignored/local-only | `CloudSendAdbRunner.kt`, Android packaging | `OWNER-REQUIRED` | upstream/source commit、reproducible build recipe、per-ABI hash、signature、version、license mapping、artifact registry | clean clone 不能复现 ADB packaging；Android release `BLOCKING` |
+| `EXT-REF-ADB-002` | `ADB-CODE/` research/decompiled materials | `MISSING`：2026-10-02 当前目录不存在，ignore 规则仍在；historical local-only | `docs/ADB_LADB_INTEGRATION_MEMORY.md` 的研究背景 | `OWNER-REQUIRED` | origin、revision、legal/provenance、是否仅研究使用、保留策略 | 旧研究结论目前不可独立重证；不得直接进入 release source |
+| `EXT-REF-ADB-003` | `LADB/` reference source | `MISSING`：2026-10-02 当前目录不存在，ignore 规则仍在；historical local-only | ADB integration memory 与实现设计背景 | `OWNER-REQUIRED` | upstream URL/commit、license obligations、旧文档所述分发限制的原始证据、修改清单 | license/distribution 需资产到位后复核；不得等同 bundled binary source |
 
-当前本机存在三个 `libadb.so` 和一份 license 文件，但它们均未 tracked。2026-07-12 只读盘点得到的 SHA-256 为：
+**历史快照，不能作为本机验收：** 2026-07-12 文档记录当时存在三个 `libadb.so` 和一份 license 文件且均未 tracked。2026-10-02 当前 worktree 未找到这些文件，因此下列 SHA-256 只保留为历史交接线索，没有重新计算或核验：
 
-| ABI | Observed SHA-256 |
+| ABI | Historical SHA-256 recorded on 2026-07-12 |
 |---|---|
 | `arm64-v8a` | `47EA035FA5ED57F6149A2B025BBBD4B21584C355C05D0400416804715E4C12DE` |
 | `armeabi-v7a` | `0AFEA102225CD4DDA85D2C01F36A56473724B741CC63B6386163EE286EFF268E` |
 | `x86_64` | `62CC0F7707C83C98AA4DE699492C61091EDA9D68B3DB9EA2A185B179DA505BFA` |
 
-这些 hash 仅标识当前本机观察到的文件，不能证明 source、publisher、license、完整性或 release approval，也不能把本机存在当作 provenance。
+这些历史 hash 不能证明当前资产存在、source、publisher、license、完整性或 release approval。材料补齐后需同时核对 source/license/recipe 与实际文件，不能只匹配历史 hash。
 
 ## 5. Windows Drivers, DLLs and Helpers
 
@@ -103,7 +103,7 @@ Owner 为空时统一写 `OWNER-REQUIRED`，不能由 AI 推断个人或组织�
 
 | ID | 资产 | 当前存在性 | 仓内证据 | Owner | 主要缺口 | 影响 |
 |---|---|---|---|---|---|---|
-| `EXT-HIST-001` | RustDesk/DaXianDesk upstream baseline and pre-2026 history | `MISSING` | root commit is a snapshot; no upstream tag/commit recorded | `OWNER-REQUIRED` | exact fork point、patch lineage、authors、license/CVE mapping | differential maintenance、CVE triage、attribution `BLOCKING` |
+| `EXT-HIST-001` | RustDesk/DaXianDesk upstream baseline and historical repository | `MISSING` | 当前本地为非 shallow 的单 root commit；旧 `77062b4` 与 59-commit 演进记录不能在本地重证 | `OWNER-REQUIRED` | 原始 repo/bundle、exact fork point、patch lineage、authors、旧 baseline 对照、license/CVE mapping | differential maintenance、CVE triage、attribution `BLOCKING`；旧 public/remote 状态本轮未验证 |
 | `EXT-DEP-001` | Cargo Git repositories and revisions | `EXTERNAL/PARTIAL` | Cargo manifests + lockfile; many manifests do not pin `rev` | Domain/Release owner required | approved source list、manifest pin、license/security review、mirror policy | lock update and supply-chain drift risk |
 | `EXT-DEP-002` | Flutter/Gradle/Maven/vcpkg/Python/tool downloads | `EXTERNAL/PARTIAL` | pub/Gradle/vcpkg/build scripts | Domain/Release owner required | complete lock/verification、hash/signature、mirror/cache policy、license/SBOM | build reproducibility and dependency takeover risk |
 

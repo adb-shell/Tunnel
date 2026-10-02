@@ -1,6 +1,6 @@
 # CloudSend Architecture Memory
 
-最后更新：2026-07-12  
+最后更新：2026-10-02
 用途：跨会话架构速记；详细设计只在 `docs/AI_ENGINEERING/` 维护。
 
 ## 1. Runtime Topology
@@ -24,6 +24,8 @@ Windows Rust core
 ```
 
 完整图：`docs/AI_ENGINEERING/01_ARCHITECTURE.md`。
+
+按产品功能找入口/对接/验证：`docs/AI_ENGINEERING/12_FEATURE_MAP.md`。本轮证据与覆盖边界：`docs/AI_ENGINEERING/audits/2026-10-02/README.md`；不把静态接线当运行已验证。
 
 ## 2. Core Modules
 
@@ -105,6 +107,8 @@ Network:
 ```text
 CloudSend controller relay-only != controlled endpoint has no direct/NAT compatibility
 ```
+
+补充易混边界：terminal进程内persistence != 跨重启durable storage；Android waiting normal-only != 所有平台事件都禁止fallback；Dart engine-local voice owner != Rust process级`ZEGO_VOICE_CALL_OWNER`；`FrameRaw` Mutex != Java buffer生命周期所有权。
 
 ## 5. Detailed References
 

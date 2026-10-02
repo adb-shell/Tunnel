@@ -1,6 +1,8 @@
 # CloudSend Android 完整链路 / Android Pipeline
 
-基线：2026-07-12，`HEAD 77062b4`
+最后源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，`T-2026-10-02-001`，V0 静态证据。旧 `77062b4` 为历史文档快照，不能据此推断当前 Git ancestry。
+
+本次复核的逐符号证据、状态 owner、发现及后续定位见 [Android / Flutter Audit](audits/2026-10-02/ANDROID_FLUTTER_AUDIT.md)。本文的“必须/不得”是维护目标，不表示所有实现已满足，更不表示真机验证通过。
 
 > 本文只记录当前仓库可证明的 Android 运行时事实。标签含义：`verified` 为源码直接证实；`inferred` 为跨文件静态推断；`external` 为 Android/第三方平台行为；`verification-required` 为必须在正式构建机或真机确认的事项。源码高于本文。
 
@@ -31,7 +33,7 @@ Android 不是“Flutter 应用加一个 Service”，而是四层共同组成�
 | ADB/LADB | `flutter/lib/mobile/pages/adb_page.dart`，`flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/*.kt` |
 | ZEGO | `flutter/lib/models/zego_voice_call_model.dart`，`flutter/lib/models/server_model.dart`，`src/client/helper.rs` |
 
-当前移动主页只直接装载 `ServerPage` 与 `AdbPage`。Remote、file、terminal、camera、settings 等移动页面仍有源码，但不是当前主页的直接导航入口。
+当前 `HomePageState.initPages()` 仅在 `isAndroid && !bind.isOutgoingOnly()` 时装载 `ServerPage` 与 `AdbPage`；底部导航代码被注释，页面由 `PageView` 承载。Remote、file、terminal、camera、settings 等移动页面仍有源码，但不是当前主页的直接导航入口。非 Android / outgoing-only 下 `_pages` 为空而 build 使用 `elementAt(_selectedIndex)`，需要单独验证，不能把 Android 主页结论推广到所有 mobile。
 
 ## 2. 总体链路
 
@@ -61,7 +63,7 @@ Android 端 core service、screen share、frame source 和 PC waiting 是四个�
 
 | 状态层 | 关键状态 | “已就绪”的真实含义 | 不能据此推断 |
 |---|---|---|---|
-| L1 Core service/JNI | `MainService._isReady`、`ctx`、`MAIN_SERVICE_CTX` | MainService/JNI/Rust core 可工作 | 已获投屏权限、已有首帧 |
+| L1 Core service/JNI | `MainService._isReady`、`ctx`、`MAIN_SERVICE_CTX` | 表达 core-ready 意图，需分别核实对象和服务 | 已获投屏权限、已有首帧；`_isReady` 本身也不证明 core 健康 |
 | L2 Screen share | `_isStart`、`mediaProjection`、`captureStarting`、`surface`、`virtualDisplay` | normal MediaProjection 链已启动或正在启动 | PC 已显示画面、ignore/SKL 状态 |
 | L3 Frame source | normal、`SKL`、`shouldRun`、one-shot | 当前向 `VIDEO_RAW` 提供数据的来源 | relay 状态、PC waiting |
 | L4 PC display | `waitForFirstImage`、`waitForImageTimer`、last frame | 控制端是否收到真实 RGBA/Texture | Android service 或 projection 是否存活 |
@@ -70,14 +72,14 @@ Android 端 core service、screen share、frame source 和 PC waiting 是四个�
 
 - `ServerModel._connectStatus` 直接来自 Rust `mainGetConnectStatus()`，代表真实 rendezvous 注册状态，不是 core service 存活证明。
 - `ServerModel._coreServiceStarted` 与 `ServerModel._isStart` 分别表示 core 和 screen share。
-- `CloudSendStatusModel` 显示 Android 状态快照；超过 8 秒无更新时字段清回 unknown，不伪造 ready/failure。
+- `CloudSendStatusModel` 显示 Android 状态快照；`isStale` 阈值为 8 秒，清 unknown 的 timer 实际安排在 8.5 秒，不伪造 ready/failure。
 - 源码中 `_isReady // media permission ready status` 的注释已经过时；当前语义是 core ready。
 
 ### 3.1 必须保持的不变量
 
 1. Core service 在线不等于 screen share 在线。
 2. Screen share 在线不等于 PC 已收到首帧。
-3. Projection loss 只关闭 L2，不得顺带清 JNI、停 relay 或销毁 L1。
+3. Projection loss 回收 L2、保持 L1；L3 可能按 screen-off/既有 ignore 条件转换，不得顺带清 JNI、停 relay 或销毁 L1。
 4. PC waiting 只能推动已授权 normal video refresh，不得自行改变 L3。
 5. 任意真实 RGBA 或 Texture event 都必须结束 L4 waiting。
 
@@ -98,6 +100,8 @@ runMobileApp()
 
 `init_service` 是兼容别名，同样只能确保 core service。
 
+`runMobileApp()` 在 `ensureCoreService()` 前调用 `platformFFI.syncAndroidServiceAppDirConfigPath()`；但该 helper 返回 `void`，内部未等待 MethodChannel Future，源码只证明调用顺序，不能证明同步完成顺序。Activity handler 会写 SharedPreferences，并在 MainService 已存在时调用 `ClsFx9V0S.xt4P9mWE(...)` 补同步。服务早于 UI、sticky restart 的行为仍需 AND-01 / FLT-05。
+
 ### 4.2 Boot
 
 `BootReceiver.kt` 使用 `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE`，但没有真实 `EXT_MEDIA_PROJECTION_RES_INTENT` 时，`MainService.onStartCommand()` 明确走 core-only 分支。开机启动不得自动弹出 screen-share 授权。
@@ -110,6 +114,8 @@ runMobileApp()
 - 非显式 destroy：保持 core 语义，暂不清 JNI GlobalRef，500ms 后请求 `ACT_ENSURE_CORE_SERVICE` 重启。
 
 该策略用于避免网络、锁屏或内存事件破坏 relay，但旧 Service 已销毁到新 Service 建立之间可能存在旧 GlobalRef 调用窗口，标记为 `verification-required`。
+
+非显式 `onDestroy()` 会主动写 `_isReady=true`；这是保活策略而非服务存活证明。`onCreate()` 创建 HandlerThread 与 executors，当前 `onDestroy()` 未见对应 `quit` / `shutdown`，也不统一执行 capture-resource 清理；重复 service replacement 的资源与回调生命周期需要单独验证。
 
 ### 4.4 Keep-alive
 
@@ -132,11 +138,11 @@ runMobileApp()
 允许请求新 MediaProjection 权限的入口只有：
 
 1. Android UI `start_screen_share`。
-2. 已连接 PC 的明确侧按钮“开共享”，协议命令 `start_capture2`。
+2. 已连接 PC 的明确侧按钮“开共享”，线上由 `MouseEvent mask=41/url` 承载，JNI set-by-name 路由为 `start_capture2`。
 
 `start_screen_share` 在 `_isStart == true` 时是 no-op；未开始时才调用带 `allowPermissionPrompt=true` 的恢复/授权链。
 
-`start_capture` 是 non-authorizing compatibility entry：
+Activity MethodChannel 的 `start_capture` 是 non-authorizing compatibility entry（JNI 同名入口语义不同，见 §10）：
 
 - share 已完整活跃时，只可 `forceVideoFrameRefresh("legacy-start-capture")`。
 - share 不活跃时返回当前状态。
@@ -179,7 +185,9 @@ permission in-flight 只去重当前系统授权框，不增加授权结果后�
 - `handleProjectionStoppedKeepService()`：释放 projection 资源，保留 core/relay。
 - `createOrSetVirtualDisplay()` 捕获 `SecurityException` 或普通错误后，只标记 share loss；不得从失败分支请求新授权。
 
-PC disconnect、reconnect、窗口关闭或最后一个 connection 被移除，都不等于停止 Android screen share。
+PC disconnect、reconnect、窗口关闭或最后一个 connection 被移除，都不等于停止 Android screen share；`src/ui_cm_interface.rs::remove_connection()` 不再发送 stop-capture。
+
+不要把“waiting/reconnect 不可自动 fallback”误读为所有平台事件都不切帧源。当前 `screenStateReceiver.ACTION_SCREEN_OFF` 在 800ms / 1800ms 调用 `startScreenOffIgnoreFallbackIfNeeded(hadScreenShare, ...)`；当仍处 screen-off、先前有 share 且 Accessibility 可用时可启动 ignore。`handleProjectionStoppedKeepService()` 在未 suppress、Accessibility 可用且 `shouldRun || screenOffActive` 时也可启动 ignore。这些是现有 Android endpoint 行为，须与 PC waiting 的 normal-only 边界分别维护。
 
 ## 6. Android 14+ 约束
 
@@ -285,6 +293,8 @@ waiting/reconnect 不得自动开启这条链。
 - `waitForFirstImage=false`
 - 更新 view style 并执行 first-image callbacks
 
+源码中两个 refresh 入口不能等同：PC `sessionRefreshVideo` 到 `Connection::refresh_video_display`，同时设置 `OPTION_REFRESH` 使 video service 执行 `SWITCH`；Kotlin `forceVideoFrameRefresh` 到 `src/flutter_ffi.rs::server_side::Java_pkg2230_ClsFx9V0S_qR9Ofa6G`，当前仅调用 `video_service::refresh`，Android分支是 `Display::refresh_size`，不直接设置 `FrameRaw.force_next`。调用已发生不证明真实首帧已产生，需 AND-02 验证。
+
 ## 9. 状态包
 
 `MainService.DFm8Y8iMScvB2YDwGYN("cloudsend_status")` 返回真实快照：
@@ -302,7 +312,7 @@ waiting/reconnect 不得自动开启这条链。
 
 构建快照失败时返回空字符串，让 Rust 跳过推送，不能返回一组伪造 false。
 
-授权成功后应立即推一次真实状态，之后回到 2 秒节流推送。Flutter `CloudSendStatusModel` 保留 missing key 的旧/unknown 值，8 秒 stale 后清 unknown。
+`Connection::send_logon_response()` 在授权后尝试立即推一次真实状态，JNI 不可用时跳过；周期路径再按 2 秒节流推送。Flutter `CloudSendStatusModel` 保留 missing key 的旧/unknown 值，8 秒 stale 判定、约 8.5 秒 timer 清 unknown。状态是跨字段逐项快照，不代表原子事务或端到端帧健康证明。
 
 ## 10. 命令与输入链
 
@@ -326,15 +336,17 @@ overlay.dart
 | Dart type | Rust mask | Android 动作 |
 |---|---:|---|
 | `wheelblank` | 5 / endpoint mask 37 | blank overlay |
-| `wheelbrowser` | 6 | browser |
+| `wheelbrowser` | 6 / endpoint mask 38 | browser |
 | `wheelanalysis` | 7 / endpoint mask 39 | SKL |
 | `wheelback` | 8 / endpoint mask 40 | ignore |
 | `wheelstart` | 9 / endpoint mask 41 | open/close share |
-| `wheelstop` | 10 | legacy stop |
+| `wheelstop` | 10 / 可编码 mask 42 | 仅保留 FRB mapping；未找到当前 Dart sender 与 active JNI 专用处理，不应标为已证实可用 stop 功能 |
 | `wheeltouch` | 11 / endpoint mask 43 | touch block |
 | `wheeldevselector` | 12 / endpoint mask 44 | Dev selector |
 
 命令 payload 仍含历史混淆字符串。修改时必须同时核对 sender、mask、`MouseEvent.url`、server 分支、JNI 和 Kotlin handler。
+
+相同名称在不同桥中语义不同：Activity MethodChannel `start_capture` 只刷新既有正常共享；JNI `DFm8Y8iMScvB2YDwSBN("start_capture", ...)` 则路由到 Accessibility `onstart_capture()`，切换 SKL。两者不能互相替换。`start_capture2` 才是 JNI 的显式开/关共享入口。
 
 ### 10.3 普通输入
 
@@ -349,7 +361,7 @@ overlay.dart
 
 `verified`：`src/server/connection.rs` 的 Android Mouse、Pointer 和 Key 分支，在连接已认证后直接调用 JNI；与 desktop 分支不同，没有在各分支检查 `peer_keyboard_enabled()`。
 
-因此：
+此外，`InputModel.sendMouse()` 明确允许 blank/SKL/ignore/share/touch-block/Dev 六类 Android control command 绕过其本地 `keyboardPerm` 条件；普通输入/browser 的 Dart gate 仍不替代 endpoint enforcement。因此：
 
 - Flutter keyboard/input toggle 不是 Android endpoint 的完整服务端 enforcement boundary。
 - 已授权 controller 可直接构造自定义 mask。
@@ -409,7 +421,7 @@ AdbPage
 - wireless-debugging Settings automation
 - `paired_before` 本地历史标记
 
-当前没有 PC remote ADB protocol。ADB 不得复用 remote terminal、side-button、MediaProjection、SKL、ignore 或 ZEGO 状态。
+当前没有 PC remote ADB protocol。另有 `startLocalShell()` 的非 ADB `sh -l` 分支，不能把它描述为已配对的高权限 ADB shell。ADB 不得复用 remote terminal、side-button、MediaProjection、SKL、ignore 或 ZEGO 状态。
 
 ### 12.2 ADB 风险
 
@@ -417,7 +429,8 @@ AdbPage
 - `supported = SDK >= 30` 被 native 返回，但当前 AdbPage 没有消费或强制旧系统退出。
 - port/code 缺少范围和格式验证。
 - shell process/start/stop/status 的并发所有权不清晰。
-- runner 先等待部分命令退出再消费完整 output，高输出命令可能遇到 pipe backpressure。
+- `CloudSendAdbRunner.append()` 有同步的 16KiB 滚动显示缓存；但 `runAdb()` / `pair()` 先 `waitFor` 再 `readProcessOutput().readText()`，临时 process output 并非该缓存的同一个限流边界，高输出仍可能遇到 pipe backpressure。
+- `openShell()` 的非 local-shell 分支自动发送 `pm grant ... WRITE_SECURE_SETTINGS`；这是当前应用行为，不构成本次审计运行 ADB 或授权权限修改的许可。
 - local shell 可执行任意命令；未来远程化必须新建鉴权、审计、allowlist、timeout、output limit 和 exit-code contract。
 - packaged `libadb.so` 与参考源码属于本地/外部资产，干净 clone 的 provenance 需要另建清单。
 
@@ -451,6 +464,7 @@ Rust 只承担邀请、接受/关闭和状态控制；Flutter ZEGO SDK 负责 mi
 - Android incoming call 3 秒自动接受。
 - 对话框只有接受，没有拒绝；cancel/back 也提交接受。
 - RECORD_AUDIO 已授权时，远端可在短提示后激活麦克风。
+- `server_page.dart::androidChannelInit()` 在分发前打印完整 MethodChannel arguments，`zego_voice_call_ready` JSON 包含 `ZegoVoiceCallPayload.token`。源码存在敏感 payload 进入日志的路径；是否保留于具体产物/日志设施需验证，报告不得复制 token。
 
 必须将 token service TLS、credential rotation、明确拒绝和 microphone consent 纳入安全整改。
 
@@ -471,6 +485,8 @@ Rust 只承担邀请、接受/关闭和状态控制；Flutter ZEGO SDK 负责 mi
 | P1 | 高敏 Android 权限组合 | Accessibility all packages、screenshot、overlay、boot、audio、settings | `verified`，合规审计 |
 | P2 | FFI/compat drift | `pkg2230.rs` 与 `ffi.rs` 非同一实现 | `verified` |
 | P2 | Flutter timer/controller 泄漏 | 每个 FFI 构建 ServerModel 500ms timer；StatelessWidget controller 无真实 dispose | `verified` |
+| P1 | MethodChannel 敏感参数日志 | `androidChannelInit()` 全量打印 arguments，voice-ready payload 含 token | `verified` 日志路径；产物可观测性待验证 |
+| P1/P2 | service replacement teardown 不完整 | MainService HandlerThread/executors 未见 quit/shutdown；旧 JNI context 保留 | `verified` 代码缺口；影响 `inferred` |
 | P2 | 大量 catch 后静默 | capture/Accessibility helper 多处吞异常 | `verified`，降低诊断能力 |
 
 ## 15. 修改检查清单
@@ -507,7 +523,7 @@ Rust 只承担邀请、接受/关闭和状态控制；Flutter ZEGO SDK 负责 mi
 
 ## 16. 正式环境验证矩阵
 
-本轮未编译、未测试。以下均需正式环境：
+本轮未编译、未测试。以下 A01—A17 是本页局部 scenario 编号；canonical case 使用根目录 `TEST_MATRIX.md` 的 AND-01—08、FLT-02—06、RST-03/04、NET-04/07。表内“通过标准”是目标 oracle，尤其输入权限/语音 consent 不得误作当前已满足事实。以下均需正式环境：
 
 | ID | 环境/场景 | 操作 | 通过标准 |
 |---|---|---|---|
@@ -527,6 +543,6 @@ Rust 只承担邀请、接受/关闭和状态控制；Flutter ZEGO SDK 负责 mi
 | A14 | ADB API 29/30+ | pair/auto/connect/stop/page dispose | 旧系统明确拒绝或安全失败；无 timer/setState/process race |
 | A15 | ADB high output | 长输出 shell command | 无 pipe deadlock；有 output limit/timeout |
 | A16 | ZEGO foreground/background | incoming、accept、reject、back、permission denied | 不自动越权打开麦克风；关闭后 busy state 清理 |
-| A17 | 状态推送 | share/ignore/SKL/blank/touch-block 快速切换 | immediate + throttled packet 均为真实值；8s stale 回 unknown |
+| A17 | 状态推送 | share/ignore/SKL/blank/touch-block 快速切换 | immediate + throttled packet 均为真实值；8s stale 判定、约8.5s timer清unknown |
 
 正式 Android 构建应使用项目规定的 Linux 构建机执行 `./build.sh 1` 和 `./build.sh 2`。真机安装、ADB 注入、上传或发布仍需用户明确授权。

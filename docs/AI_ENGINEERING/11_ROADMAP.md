@@ -1,6 +1,6 @@
 # CloudSend 工程路线图 / Roadmap
 
-接管基线：2026-07-12  
+初始路线图：2026-07-12；最近源码边界校正：2026-10-02
 状态：`proposed`
 
 > 本路线图是接管后的工程建议，不表示已获开发、发布、密钥轮换、历史改写或基础设施操作授权。所有业务逻辑修改和外部状态变更均需单独批准。
@@ -23,7 +23,7 @@
 
 ### P0-1 Credential incident response
 
-- 确认 public repository 暴露范围和 credential 当前有效性。
+- 由 owner 确认 credential 所属环境、有效性与历史传播范围；当前只确认 tracked credential-type literals，不推断远端 public/private。
 - 由 owner 轮换/撤销 ZEGO、Token service、API 等相关 credential。
 - 将文档/脚本默认值模板化并接入 secret store。
 - 评估 Git history rewrite、clone/fork/cache 和部署端更新顺序。
@@ -38,6 +38,7 @@
 - 复核 secretbox key/nonce 方向隔离。
 - 服务端强制 Android input/custom-command permission。
 - 把 Dev selector UI password 明确限定为 UI gate，协议另设 authorization。
+- 补查 LoginRequest.PortForward 的认证前 outbound connect、terminal service_id owner 绑定、Android MultiClipboards permission；来源见本轮审计，尚未实施或复现。
 
 ### P0-3 Android native memory
 
@@ -52,6 +53,7 @@
 - 取消 Android 自动接受、cancel=accept 和无拒绝入口。
 - 麦克风启用必须有当前用户明确同意和可见状态。
 - Token 绑定 authenticated user/peer/room/TTL。
+- 去除 token/password/URI 等整包敏感日志，包括 Android MethodChannel voice-ready 参数与 RDP 参数输出；验证最终产物日志策略。
 
 ## 3. Phase 1：建立可重复工程基线
 
@@ -137,7 +139,7 @@
 
 - PC 远程 ADB command protocol。
 - 更完整的设备管理/分组能力。
-- terminal persistence。
+- terminal 跨进程/重启的耐久恢复、peer-owner隔离与权限撤销；当前已有进程内 persistent registry/reattach，不再把基础 persistence 标成未实现。
 - 多平台正式支持扩展。
 - record upload。
 - 新 capture/virtual-display backend。

@@ -1,5 +1,7 @@
 # CloudSend 文档资产审计报告 / Document Audit Report
 
+> 2026-10-02 补注：以下是固定日期历史快照，39份清单及旧Git/远端观察不是当前库存。本轮HEAD有104份Markdown；旧历史对象不可用。当前更正与逐份登记见 [接管索引](audits/2026-10-02/README.md) 和 [文档登记](audits/2026-10-02/DOCUMENT_REGISTER.md)。terminal已有进程内persistence/reattach，不应沿用“纯临时”的概括。
+
 审计日期：2026-07-12  
 源码基线：Git <code>HEAD 77062b4</code>  
 审计方式：只读源码检索、Markdown 清单、路径核对、Git <code>log/show/diff</code>  

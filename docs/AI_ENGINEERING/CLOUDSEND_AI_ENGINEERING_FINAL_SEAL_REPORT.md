@@ -1,5 +1,7 @@
 # 《CloudSend AI工程体系最终封版报告》
 
+> 固定日期治理快照。2026-10-02源码复核、当前状态和未接管边界见 [本轮接管索引](audits/2026-10-02/README.md)；“封版”不代表运行或发布验证通过。
+
 完成日期：2026-07-12  
 Source baseline：`77062b4d8b63eae9a31afe288e3ac00a4f89e009`  
 Engineering Baseline ID：`CS-BL-2026-07-12-77062b4`  

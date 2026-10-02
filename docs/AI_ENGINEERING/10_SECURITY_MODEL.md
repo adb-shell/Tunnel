@@ -1,16 +1,17 @@
 # CloudSend 安全模型 / Security Model
 
 接管基线：2026-07-12  
+最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
 状态：`verified` + `inferred` + `external` + `verification-required`
 
-> 本文是源码与公开仓库资产的静态安全接管，不是渗透测试。未测试任何 credential，有关值均不复述。当前结论足以判定：在 P0 人工处置和正式验证完成前，CloudSend 不应进入新的正式发布。
+> 本文是本地 tracked source 的静态安全接管，不是渗透测试。未测试任何 credential，有关值均不复述。2026-07-12 关于公开远端/历史传播的结论是历史记录；本轮没有联网核查，也没有完整旧 Git history，不能把它写成当前远端事实。当前源码暴露和正式验证缺口仍未关闭，不能据此批准发布。逐项证据见 [API / Security / Release Audit](audits/2026-10-02/API_SECURITY_RELEASE_AUDIT.md) 及同目录领域报告。
 
 ## 1. 总体判断
 
 当前最重要的安全问题不是一般代码质量，而是多个边界可以组合：
 
 ```text
-公开 credential / 共享远控凭据
+源码内 credential / 共享远控凭据
   + 明文或 fail-open transport
   + 可改写配置的 Android deep link
   + 未签名/未哈希的 update 或 plugin
@@ -18,7 +19,7 @@
   = 远程控制、数据泄露或代码执行的高影响路径
 ```
 
-已确认的 incident fact：公开仓库及 Git 历史中存在真实 ZEGO/Token service credential 类型的字面值。应按已泄露处理；只删除当前文件内容不能撤销历史泄露。
+本轮已确认：当前 tracked source、脚本和部署资料包含 ZEGO/Token service credential 类型字面值及客户端共享凭据。有效性、所属环境、是否仍在生产使用、当前公开性及旧历史传播范围未验证。旧接管记录声称它们曾公开；在 owner 完成排查前应按潜在已暴露凭据处置，不能用删除当前字面值替代撤销/轮换评估。
 
 静态发现但未动态复现的内容必须继续标 `verification-required`，包括握手降级、nonce reuse、deep-link 配置劫持、update/plugin 利用、DLL 劫持、JNI 悬空读等。
 
@@ -79,11 +80,13 @@ CloudSend 至少存在六个身份域：
 
 ### 已确认的认证风险
 
-- 构建内置共享远控密码可由公开源码获知，设置 permanent password 的实现没有真正更新该值。
-- Developer/toolbar 功能密码存在于公开客户端源码，只能算 UI gate。
+- 构建内置共享远控密码可由源码/客户端提取，设置 permanent password 的实现没有真正更新该值。
+- Developer/toolbar 功能密码存在于客户端源码，只能算 UI gate。
 - trusted-device 依据客户端可提交的 tuple，保留期长，缺少强密码学设备绑定。
 - product access token 保存在普通本地配置。
-- Android custom commands/input 在受控端未统一执行 keyboard permission gate。
+- Android custom commands/input 在受控端未统一执行 keyboard permission gate；已授权消息分支内，`MultiClipboards` 的 Android 路径也未像 desktop 分支一样检查 `self.clipboard`，直接进入 JNI clipboard handler（`connection.rs:2530`、`clipboard.rs:729`）。这属于登录后的 capability enforcement 缺口，不是未登录剪贴板访问证明。
+
+产品账号还存在状态写入顺序风险：`UserModel.getLoginResponseFromAuthBody()` 在 `validateUser()` 前更新本地已登录状态；失败 UI 路径未见回滚。OIDC remember-me 也写入相同 `access_token` / `user_info` keys。必须验证失败、logout、revoke 与跨登录方式状态隔离，不能把客户端资格校验或 `isLogin` 当作服务端授权（`SEC-016`，`API-01/02`）。
 
 目标模型：每设备生成高熵独立凭据，支持安全轮换/撤销；敏感 token 进入平台 secure storage；所有 capability 在受控端检查；开发入口在 production build 中不可达且不承载授权。
 
@@ -109,7 +112,7 @@ CloudSend 至少存在六个身份域：
 
 ### S-TR-04：Plaintext product control/data — Critical / E1
 
-默认 API、login、heartbeat/sysinfo、record upload 与 ZEGO token 路径存在 HTTP。登录请求可含原始产品账号密码；heartbeat response 能驱动 disconnect/config changes；录屏和 voice metadata 都是高敏数据。
+默认 API、login、heartbeat/sysinfo 与 ZEGO token 路径存在 HTTP；record upload 也使用该 API 配置，但当前 dormant，不能称为已经发生录屏上传。登录请求可含原始产品账号密码；heartbeat response 能驱动 disconnect/config changes，客户端调用传空 auth header 且未见响应签名验证。外部服务器鉴权方式、实际配置及网络暴露仍为 unknown，不能据客户端缺口断言所有生产服务完全无认证。
 
 要求：全面 HTTPS、证书校验、服务端认证、response integrity、最小 scope、timeout/size limit、replay protection。server-driven disconnect/config 必须作为高权限控制输入验证。
 
@@ -123,6 +126,8 @@ CloudSend 至少存在六个身份域：
 - 相关 Git 历史与已构建客户端
 
 这里只列路径，不列值。
+
+当前 Go 脚本并非完全没有控制：`handleCreate()` 有 method/Bearer 校验、4 KiB body cap、ID 清洗与非空检查；`authorized()` 对空/占位 key 拒绝。但 bearer secret 同时内置在 client，且未见产品 session/peer 身份核验、rate limit 或 replay control；`GenerateToken04` payload 为空，源码未提供 room privilege 绑定。已有控制不能证明业务授权或生产部署安全。
 
 ### 必须由 owner 执行的顺序
 
@@ -202,6 +207,7 @@ Plugin ZIP 解压使用 archive-provided name 拼接 target path，未见 `enclo
 - device installer、Amyuni/usbmmidd/print driver/helper 从本地 cache 复制，应用层 provenance/hash/signature 不完整。
 - 某些 privacy modes 在 hook/capture verification 失败时可能 fail-open。
 - `new-build.cmd` 未见 Windows Authenticode signing stage。
+- `win_virtual_display.rs::turn_on_privacy()` 先置 `guard.succeeded = true`，随后 `allow_err!(win_input::hook())` 并返回 `Ok(true)`；hook 错误可能被吞并虚报成功。`turn_off_privacy()` 的 `unhook()?` 位于 `restore()` 前，失败可能提前跳过显示拓扑恢复。源码顺序已确认，实际触发和恢复范围仍需 `WIN-03/04/06` 注入失败验证。
 
 要求：
 
@@ -235,24 +241,35 @@ Plugin ZIP 解压使用 archive-provided name 拼接 target path，未见 `enclo
 
 | ID | Severity | Evidence | Finding | Current disposition |
 |---|---|---|---|---|
-| SEC-001 | Critical | confirmed exposure | public/history credential literals | open incident；待 owner rotation |
+| SEC-001 | Critical | E1 current literal presence；historical exposure report | tracked credential literals；validity/public status unverified | owner incident assessment/rotation decision pending |
 | SEC-002 | Critical | E1 | shared fixed remote password + ineffective setter | release blocker |
 | SEC-003 | Critical | E1 | peer secure handshake fail-open | protocol review/negative test |
 | SEC-004 | Critical | E1 | same key/nonce sequence in both directions | crypto redesign/review |
 | SEC-005 | Critical | E1 | plaintext login/API/sync/ZEGO paths | HTTPS/auth migration |
-| SEC-006 | Critical | E1 | unauthenticated heartbeat control/config | fail-closed control auth |
+| SEC-006 | Critical | E1 client path；server unknown | heartbeat control/config 缺可见客户端认证/完整性校验 | verify backend contract + fail-closed control auth |
 | SEC-007 | Critical | E1 | Android config deep-link trust rewrite | disable/harden + consent |
 | SEC-008 | Critical | E1 | unverified update execution | suspend until signed manifest |
 | SEC-009 | High | E1 conditional | plugin archive traversal | block enable/install |
 | SEC-010 | High/Critical | E1 | Android DirectBuffer lifetime/static mut UB | ownership fix + sanitizer |
-| SEC-011 | High | E1 | endpoint input permission/UI-only gates | server enforcement |
+| SEC-011 | High | E1 | endpoint input/custom command/Android MultiClipboards permission gaps | endpoint capability enforcement |
 | SEC-012 | High | E1 | ZEGO static client auth/auto-accept | consent/token redesign |
 | SEC-013 | High/Critical | E1 | Windows unverified DLL/driver/injection + unsigned release | signed provenance gate |
 | SEC-014 | High | E1 | mutable CI/dependencies/auto push | isolate/harden workflows |
 | SEC-015 | High | E1 | weak local token/password protection | platform secure storage |
 | SEC-016 | High | E1 | developer/account gate bypasses | remove from production boundary |
+| SEC-017 | High conditional | E1 path confirmed；not reproduced | PortForward outbound connect occurs before endpoint login validation | move privileged side effect after auth；NET-04/06 |
+| SEC-018 | High conditional | E1 sinks confirmed；runtime logs not collected | RTC token payload / RDP password args / OIDC code URL may enter logs | redact at source；FLT-06/API-02/E2E-05 |
+| SEC-019 | High conditional | E1 registry path；cross-peer effect unverified | persistent terminal reuse keyed by client-supplied service ID without owner binding | bind service to authenticated owner；RST-05/NET-04/06 |
 
-Severity reflects static path and impact; except SEC-001, exploit success was not dynamically proven in this takeover.
+Severity reflects static path and potential impact. 本轮没有动态证明任何 exploit，也没有验证 credential 有效性；`SEC-001` 确认的是 tracked 字面值存在。风险关闭需要修复/正式验证或明确的 owner 风险接受。
+
+### 2026-10-02 新增路径与验证边界
+
+- `SEC-017`：`Connection::on_message()` 的 `LoginRequest::PortForward` 先检查全局 `enable-tunnel`，随后按收到的 host/port 执行 `TcpStream::connect`（`connection.rs:2095`—`:2112`），而 username/password/click/2FA 在后续。前置条件是可到达受控端协议入口且 tunnel enabled；当前发现证明认证前有 outbound connect 副作用，未证明认证前能转发任意数据或已攻破内网。修复应把连接行为放到成功认证/授权之后并限定目标策略；保留已授权 tunnel/RDP 兼容测试。`port_forward.rs::listen()` 还绑定全接口而非 loopback；客户端监听暴露范围要另作产品/安全决定。
+- `SEC-018`：`client/helper.rs::payload_json()` 包含 RTC token，经 `flutter.rs` / Kotlin `dispatchFlutterEvent()` 到 `mobile/pages/server_page.dart::androidChannelInit()`；该函数在 switch 前打印全部 arguments。`port_forward.rs::run_rdp()` 同样打印含 password 的参数列表；`account.rs::auth_task()` 输出 OIDC code/URL 结果。前置条件是相应功能运行且日志被保存/读取；未采集真实日志。修复应在输出源做字段 allowlist/redaction，验证 debug/release、错误与诊断导出都不含测试 secret。
+- `SEC-019`：terminal LoginRequest 在权限启用且登录成功后才初始化 terminal，已有这些控制。风险在后续 session ownership：`terminal.service_id` 来自 client，`get_or_create_service()` 仅按 ID 查全局 map，`PersistentTerminalService` 无 owner 字段。需要已知有效 ID、旧 persistent service 仍活着和合法 terminal 登录能力，才存在跨 peer 复用假设；不是未登录 shell bypass。修复设计需要 owner/session 绑定和 reconnect capability，覆盖原用户恢复与异用户拒绝，避免破坏 persistence。
+
+上述实现修订需独立 C2 设计/授权；V1—V4 测试、设备、签名/部署、credential 处置保持各自 C3 门。Domain/Security owner 尚需指定，不由本报告代替 owner 接受风险。
 
 ## 12. Positive Controls
 
@@ -261,7 +278,7 @@ Severity reflects static path and impact; except SEC-001, exploit success was no
 - HTTP client did not show an explicit disable-TLS-verification option.
 - Android AccessibilityService is not exported; MediaProjection permission remains system-mediated.
 - Local ADB pairing code is passed through stdin and no PC remote ADB protocol was found.
-- Workflows are manual-triggered today and repository has no GitHub Release observed at takeover time.
+- 当前本地 workflows 提供 manual dispatch，三个还提供 reusable `workflow_call`；未见 push/PR/schedule 触发。远端运行、权限和 Release 状态本轮未核查；旧“无 Release”观察仅属 2026-07-12 历史记录。
 
 These controls reduce some paths but do not close the P0/P1 findings.
 

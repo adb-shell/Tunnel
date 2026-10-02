@@ -1,5 +1,7 @@
 # CloudSend Terminal Service Implementation
 
+> 2026-10-02 source correction（V0）：`src/server/terminal_service.rs` 已有进程内 persistent service registry、`is_persistent`、断连保留和 service ID reattach；这不证明跨进程/重启耐久化或跨peer授权隔离。旧 `tmp_` / `persist_` examples 仍过时。当前边界见 [Network Protocol](docs/AI_ENGINEERING/06_NETWORK_PROTOCOL.md) 与 [本轮审计](docs/AI_ENGINEERING/audits/2026-10-02/RUST_NETWORK_WINDOWS_AUDIT.md)。
+
 > [!IMPORTANT]
 > This file is a historical terminal design note. The current documentation audit classifies it as reference-only: verify terminal facts against `src/server/terminal_service.rs`, `src/server/connection.rs`, and `flutter/lib/models/terminal_model.dart` before using them as implementation truth.
 >

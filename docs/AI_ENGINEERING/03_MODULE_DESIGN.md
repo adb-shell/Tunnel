@@ -1,6 +1,10 @@
 # CloudSend 模块设计 / Module Design
 
-基线：2026-07-12，`HEAD 77062b4`
+原始基线：2026-07-12，`HEAD 77062b4`（historical）
+
+Rust / Network / Windows 复核：2026-10-02，`HEAD 5cee692`，V0 静态源码审计
+
+本轮证据：[RUST_NETWORK_WINDOWS_AUDIT.md](audits/2026-10-02/RUST_NETWORK_WINDOWS_AUDIT.md)。未执行 build/test 或运行验证；未复核段落需结合对应领域报告使用。
 
 ## 1. 启动与进程模型
 
@@ -10,7 +14,7 @@
 
 ## 2. Connection 与 Service registry
 
-`Server::new()` 注册 display/audio/clipboard/input 等服务；每个 `Connection` 负责：
+`src/server.rs::new()` 是构造 `ServerPtr` 的 free function，注册 audio/display/clipboard 与按平台启用的 cursor/position/focus 服务；`windows + flutter` 且 adapter 初始化成功时才注册 printer。视频服务由 `Server::try_add_primay_video_service()` / `try_add_primary_camera_service()` 按需增加；terminal 的 `GenericService` 由 connection 独立创建。每个 `Connection` 负责：
 
 1. stream handshake。
 2. login request、password/hash、approve/2FA/trusted device。
@@ -65,7 +69,11 @@ CloudSend 自定义 Android 命令复用 mouse mask/url 通道，包括 blank、
 - Flutter：`terminal_model.dart`, `terminal_*` pages。
 - 当前 service ID：`ts_<uuid>`。
 
-`terminal.md` 中 `tmp_`/`persist_` 属历史设计，不能解释当前生命周期。Port forward 由 `src/port_forward.rs` 和 session interface 管理。
+当前确实有 persistent terminal：`LoginRequest.Terminal.service_id` 与 `OptionMessage.terminal_persistent` 进入 `Connection::init_terminal_service()`，使用进程内 `TERMINAL_SERVICES` registry；空 ID 才生成 `ts_<uuid>`。`TerminalServiceProxy::handle_open()` 可复用已有 terminal，controller 将返回的 service ID 存入 peer option `terminal-service-id`。这是同一 endpoint 进程内的断连保留，未实现跨进程重启恢复。
+
+`terminal_service::run()` 退出会删除非 persistent service；cleanup 每约 5 分钟检查，非 persistent 空闲阈值为 1 小时，persistent 且无 terminal 的阈值为 2 小时。已有 output buffer / channel 上限不等于所有服务、terminal 数或输入都有完整限额。`terminal.md` 中 `tmp_` / `persist_` 的 ID 与按前缀判断属于历史漂移；不能因此否认现有 persistence 功能。
+
+Port forward 由 `src/port_forward.rs::{listen, connect_and_login, run_forward}` 管理。当前 controller listener 绑定 `0.0.0.0`；endpoint 在 `LoginRequest::PortForward` 中先做 tunnel option gate，再连接目标，后续才验证 username/password/click/2FA。认证前 outbound connect、persistent service ID 缺 peer-owner 绑定、RDP credential 参数日志是待整改的静态路径，见 Network 文档。
 
 ## 8. Android runtime 模块
 
@@ -89,7 +97,7 @@ adb_page.dart
 
 当前支持 manual pair/connect、endpoint fallback、NSD retry、preferred serial、shell restart cap、best-effort wireless-debug Settings automation。PC remote ADB protocol 未实现。
 
-`libadb.so` 为本地 ignored asset，构建可复现性和来源清单未闭环。
+`libadb.so` 为 packaging 所需的 ignored/external asset；是否在当前 checkout 存在必须逐次清点，不能继承旧机器的“本地存在”结论。构建可复现性和来源清单未闭环。
 
 ## 10. Windows privacy/virtual display
 
@@ -138,3 +146,18 @@ Flutter API token、cache 和 model state 经 native local options/JSON cache �
 5. raw pointer、JNI、WinAPI、driver、injection 需要单独 safety review。
 6. 新增 API 必须记录 auth、transport、timeout、retry、idempotency、redaction。
 7. 任何恢复路径不得借“重启服务”掩盖状态机错误。
+
+## 16. Rust crate / feature / generation 定位
+
+| 入口 | 当前实现与后续修改位置 |
+|---|---|
+| `Cargo.toml` | 根 `cloudsend` + 8 个 workspace members；edition 2021 / rust-version 1.75；`cdylib`、`staticlib`、`rlib`；default feature 是 `use_dasp` |
+| `src/lib.rs` | `flutter` / mobile 编译 FRB module；`plugin_framework + flutter + desktop` 才导出 plugin；iOS 不导出 endpoint server；port forward 和 PTY 限 desktop |
+| `src/main.rs` | desktop Sciter、mobile/Flutter 与 CLI 三组 `cfg`；CLI 不是当前已验证的替代产品入口 |
+| `src/flutter.rs::{cloudsend_core_main, cloudsend_core_main_args}` | native runner 启动桥，继续调用 `core_main()`；raw C args 与释放函数属于 ABI/ownership 合约 |
+| `src/flutter_ffi.rs` | FRB source of truth；`src/bridge_generated*.rs` / `flutter/lib/generated_bridge*.dart` 是生成输出，不能手工修补作为最终方案 |
+| `libs/hbb_common/build.rs::main` | 从两份 `.proto` 生成到 `OUT_DIR/protos`，protobuf 改动必须检查 producer/consumer 和生成边界 |
+| `src/server/service.rs::ServiceTmpl` | subscriber、thread、active state、join/cleanup；修改长驻 service 时先确认这些所有权 |
+| `src/cli.rs::Session` | 与当前 `Interface`、`Data::Login`、`Client::start()` 存在静态签名/返回形状漂移；`cli + flutter` 的 `main()` cfg 也可能重叠。只有正式 RST-01 结果才能证明编译状态 |
+
+硬件 codec、`vram`、`mediacodec`、`unix-file-copy-paste`、`screencapturekit` 都是独立 feature/platform 面。模块被跟踪、默认注册或有 UI 入口，均不证明当前发布包启用了它。

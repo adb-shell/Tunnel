@@ -1,7 +1,12 @@
 # CloudSend 网络与协议 / Network Protocol
 
-接管基线：2026-07-12  
-状态：`verified` + `verification-required`
+原始接管基线：2026-07-12（historical）
+
+源码复核：2026-10-02，`HEAD 5cee692`
+
+状态：`verified` 指 V0 源码路径；运行/互操作为 `verification-required`
+
+详细证据：[RUST_NETWORK_WINDOWS_AUDIT.md](audits/2026-10-02/RUST_NETWORK_WINDOWS_AUDIT.md)
 
 > 本文描述仓库内的端点协议实现。`hbbs`、`hbbr` 服务端源码不在本仓库，因此服务端部署、数据库和运营策略只能作为外部依赖记录，不能由本文推断。
 
@@ -19,7 +24,7 @@ CloudSend 同一二进制同时包含两类角色：
 - 产品 HTTP API：账号、设备、地址簿、分组和同步。
 - ZEGO Token service 与 ZEGO RTC：语音媒体链。
 
-仓库只保存端点实现、协议定义和外部地址配置，不保存这些服务的完整实现。
+仓库只保存端点实现、协议定义和外部地址配置。ZEGO broker 有部署脚本内嵌的部分 Go 源码，但不能视作完整受控服务工程；其他外部服务也不能由 client contract 推断实现。
 
 ## 2. 协议层次
 
@@ -91,6 +96,8 @@ controller resolves peer ID through hbbs
 
 受控端认证仍由 `src/server/connection.rs` 执行，包含密码、点击确认、2FA、trusted devices 等分支。`src/common.rs::verify_login()` 当前近似直接返回 true，但它属于 legacy/custom UI gate，不能据此推断远程端点认证已关闭。
 
+此处是通常的控制流，不是“所有副作用都发生在认证后”的保证：`Connection::on_message()` 的 `LoginRequest::PortForward` 会在 `enable-tunnel` option 允许后调用 `TcpStream::connect()`，位置早于 username/password/click/2FA 检查。后续 raw byte forwarding 仍有授权门；认证前触发 outbound connect 本身是独立静态风险，需隔离环境 NET-04/06 验证。
+
 控制端 Android 自动重连的远端密码来源顺序是：当前进程会话缓存，其次构建内置的默认连接密码；禁止把本机 permanent password 当作远端密码。
 
 ## 5. 能力与权限消息
@@ -107,6 +114,8 @@ controller resolves peer ID through hbbs
 - ZEGO voice invitation state；媒体不走该 peer stream。
 
 受控端必须在服务入口处执行权限检查，UI 是否显示按钮不能作为授权边界。已确认的审计缺口：Android Mouse/Touch/Key 和部分自定义 command 在授权连接后未与 desktop 分支一样统一检查 `peer_keyboard_enabled()`。该行为需要产品安全决策和正式环境验证。
+
+另一个不一致是 `Connection::on_message()` 的 `MultiClipboards`：desktop 分支检查 `self.clipboard`，Android 分支直接进入 `src/clipboard.rs::handle_msg_multi_clipboards()` → JNI。单个 `Clipboard` 分支则有 `self.clipboard` 检查。两者仍位于 `self.authorized` 门后，不能称为未登录剪贴板访问；也不能把 endpoint 关闭 clipboard 选项描述成对所有 Android 消息均已生效。
 
 ## 6. 视频与输入在协议中的位置
 
@@ -127,22 +136,32 @@ platform capturer
 
 ```text
 Flutter InputModel
-  -> session_send_mouse/key
+  -> session_send_mouse / session_input_key / session_handle_flutter_key_event / session_handle_flutter_raw_key_event
   -> MouseEvent/KeyEvent/TouchEvent
   -> server/connection.rs
   -> platform input service or Android JNI
 ```
 
-CloudSend 在 `MouseEvent.url` 上复用了若干 Android command 字符串。修改这些命令必须同时检查 Dart、Rust FFI、client、protobuf usage、server、JNI 与 Kotlin，且需要验证旧端点收到未知命令时的行为。
+CloudSend 在 `MouseEvent.url = 5` 上复用了若干 Android command 字符串，`mask` 还承载 command type 与 button bits。`src/common.rs::input` 的自定义类型为 5—12（blank/browser/analysis/back/start/stop/touch-block/Dev selector），经 `flutter_ffi::session_send_mouse()`、`Session::send_mouse()`、`client::send_mouse()` 发出。active JNI consumer 是 `libs/scrap/src/android/pkg2230.rs::call_main_service_pointer_input()`；`ffi.rs` 不是 active 导出。
+
+修改这些命令必须同时检查 Dart、Rust FFI、client、protobuf usage、server、JNI 与 Kotlin，且需要验证旧端点收到未知命令时的行为。旧 client 对 mouse type 的低位解释与扩展命令不同，不能只凭 protobuf 可解析就声称业务兼容。
 
 ## 7. 文件、终端与隧道
 
 - 文件传输：`src/client/io_loop.rs`、`src/server/connection.rs`、`libs/hbb_common/src/fs.rs` 与 Flutter `FileModel` 协作。
-- Terminal：`src/server/terminal_service.rs` 创建 `ts_<uuid>` 临时会话；旧 `terminal.md` 的持久化描述不是当前实现。
-- Tunnel/port forwarding：使用会话协议协商后转发字节流。
+- Terminal：`src/server/terminal_service.rs` 生成 `ts_<uuid>`，临时/持久行为由 `is_persistent` 独立决定；当前支持同一进程内断连保留和 service ID 重连，未实现跨进程恢复。旧 `terminal.md` 的 `tmp_`/`persist_` 前缀规则不是当前实现。
+- Tunnel/port forwarding：使用会话协议协商后转发字节流；controller `port_forward::listen()` 当前监听 `0.0.0.0`，并非仅 localhost。endpoint 目标 host/port 来自 `LoginRequest::PortForward`，含 `RDP`→localhost:3389 特殊映射。
 - Remote printer：Windows 专属能力，需显式 option 和平台依赖。
 
 文件路径、符号链接、覆盖、权限和取消语义属于跨平台安全边界；未来改动必须包含恶意 peer 输入测试设计。
+
+补充实现边界：
+
+- `TransferJob::write()` 校验 job ID/file index，并使用 `.download` 与完成时 rename；`TransferJob::join()` 直接使用 `PathBuf::join()`。不能把这些检查等同于 canonical-path containment 或独立 session root sandbox。
+- Terminal login 有 `OPTION_ENABLE_TERMINAL` 和会话认证门，但 `TERMINAL_SERVICES` 按客户端可提交的 `service_id` 索引，未见 peer-owner 字段/匹配。已授权 peer 持有另一个有效 service ID 时的 reattach/数据隔离需 NET-04/06 检验。
+- `port_forward::run_rdp()` 将包含 RDP password 参数的 args 写入 `println!`。这里只记录位置和数据类型，不读取或复制值；日志必须纳入敏感信息治理。
+
+当前 wire anchor：`LoginRequest.terminal = 16`、`OptionMessage.terminal_persistent = 18`、`TerminalOpened.service_id = 5`、`Message.terminal_action = 31` / `terminal_response = 32`、`Misc.cloudsend_status = 39`。这些号码是已部署兼容锚点，不得复用。
 
 ## 8. ZEGO 语音控制面
 
@@ -167,7 +186,11 @@ Token 由外部 HTTP service 获取，音频经 ZEGO SDK 传输。原 RustDesk `
 
 这些结论来自静态源码审计，尚未通过抓包、互操作或攻击复现。修复前必须设计协议版本、兼容窗口和降级拒绝策略。
 
+2026-10-02 复核补充：endpoint `src/server.rs::create_tcp_connection()` 对空 `PublicKey.asymmetric_value` 只清 `key_confirmed` 后继续；收到非 PublicKey message 的分支只记录 error 后继续进入 `Connection::start()`。`Encrypt::new(key)` 初始化 send/receive counters 为 0，双方各自第一次 `enc()` 都使用计数 1，`FramedStream::get_nonce()` 无 direction tag。相同 session key 下方向 nonce 序列重合是源码可证实的构造事实；实际攻击/流量后果仍未验证。
+
 ## 10. 兼容性原则
+
+以下是变更和验收要求，不是当前每条路径都已满足的运行保证；第 4、5、7、9 节列出了当前差距。
 
 协议改动必须满足：
 
@@ -180,6 +203,8 @@ Token 由外部 HTTP service 获取，音频经 ZEGO SDK 传输。原 RustDesk `
 - 日志不得记录密码、access token、ZEGO credential、完整剪贴板或文件内容。
 
 ## 11. 可观测性
+
+以下为建议的诊断要求，尚未实现统一事件 schema 或全链路 redaction 审计。
 
 最小诊断字段应包含：
 
