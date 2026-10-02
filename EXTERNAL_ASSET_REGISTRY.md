@@ -1,6 +1,6 @@
 # Tunnel External Asset Registry
 
-最后更新：2026-10-02，Task `T-2026-10-02-001`
+最后更新：2026-10-03（ADB binary/helper 来源与服务器准备入口补充；其余 inventory 保留各自日期）
 状态：repository-side inventory rechecked at `HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`；owner/provenance onboarding incomplete
 范围：不在 Git tracked source 中，或不能由 clean clone 独立复现的 service、database、driver、binary、signing/build/release infrastructure 和历史 provenance
 
@@ -58,7 +58,7 @@ Owner 为空时统一写 `OWNER-REQUIRED`，不能由 AI 推断个人或组织�
 
 | ID | 资产 | 当前存在性 | 仓内消费/证据锚点 | Owner | 主要缺口 | 影响 |
 |---|---|---|---|---|---|---|
-| `EXT-BIN-ADB-001` | `libadb.so` for arm64-v8a / armeabi-v7a / x86_64 | `MISSING`：2026-10-02 当前 `jniLibs/` 不存在；旧记录为 ignored/local-only | `TunnelAdbRunner.kt`, Android packaging | `OWNER-REQUIRED` | upstream/source commit、reproducible build recipe、per-ABI hash、signature、version、license mapping、artifact registry | clean clone 不能复现 ADB packaging；Android release `BLOCKING` |
+| `EXT-BIN-ADB-001` | `libadb.so` for arm64-v8a / armeabi-v7a / x86 / x86_64 | `PARTIAL / NOT_ACQUIRED`：官方 LADB 固定 commit 与四 ABI Git blob hash/size/ELF 属性已登记；本机未取得 binary | `android-adb/ladb-prebuilt.lock.json`, `android-adb/prepare_adb.py`, `LocalAdbProcessSpec.kt`, Gradle `verifyTunnelAdbArtifacts` | Android/Release/Security owner required | upstream 内部 AOSP source commit/toolchain、实际 SHA-256 receipt、SBOM、signature、16 KiB/ROM 运行证据 | 服务器可获取并逐字节复核固定 prebuilt，不等于从源构建复现或发布验收；运行与 release evidence 仍 `BLOCKING` |
 | `EXT-REF-ADB-002` | `ADB-CODE/` research/decompiled materials | `MISSING`：2026-10-02 当前目录不存在，ignore 规则仍在；historical local-only | `docs/ADB_LADB_INTEGRATION_MEMORY.md` 的研究背景 | `OWNER-REQUIRED` | origin、revision、legal/provenance、是否仅研究使用、保留策略 | 旧研究结论目前不可独立重证；不得直接进入 release source |
 | `EXT-REF-ADB-003` | `LADB/` reference source | `MISSING`：2026-10-02 当前目录不存在，ignore 规则仍在；historical local-only | ADB integration memory 与实现设计背景 | `OWNER-REQUIRED` | upstream URL/commit、license obligations、旧文档所述分发限制的原始证据、修改清单 | license/distribution 需资产到位后复核；不得等同 bundled binary source |
 
@@ -72,14 +72,22 @@ Owner 为空时统一写 `OWNER-REQUIRED`，不能由 AI 推断个人或组织�
 
 这些历史 hash 不能证明当前资产存在、source、publisher、license、完整性或 release approval。材料补齐后需同时核对 source/license/recipe 与实际文件，不能只匹配历史 hash。
 
-### 4.1 Remote ADB planning assets — proposed only
+### 4.1 Remote ADB source and generated assets
 
 | ID | Asset | State / owner | Required evidence / impact |
 |---|---|---|---|
-| EXT-SRC-ADB-HELPER-001 | scrcpy v4.1受限采集适配+Tunnel本地P0协议；参考2926c06c5dc3064ae6d8db706f1a98a37cfcf3f0 | SOURCE_IMPORTED / V0 / runtime NOT_RUN；正式Android+Security+Release owner required | [provenance](android-helper/server/PROVENANCE.md)、Apache license/NOTICE与修改清单；[独立构建配方](android-helper/README.md)；不是完整scrcpy原版产物或全部API/ROM通过证明 |
-| EXT-BIN-ADB-HELPER-001 | 从上述源码构建的dex/jar helper | NOT_BUILT；Android+Release owner required | 生成manifest记录hash/版本/source/tool关联，APK校验staging；实际hash/ROM矩阵/SBOM仍缺；P0和release gate未通过 |
+| EXT-SRC-ADB-HELPER-001 | scrcpy v4.1 受限采集适配与 Tunnel helper protocol 2；来源参考 `2926c06c5dc3064ae6d8db706f1a98a37cfcf3f0` | SOURCE_IMPLEMENTED / V0 / runtime NOT_RUN；正式 Android+Security+Release owner required | [provenance](android-helper/server/PROVENANCE.md)、Apache license/NOTICE 与修改清单；[独立构建配方](android-helper/README.md)；本地源码 hash 决定实际实现，不能用 upstream reference 冒充完整 scrcpy 原版产物或 ROM 通过证明 |
+| EXT-BIN-ADB-HELPER-001 | 从上述源码构建的 dex/JAR helper，APK native assets `adb-mirror-p0/` | NOT_BUILT；Android+Release owner required | `build.sh` 默认构建/stage，不依赖 P0 开关；manifest 绑定 artifact/source/resource/tool/build-script hash，Gradle 与运行时分别核验；实际 artifact SHA-256、ROM 矩阵、SBOM 仍待服务器和设备验证 |
 
 T-2026-10-02-002只登记未来依赖；不替代EXT-BIN-ADB-001，也不宣称已安装APK缺少ADB。当前worktree的缺失与用户设备上的产物是不同证据范围。
+
+### 4.2 2026-10-03 固定来源与服务器准备
+
+- 官方 [LADB 仓库](https://github.com/tytydraco/LADB) 固定为 `60f48029cf9d8e0bc848ca41a7bd76694d4ab796`。本轮只访问其源码和 Git tree 元数据；没有下载或执行任何 ABI binary。四个 `libadb.so` 的 Git blob SHA-1、精确 size 和 ELF 属性见 [source lock](android-adb/ladb-prebuilt.lock.json)，不得与上面的历史 SHA-256 混用。
+- Linux 正式服务器 `./build.sh 1` / `./build.sh 2` 在 Flutter 构建前调用 `android-adb/prepare_adb.py`，按固定 commit 获取所需 ABI，复核 Git blob、size、ELF class/machine/PIE，计算真实 SHA-256 到 `assets/adb-provenance/manifest.json`；已有不同文件拒绝覆盖。`TUNNEL_ADB_OFFLINE=1` 仅复核已准备组件。Gradle 校验所有待打包的 `libadb.so` 与 receipt，并保留原始 executable bytes。完整命令见 [ADB provenance](android-adb/README.md)。
+- 原始 [native Apache license](https://github.com/tytydraco/LADB/blob/60f48029cf9d8e0bc848ca41a7bd76694d4ab796/app/src/main/jniLibs/LICENSE) 与 [LADB repository LICENSE](https://github.com/tytydraco/LADB/blob/60f48029cf9d8e0bc848ca41a7bd76694d4ab796/LICENSE) 分别固定、复核并随 APK 保存。后者含非官方 Google Play 分发限制；不能把一个 LICENSE 概括为整个依赖图授权，也不构成法律发布批准。
+- helper 使用现有 JDK、Android API 34 `android.jar` 和 D8 离线编译，`--stage` 对已核验且仅含两文件的旧资产作 recoverable replace；不下载工具、不执行 helper。Gradle `verifyTunnelAdbHelper` 拒绝 stale source/script/resource、protocol 或 JAR hash。临时目录/锁崩溃残留需构建负责人检查，不自动递归删除。
+- 已固定的是 **upstream prebuilt 的获取内容**，不是 upstream 从 AOSP 到 executable 的完整可复现源码链。缺失的 publisher/signature、AOSP revision/toolchain、完整 SBOM、Android 16 与 16 KiB page-size 实测仍需补齐。服务器构建、单元测试、APK 安装、配对、uid 2000、采集和远程切换在本轮均为 `NOT_RUN`。
 
 ## 5. Windows Drivers, DLLs and Helpers
 

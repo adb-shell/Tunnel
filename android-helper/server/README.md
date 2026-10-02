@@ -1,57 +1,54 @@
-# 本机 ADB capture helper（P0）
+# 本机 ADB capture helper
 
-状态：`source prototype / NOT_BUILT / NOT_RUN`。入口 `com.tunnel.adbhelper.Server`；本模块仅在手机本机显式诊断时运行，不接 PC、relay、远程命令或正式视频链。
-
-## 模块和构建边界
+2026-10-03 状态：P0—P6 源码接入中，`NOT_BUILT / NOT_RUN`。远程验收必须覆盖 helper、APK、Rust relay、PC decode/presentation，不能从本地诊断 ready 推断完成。
 
 | 文件 | 职责 |
 |---|---|
-| `Server.java` | shell UID/API gate、bootstrap、双方认证、control、EOF、deadline、进程清理 |
-| `ShellEnvironment.java` | shell 专用 ActivityThread/context、可退出 main Looper |
-| `DisplayCapture.java` | 固定上游签名的 display 0 mirror/SurfaceControl fallback；检测尺寸/方向变化 |
-| `VideoEncoder.java` | 硬件 H264 Surface encoder、CSD/IDR、显式关键帧、owned packet、释放 |
-| `H264AnnexB.java` | 有界 Annex-B SPS/PPS 与 IDR 检查；不假装支持其他 bitstream |
+| `Server.java` | shell UID/API gate、双通道认证、有限操作队列、EOF/心跳/硬期限 |
+| `ShellEnvironment.java` | shell ActivityThread/context、可退出 main Looper |
+| `DisplayCapture.java` | display 0 non-secure mirror、版本固定的反射适配 |
+| `VideoEncoder.java` | 硬件 H264 Surface encoder、CSD/IDR、旋转重建和源切换 |
+| `ShellAutomation.java` | 独立 UiAutomation、固定输入、截图、节点和 semantic Canvas |
+| `BitmapSurface.java` | bitmap → EGL/GLES → encoder Surface；video 线程独占 GL |
+| `DisplayPower.java` | display 0 的 physical token/power；仅恢复本实例关闭的屏幕 |
+| `H264AnnexB.java` | 有界 SPS/PPS/IDR 与 access unit 格式检查 |
 
-构建输入为本目录 `src/main/java` 和 `../protocol/src/main/java`。Java source/target 8、Android SDK 34 `android.jar`、D8 `--min-api 30`；无第三方 Java 库、NDK 或 Gradle plugin 依赖。构建脚本与产物封装由 `android-helper` 根目录负责；本轮没有执行编译、测试、D8、APK 安装或设备命令。
+编译输入：本目录和共享 `../protocol/src/main/java`，Java 8、SDK API 34、D8 min-api 30。无额外 Java 库、NDK 或完整 scrcpy SDK。来源和固定 commit 见 [PROVENANCE](PROVENANCE.md)；产物必须带 [NOTICE](NOTICE) 和 [LICENSE.scrcpy](LICENSE.scrcpy)。
 
-官方来源、原始 hash 与修改说明见 [PROVENANCE](PROVENANCE.md)；随产物保留 [NOTICE](NOTICE) 和 [LICENSE.scrcpy](LICENSE.scrcpy)。未全量引入 scrcpy SDK。
+## 启动与权限
 
-## APK 调用合同
+APK 持有全进程唯一 mirror lease，核验目标为本机且 shell UID=2000，再验证包内 helper hash、推送自身随机目录、核验远端 hash。helper 无 argv；自身再次拒绝非 UID 2000 或 API 30—36。stdin 只接受固定 Bootstrap，随后 EOF/额外字节撤销。
 
-1. 只允许本机已验证 ADB 的独立无 PTY 子会话启动此入口，无 argv；helper 自身再次检查 UID 必须为 2000、API 必须在 30—36。
-2. APK 先创建两个仅绑定 `127.0.0.1` 的 listener，通过 stdin 写入共享 `AdbWire.writeBootstrap()` 结构。secret 不放 argv、文件或日志。整个会话保留 stdin；EOF 表示父进程撤销，额外 stdin 字节导致退出。
-3. helper 按 **VIDEO → CONTROL** 顺序连接；每条连接 helper 调用 `authenticateServer`，APK accept 后调用 `authenticateClient`。协议角色不是 TCP client/server 方向。
-4. 两条通道认证均完成前，不初始化 capture/encoder，不调用 display API。认证失败、未知协议或包篡改会关闭会话。
-5. 首个 CONTROL `CAPABILITIES(0,0)` 仅表示完成认证；encoder/surface 初始化成功后再推 `H264 / VIDEO|KEYFRAME`。这些能力位不证明已经产生可解码画面。
-6. APK 每 1—2 秒 PING，helper PONG；只有 `REQUEST_KEYFRAME`、`STOP`、`PING` 三类控制输入。无任意命令、文件、输入注入、设置修改接口。
-7. VIDEO 首先给 `VIDEO_CONFIG`（合并 Annex-B SPS/PPS，revision 从 1 起）；随后必须为 IDR。sequence 在每条通道/方向独立连续；PTS 单调微秒。收到帧不等于 PC 解码或呈现成功。
-8. Bootstrap 规定最长边、fps、码率、1—30 秒 duration；当前 APK 接收采样窗口为 10 秒，发送 helper duration 为 20 秒，使正常收尾先由 APK 撤销 stdin 完成。duration 是 helper 独立硬上限。编解码能力失败时只给诊断错误，不偷偷切 MP、Accessibility、软件编码或再次申请权限。
+APK listener 只能绑定 `127.0.0.1`。helper 依次连接 VIDEO、CONTROL，双方 nonce/HMAC 认证完成后才初始化 Android API。helper 为协议 server，APK 为 client，与 TCP 发起方向无关。HMAC 不加密本机媒体；公网媒体只允许走现有认证、加密、relay-only 的远程会话。
 
-协议是 loopback 上的双方身份与每包 HMAC，**不提供视频加密**；不允许扩大为公网/局域网 listener。未来远程通道需要独立的 endpoint scope 与可信传输，不能复用“本机认证成功”为远控授权。
+`TunnelAdbRuntime` 是本机同意和 scope 边界：video/input/accessibility/display/snapshot/hierarchy/overlay 独立；远端不能指定 target、端口、文件、shell 或授权 scope。默认未同意时仅回 `LOCAL_CONSENT_REQUIRED`。UiAutomation 使用 `FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES`，从不修改 `enabled_accessibility_services`，不调用 executeShellCommand/adoptShellPermissionIdentity。本应用无障碍服务关闭后，helper 的节点/截图/输入来源仍是自己拥有的 UiAutomation。
 
-## 生命周期和资源所有权
+## 源和首帧
 
-- helper 启动 deadline 为 15 秒；单 socket connect 3 秒、握手/control read 5 秒。APK 另外有包含身份核实、产物准备和采样的 45 秒总 deadline。
-- capture 初始化后计 duration；duration 到期无真实发送帧则 `NO_FRAME_BEFORE_TIMEOUT`，不是成功。
-- video/control 写阻塞 2 秒由独立 watchdog 关闭 socket；control 5 秒无有效消息即退出。
-- 所有 packet 拥有 byte[]，没有跨线程存储已释放 MediaCodec ByteBuffer。每次 codec output 在 finally 中释放，主视频不经过字符串、Dart 或 stdout。
-- codec/capture/surface 仅 video thread 创建和释放；control thread 仅写原子 keyframe flag。请求合并，关键帧间隔至少 500ms。
-- stop 先撤销操作并关闭连接；video thread 随后释放 mirror、codec、surface。OEM native 调用卡住超过清理期限时只结束当前 helper PID；不调用 `kill-server`、不清配对、不停止 APK/core。
-- stdout 不承载媒体或日志。stderr 只由本代码输出 `TUNNEL_ADB_P0:<固定错误码>`；APK 仍必须有界 drain 并丢弃 vendor/framework 的原始输出，不能向 UI/持久日志直接转发。
+- live：non-secure display mirror → hardware H264。
+- snapshot：UiAutomation screenshot → bounded bitmap → EGL → 同一 H264 wire。
+- hierarchy：UiAutomation 独立节点 → 有界 semantic Canvas → EGL → 同一 H264 wire。它是结构图，不是受保护像素捕获；password 文本不输出。
+- 单一 `captureMode` 互斥三者。选择 alternate 先取得真实 bitmap，失败保留当前模式；后续 provider 丢失退回 live。EGL/codec 初始化失败则终止 helper，由 endpoint 回退已有 MediaProjection 或提示本机操作。
+- `baseMode=live/stopped` 与唯一 screenshot/hierarchy override 分离；关共享只停止 live，保留 helper/control。关闭当前 override 回 base，关闭非当前 override 为 no-op。base 已停止时 provider 丢失也回暂停，不能偷偷开启 live。暂停丢弃迟到帧并冻结输入；VIDEO read 无 socket idle timeout，由独立 control 心跳和未暂停 10 秒无帧 watchdog 取消。恢复必重建 codec、发新 revision/CONFIG 并走新 network epoch 首帧事务。
+- VIDEO_CONFIG flags 标识实际 helper source；源/尺寸/rotation 变化重建 codec、增加 revision、释放按住输入。Runtime 先冻结输入并通知 RECONFIGURE，Rust 给新 network epoch，然后发送 CONFIG/IDR。只有 PC decode ready → Activate → 真实 Presented ACK 后才 COMMITTED。收到 config、socket 通或服务活着均不算首帧。
+- 不请求 secure display/buffer，不承诺 FLAG_SECURE、DRM 或 OEM 安全层可见。截图和树可用性按实际 API 结果变化。
 
-## 首轮验证和明确不支持项
+## 有界资源与恢复
 
-以下需要后续明确授权后在正式工具链/真机执行；目前全部未运行：
+启动 helper 15 秒、APK 含 probe/stage 45 秒；本机 control 每秒 PING，5 秒无有效 control 停止。每个方向 sequence 连续，command ID 严格递增；最多 64 条排队操作、每秒 240 条 control、操作 10 秒、写阻塞 2 秒。Runtime 控制者心跳 15 秒过期；Bootstrap 硬上限一小时，旋转不延期。
 
-| 验证 | 通过证据 |
-|---|---|
-| UID/API/破损bootstrap/假listener/错误secret/调换channel | 无capture，有限时间退出 |
-| 两通道认证、initial/ready capabilities | 未初始化时不误报capture ready |
-| 默认10秒静态及运动画面 | 实际CONFIG、IDR和frames；先接收、后单独验证解码/显示 |
-| keyframe/stop/PING/EOF/客户端退出/不读视频 | 请求可取消、deadline成立，无残留helper或mirror |
-| 旋转、折叠、display尺寸变化 | 明确 `DISPLAY_CHANGED_RESTART_REQUIRED`，不继续发送错误metadata |
-| CSD分离/合并、非Annex-B/partial AU、异常buffer | 正确归类或拒绝，有界分配，不产生伪帧 |
-| 100次启动/取消、native codec阻塞 | fd/thread/native资源不持续增长，强制退出仅作用于本helper |
-| 受保护页面 | 尊重系统采集限制，不承诺安全内容可见 |
+VIDEO packet 拷贝 codec buffer，outputBuffer 总在 finally 释放；截图最长边 1280，树最多 1024 节点/depth32/text32KiB/JSON256KiB；跨线程 bitmap 槽最多一个，旧图 recycle。bitmap 与 GL 资源归明确线程所有。control 只有固定数值操作，没有远程任意命令解释器。
 
-P0 不实现：远程投屏接入、PC呈现、输入、无视、节点、无障碍启停、显示电源、防触、音频、热旋转和多viewer。具备这些后续能力必须分别增加实现与验收，不能从此诊断 ready 推断。
+停止释放输入、自己的 overlay/A11y pause、mirror/codec/GL/socket，关闭 UiAutomation，恢复自己关闭的物理 display；不清配对、不 kill-server、不重启 APK/core。清理 native binder/codec 卡住时 watchdog 最终只终止 helper PID。此时 physical display 恢复仍需真机验证，不能保证被杀死的 Java finally 能执行；物理电源键是本机恢复路径。
+
+屏幕电源以反射签名和 display0 physical address 识别；失败撤销 capability，不注入 POWER toggle。普通 APK overlay 不能可靠区分物理触摸与 ADB 注入，因此防触默认由宿主返回不支持，不伪报成功。无障碍暂停只在 ADB COMMITTED 且输入可用时允许；disableSelf 后的重新开启走本机设置确认，避免覆盖其他服务配置。
+
+## 服务器/真机验证需求（均未执行）
+
+1. 正式协议测试和 Java/D8/APK/Rust/Flutter 编译；验证产物 provenance/hash 与配置相符。
+2. 同意前拒绝、scope 越权、换 owner、旧 epoch/generation/operation 重放、双通道假监听和篡改、超长包、EOF、超时、背压。
+3. 两台目标 Android 16 的 live/静态帧/旋转/折叠、CONFIG/IDR 解码和实际呈现 ACK；旧源不抢帧、无双重输入。
+4. 无障碍共存/暂停/恢复/disableSelf、本机重新开启；拒绝输入、按住时断线和旋转不能留下 stuck key/touch。
+5. snapshot/hierarchy 切换、无节点/截图失败、password/FLAG_SECURE 页面、EGL 失败和源回退。
+6. display0 off/on、helper EOF/应用退出/被杀、物理键唤醒与恢复；防触保持不可用直至有独立可靠 provider。
+7. 一小时/持续重连和 100 次启动取消：fd/thread/native/GPU/bitmap 不持续增长、不残留 helper。

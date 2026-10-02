@@ -1,5 +1,7 @@
 # Tunnel 调试与验证体系 / Debug System
 
+> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：本轮只做V0。新增《编译验证需求》见指南第6节：服务器build.sh/new-build.cmd、OnePlus ACE6T与iQOO Neo9 Android16、ADBM01—30、无障碍返回/重绑、换源/旋转、断线/撤销/回滚、自解压载荷与驱动。不得把代码存在或语法静态检查记为设备PASS。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
+
 接管基线：2026-07-12  
 最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
 状态：`verified` + `verification-required`

@@ -12,7 +12,7 @@ internal enum class ProcessFailure {
     INVALID_LIMITS, BUSY, START_FAILED, TIMEOUT, INTERRUPTED, OUTPUT_LIMIT, DRAIN_FAILED, RUNNER_UNAVAILABLE
 }
 
-/** Output stays inside the Android implementation; never put it in logs or MethodChannel maps. */
+/** Never log or send to a peer; only the explicit phone-local terminal may display bounded output. */
 internal class BoundedProcessResult(
     val exitCode: Int?,
     val stdout: ByteArray,
@@ -39,7 +39,9 @@ internal object BoundedProcessRunner {
         environment: Map<String, String>,
         timeoutMillis: Long = 5_000,
         maxBytesPerStream: Int = 8 * 1024,
-    ): BoundedProcessResult = runWithFactory(timeoutMillis, maxBytesPerStream) {
+        stdin: ByteArray? = null,
+        cancelled: () -> Boolean = { false },
+    ): BoundedProcessResult = runControlled(timeoutMillis, maxBytesPerStream, stdin, cancelled) {
         ProcessBuilder(command)
             .directory(workingDirectory)
             .redirectErrorStream(false)
@@ -54,16 +56,21 @@ internal object BoundedProcessRunner {
         timeoutMillis: Long,
         maxBytesPerStream: Int,
         start: () -> Process,
+    ): BoundedProcessResult = runControlled(timeoutMillis, maxBytesPerStream, null, { false }, start)
+
+    private fun runControlled(
+        timeoutMillis: Long, maxBytesPerStream: Int, stdin: ByteArray?,
+        cancelled: () -> Boolean, start: () -> Process,
     ): BoundedProcessResult {
-        if (timeoutMillis !in 1..60_000 || maxBytesPerStream !in 1..1_048_576) {
+        if (timeoutMillis !in 1..60_000 || maxBytesPerStream !in 1..1_048_576 || (stdin?.size ?: 0) > 128) {
             return emptyResult(ProcessFailure.INVALID_LIMITS)
         }
         if (unavailable.get()) return emptyResult(ProcessFailure.RUNNER_UNAVAILABLE)
-        if (Thread.currentThread().isInterrupted) return emptyResult(ProcessFailure.INTERRUPTED)
+        if (Thread.currentThread().isInterrupted || cancelled()) return emptyResult(ProcessFailure.INTERRUPTED)
         if (!gate.tryAcquire()) return emptyResult(ProcessFailure.BUSY)
         return try {
             if (unavailable.get()) emptyResult(ProcessFailure.RUNNER_UNAVAILABLE)
-            else runOwned(timeoutMillis, maxBytesPerStream, start)
+            else runOwned(timeoutMillis, maxBytesPerStream, stdin, cancelled, start)
         } finally {
             gate.release()
         }
@@ -72,6 +79,8 @@ internal object BoundedProcessRunner {
     private fun runOwned(
         timeoutMillis: Long,
         maxBytesPerStream: Int,
+        stdin: ByteArray?,
+        cancelled: () -> Boolean,
         start: () -> Process,
     ): BoundedProcessResult {
         val process = try { start() } catch (_: Exception) {
@@ -87,9 +96,15 @@ internal object BoundedProcessRunner {
         try {
             outThread.start()
             errThread.start()
-            process.outputStream.close() // Finite commands are never interactive.
+            // At most 128 bytes (pairing code only); never arbitrary interactive stdin.
+            if (stdin != null) process.outputStream.write(stdin)
+            process.outputStream.close()
             val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
             while (true) {
+                if (cancelled()) {
+                    failure = ProcessFailure.INTERRUPTED
+                    break
+                }
                 if (stdout.overflow.get() || stderr.overflow.get()) {
                     failure = ProcessFailure.OUTPUT_LIMIT
                     break

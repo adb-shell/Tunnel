@@ -1,6 +1,6 @@
 # ADR-0014: Controlled Remote ADB Mirroring over Tunnel Sessions
 
-- Status：`accepted`（分阶段实施；P0验收前保持local-only运行边界）
+- Status：`accepted`（2026-10-03用户改为先交付P0—P6源码，运行能力仍需本机同意和正式验收）
 - Record Type：`contemporaneous`
 - Decision / Recorded / Last Reviewed：2026-10-02；Next Review：P0开始前。
 - Decision Owner / Approvers：项目owner / 2026-10-02用户要求按已交付方案开始实施。
@@ -9,8 +9,8 @@
 - Related Task / Decision：T-2026-10-02-002、T-2026-10-02-003 / D-015。
 - Baseline：CS-BL-2026-10-02-5cee692；规划HEAD为532637a，仅后续文档差异。
 - Cases / Assets：ADBM-01—30；EXT-BIN-ADB-001、EXT-SRC-ADB-HELPER-001、EXT-BIN-ADB-HELPER-001。
-- Supersedes：ADR-0007仅在P0验证后、受控typed投屏范围内被限定扩展；任意shell仍local-only；当前未开放远程入口。
-- Implementation / Evidence：P0 local prototype source added / V0 source and upstream review；V1—V5 NOT_RUN；P0整体未通过。
+- Supersedes：ADR-0007在受控typed投屏范围内被限定扩展；任意shell仍local-only。当前源码包含受控PC入口，默认无本机同意；未经运行验收不能声称发布就绪。
+- Implementation / Evidence：T-2026-10-03-001全链源码/V0；V1—V5 NOT_RUN；P0—P6设备验收未通过记录。当前基线TUN-BL-2026-10-03-ADB；细节见[实现指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
 
 ## Context / Problem
 
@@ -59,7 +59,7 @@ PC只发送typed有限操作，不接触配对secret、不直连adbd、不开放
 
 ## Build, Operations, Release and External Assets
 
-native ADB来源闭环仍缺；helper受限源码已引入，binary仍NOT_BUILT。正式Android/Windows环境及脚本副作用按08_BUILD_SYSTEM确认；本ADR不授权Git、构建、真机或发布。
+native ADB现有固定LADB commit/blob供应脚本，完整build-from-source provenance仍未取得；helper源码与自动准备/核验配方已引入，本地binary仍NOT_BUILT。正式Android/Windows构建在其他服务器，本ADR不授权本机Git、构建、真机或发布。
 
 ## Verification Plan and Evidence
 
@@ -75,6 +75,8 @@ native ADB来源闭环仍缺；helper受限源码已引入，binary仍NOT_BUILT�
 激活前保留旧source；激活后回滚使用新epoch/barrier，不能恢复旧epoch。撤销ADB lease后退出helper，不kill全局ADB。MP已失效时本机重新授权，不声称无提示恢复。
 
 ## Approval Record
+
+2026-10-03补充：用户明确要求“直接完成P0—P6，之后再编译测试”，覆盖此前先P0再写后续源码的顺序；本机consent/真实能力/不绕过系统保护等不变量保持。P0—P6源码与设备PASS分别记录。该范围变更追记D-017；原日期批准记录保留。
 
 | Date | Actor | Decision | Scope |
 |---|---|---|---|

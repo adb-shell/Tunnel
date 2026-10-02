@@ -33,6 +33,7 @@ use video_service::VideoSource;
 use crate::ipc::Data;
 
 pub mod audio_service;
+pub mod android_control;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod terminal_service;
 cfg_if::cfg_if! {
@@ -336,6 +337,11 @@ impl Server {
             let primary_camera_name =
                 video_service::get_service_name(VideoSource::Camera, camera::PRIMARY_CAMERA_IDX);
             if let Some(s) = self.services.get(&primary_camera_name) {
+                #[cfg(target_os = "android")]
+                if !android_control::subscribe(conn.id(), true) {
+                    self.connections.insert(conn.id(), conn);
+                    return;
+                }
                 s.on_subscribe(conn.clone());
             }
         }
@@ -353,6 +359,10 @@ impl Server {
                 continue;
             }
             if !noperms.contains(&(&name as _)) {
+                #[cfg(target_os = "android")]
+                if Self::is_video_service_name(&name) && !android_control::subscribe(conn.id(), true) {
+                    continue;
+                }
                 s.on_subscribe(conn.clone());
             }
         }
@@ -362,6 +372,8 @@ impl Server {
     }
 
     pub fn remove_connection(&mut self, conn: &ConnInner) {
+        #[cfg(target_os = "android")]
+        android_control::subscribe(conn.id(), false);
         for s in self.services.values() {
             s.on_unsubscribe(conn.id());
         }
@@ -393,6 +405,10 @@ impl Server {
     pub fn subscribe(&mut self, name: &str, conn: ConnInner, sub: bool) {
         if let Some(s) = self.services.get(name) {
             if s.is_subed(conn.id()) == sub {
+                return;
+            }
+            #[cfg(target_os = "android")]
+            if Self::is_video_service_name(name) && !android_control::subscribe(conn.id(), sub) {
                 return;
             }
             if sub {

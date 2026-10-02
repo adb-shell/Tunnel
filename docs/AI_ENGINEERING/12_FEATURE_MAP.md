@@ -1,5 +1,7 @@
 # Tunnel 功能定位与跨层对接地图
 
+> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：远程ADB已从计划转为源码链；顶栏android_adb_menu→android_mode_model→sessionPeerOption保留命令→AndroidControl→TunnelAdbRuntime→helper；返回视频走encoded.rs/decoder/barrier。侧按钮由InputModel按已提交owner分流。运行能力/限制与入口详见指南。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
+
 复核日期：2026-10-02；Baseline：`CS-BL-2026-10-02-5cee692`；证据：V0。
 用途：收到产品修改需求时确定入口、对接两端和验证范围。状态表示源码可达性/编译条件，不表示发布包或运行已验证。完整行为仍以对应领域文档和源码为准。
 

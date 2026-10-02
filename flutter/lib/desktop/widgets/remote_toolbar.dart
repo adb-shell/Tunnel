@@ -24,6 +24,7 @@ import '../../models/platform_model.dart';
 import '../../common/shared_state.dart';
 import './popup_menu.dart';
 import './kb_layout_type_chooser.dart';
+import './android_adb_menu.dart';
 
 class ToolbarState {
   late RxBool _pin;
@@ -454,6 +455,9 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
   Widget _buildToolbar(BuildContext context) {
     final List<Widget> toolbarItems = [];
     toolbarItems.add(_PinMenu(state: widget.state));
+    if (!isWebDesktop && widget.ffi.connType == ConnType.defaultConn) {
+      toolbarItems.add(AndroidAdbMenu(ffi: widget.ffi));
+    }
     if (!isWebDesktop) {
       toolbarItems.add(_MobileActionDevMenu(ffi: widget.ffi));
       toolbarItems.add(_MobileActionMenu(ffi: widget.ffi));

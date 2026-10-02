@@ -4,8 +4,8 @@
  * Copyright (C) 2018 Genymobile
  * Copyright (C) 2018-2026 Romain Vimont
  * Licensed under the Apache License, Version 2.0; see LICENSE.scrcpy.
- * Tunnel modifications: one bounded H264 probe, authenticated owned packets,
- * explicit keyframe requests, non-secure capture, stop on display changes.
+ * Tunnel modifications: authenticated owned packets, explicit keyframe requests,
+ * non-secure capture, rotation restart, bitmap EGL capture providers.
  */
 package com.tunnel.adbhelper;
 
@@ -16,6 +16,7 @@ import android.media.MediaFormat;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.Surface;
+import android.graphics.Bitmap;
 
 import com.tunnel.adb.protocol.AdbWire;
 
@@ -33,6 +34,7 @@ final class VideoEncoder {
     private long lastPts;
     private byte[] sentConfig;
     private boolean waitForKey = true;
+    private int currentMode;
 
     VideoEncoder(AdbWire.Bootstrap options, Server.Lifecycle lifecycle, AdbWire.Session output) {
         this.options = options;
@@ -41,14 +43,30 @@ final class VideoEncoder {
     }
 
     void run() throws Exception {
+        while (!lifecycle.stopped()) {
+            if (lifecycle.captureMode() == 3) { Thread.sleep(100); continue; }
+            try { captureOnce(); return; }
+            catch (DisplayChanged rotation) {
+                lifecycle.displayChanged();
+                if (sentConfig != null) { Arrays.fill(sentConfig, (byte) 0); sentConfig = null; }
+                waitForKey = true;
+            }
+        }
+    }
+
+    private static final class DisplayChanged extends Exception { }
+
+    private void captureOnce() throws Exception {
         DisplayCapture capture = null;
         MediaCodec encoder = null;
         Surface surface = null;
+        BitmapSurface painter = null;
         boolean started = false;
         try {
             ensureRunning();
             capture = new DisplayCapture();
             DisplayCapture.Snapshot snapshot = capture.snapshot();
+            currentMode = lifecycle.captureMode();
             MediaCodecInfo selected = findEncoder();
             MediaCodecInfo.VideoCapabilities caps = selected.getCapabilitiesForType(MIME).getVideoCapabilities();
             int alignment = Math.max(2, Math.max(caps.getWidthAlignment(), caps.getHeightAlignment()));
@@ -73,14 +91,16 @@ final class VideoEncoder {
             encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
             surface = encoder.createInputSurface();
             ensureRunning();
-            capture.start(surface, snapshot, width, height);
+            if (currentMode == 0) capture.start(surface, snapshot, width, height);
+            else painter = new BitmapSurface(surface, width, height);
             ensureRunning();
             encoder.start();
             started = true;
             lifecycle.captureStarted(options.durationSeconds);
             lifecycle.sendCapabilities();
-            stream(encoder, capture, snapshot, width, height);
+            stream(encoder, capture, snapshot, width, height, painter);
         } finally {
+            if (painter != null) painter.close();
             if (capture != null) capture.close();
             if (encoder != null) {
                 if (started) {
@@ -93,7 +113,7 @@ final class VideoEncoder {
         }
     }
 
-    private void stream(MediaCodec encoder, DisplayCapture capture, DisplayCapture.Snapshot initial, int width, int height)
+    private void stream(MediaCodec encoder, DisplayCapture capture, DisplayCapture.Snapshot initial, int width, int height, BitmapSurface painter)
             throws Exception {
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
         H264AnnexB configuration = new H264AnnexB();
@@ -101,8 +121,15 @@ final class VideoEncoder {
         long lastKeyRequest = 0;
         while (!lifecycle.stopped()) {
             long now = SystemClock.elapsedRealtime();
+            if (currentMode != lifecycle.captureMode()) throw new DisplayChanged();
+            if (painter != null) {
+                Bitmap bitmap = lifecycle.takeBitmap();
+                if (bitmap != null) {
+                    try { painter.draw(bitmap, System.nanoTime()); } finally { bitmap.recycle(); }
+                }
+            }
             if (now >= nextDisplayCheck) {
-                if (!initial.sameAs(capture.snapshot())) throw new IOException("DISPLAY_CHANGED_RESTART_REQUIRED");
+                if (!initial.sameAs(capture.snapshot())) throw new DisplayChanged();
                 nextDisplayCheck = now + 250;
             }
             if (now - lastKeyRequest >= 500 && lifecycle.takeKeyframeRequest()) {
@@ -172,7 +199,7 @@ final class VideoEncoder {
     private void publishConfiguration(H264AnnexB configuration, int width, int height) throws IOException {
         byte[] next = configuration.configuration();
         if (next != null && !Arrays.equals(next, sentConfig)) {
-            send(AdbWire.Packet.of(AdbWire.VIDEO_CONFIG, 0, options.epoch, ++configRevision, ++sequence,
+            send(AdbWire.Packet.of(AdbWire.VIDEO_CONFIG, currentMode * 2, options.epoch, ++configRevision, ++sequence,
                     0, width, height, next));
             if (sentConfig != null) Arrays.fill(sentConfig, (byte) 0);
             sentConfig = next;

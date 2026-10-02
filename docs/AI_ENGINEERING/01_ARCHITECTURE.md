@@ -1,5 +1,7 @@
 # Tunnel 完整架构 / Architecture
 
+> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：新增 helper→APK TunnelAdbRuntime→owned JNI encoded→relay→候选 decoder/barrier→Flutter呈现ACK。ADB与MediaProjection保留独立生命周期，只有COMMITTED开放输入。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
+
 最近关键链路复核：2026-10-02，`HEAD 5cee692` / V0。详细覆盖与未验证边界见 [本轮审计](audits/2026-10-02/README.md)。
 
 ## 1. 运行体与信任边界

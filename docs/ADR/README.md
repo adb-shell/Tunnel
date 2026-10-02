@@ -71,7 +71,7 @@ retrospective -> 只有 decision owner 重新批准才可 accepted
 | 0011 | Adopt AI Engineering Truth Layer | accepted | backfill | D-011 | implemented / V0 |
 | 0012 | Adopt Task Protocol and Permission Gates | accepted | backfill | D-012 | implemented / V0 |
 | 0013 | Integrate a Safe Superpowers Subset | accepted | contemporaneous | D-013 | implemented / V0 |
-| [0014](0014-controlled-remote-adb-mirroring.md) | Controlled Remote ADB Mirroring | accepted, staged | contemporaneous | D-015 | P0 local prototype source / V0；runtime NOT_RUN；ADR-0007 local-only边界仍生效 |
+| [0014](0014-controlled-remote-adb-mirroring.md) | Controlled Remote ADB Mirroring | accepted, 2026-10-03 amended | contemporaneous | D-015/D-017 | 全链源码 / V0；runtime NOT_RUN；有限typed扩展，shell仍local-only |
 
 ## 6. Responsibility Boundaries
 

@@ -649,6 +649,13 @@ class _PermissionCheckerState extends State<PermissionChecker> {
                 ).marginOnly(bottom: 8),
           PermissionRow(translate("Input Control"), serverModel.inputOk,
               serverModel.toggleInput),
+          if (serverModel.accessibilityState == 'waiting_for_system')
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Text('无障碍已在设置中启用，正在等待系统连接服务。请稍候；若持续未连接，请检查系统的受限设置、自启动和后台运行权限。'),
+            ),
+          if (serverModel.accessibilityState == 'paused')
+            const Text('无障碍授权保留，功能已暂停；ADB 可独立运行。'),
           hasAudioPermission
               ? PermissionRow(translate("Audio Capture"), serverModel.audioOk,
                   serverModel.toggleAudio)
@@ -1045,6 +1052,11 @@ void androidChannelInit() {
     debugPrint("flutter got android msg,$method,$arguments");
     try {
       switch (method) {
+        case "accessibility_state":
+          if (arguments is Map) {
+            gFFI.serverModel.updateAccessibilityState(arguments);
+          }
+          break;
         case "start_capture":
           {
             gFFI.dialogManager.dismissAll();

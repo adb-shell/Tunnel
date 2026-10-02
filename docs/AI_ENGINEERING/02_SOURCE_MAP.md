@@ -1,5 +1,7 @@
 # Tunnel 源码地图 / Source Map
 
+> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：新增 `android-adb/`、`adb/mirror/TunnelAdbSession.kt` / `TunnelAdbRuntime.kt`、`AccessibilityLifecycle.kt`、`src/server/android_control.rs`、`libs/scrap/src/android/encoded.rs`、Flutter `android_mode_model.dart` / `android_adb_menu.dart` / `adb_remote_consent_card.dart`。完整路径见指南第2节；原P0地图是历史阶段。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
+
 最近关键路径复核：2026-10-02，`HEAD 5cee692` / V0。按功能和接口定位见 [12_FEATURE_MAP.md](12_FEATURE_MAP.md)，覆盖边界见 [本轮审计](audits/2026-10-02/README.md)。
 
 ## 1. 状态标签

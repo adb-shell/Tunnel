@@ -1,5 +1,7 @@
 # Tunnel 安全模型 / Security Model
 
+> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：本次新ADB入口要求secured/authenticated normal session、键盘权限/视频订阅、单owner、本机scope+TTL与撤销；helper限定本机uid2000、认证IPC、固定操作和owned资源清理。远程文本shell禁入，截图/节点不突破secure，A11y重新开启走本机settings；既有SEC项不因本次新增控制自动关闭。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
+
 接管基线：2026-07-12  
 最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
 状态：`verified` + `inferred` + `external` + `verification-required`

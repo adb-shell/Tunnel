@@ -1,4 +1,5 @@
 package com.tunnel.app
+import com.tunnel.app.adb.mirror.TunnelAdbRuntime
 
 import pkg2230.ClsFx9V0S
 
@@ -86,10 +87,55 @@ const val VIDEO_KEY_BIT_RATE = 1024_000
 const val VIDEO_KEY_FRAME_RATE = 30
 
 class DFm8Y8iMScvB2YDw : Service() {
+    private val authorizedAdbClients = ConcurrentHashMap.newKeySet<Int>()
+
+    fun canGrantAdbConsent(id: Int): Boolean = authorizedAdbClients.contains(id)
+
+    private fun initializeAdbRuntime() {
+        TunnelAdbRuntime.initialize(applicationContext, object : TunnelAdbRuntime.Hooks {
+            override fun sendEncoded(epoch: Long, revision: Long, width: Int, height: Int,
+                ptsUs: Long, key: Boolean, config: Boolean, bytes: ByteArray): Boolean =
+                ClsFx9V0S.adbEncodedFrame(epoch, revision, width, height, ptsUs, key, config, bytes)
+            override fun onState(connId: Int, json: String) {
+                ClsFx9V0S.adbRuntimeState(connId, json)
+            }
+            override fun setAccessibilityPaused(paused: Boolean): Boolean =
+                AccessibilityLifecycle.setPaused(applicationContext, paused)
+            override fun disableOwnAccessibility(): Boolean =
+                AccessibilityLifecycle.disableOwnService(applicationContext)
+            override fun accessibilityBound(): Boolean = nZW99cdXQ0COhB2o.ctx != null
+            override fun normalCaptureReady(): Boolean =
+                _isStart && mediaProjection != null && virtualDisplay != null
+            override fun setAdbCaptureCommitted(committed: Boolean) {
+                AccessibilityLifecycle.adbCaptureCommitted = committed
+                AccessibilityLifecycle.adbOwnsInput = committed
+                mainHandler.post {
+                    if (committed) nZW99cdXQ0COhB2o.resetCaptureStates("adb-committed")
+                    else if (normalCaptureReady()) forceVideoFrameRefresh("adb-return-normal")
+                    AccessibilityLifecycle.publish(applicationContext)
+                }
+            }
+            override fun openLocalAccessibilitySettings() {
+                mainHandler.post { AccessibilityLifecycle.openSettings(applicationContext) }
+            }
+            override fun openUrl(url: String): Boolean {
+                val parsed = android.net.Uri.parse(url)
+                if (parsed.scheme !in setOf("https", "http") || parsed.host.isNullOrEmpty()) return false
+                return try {
+                    startActivity(Intent(Intent.ACTION_VIEW, parsed).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    true
+                } catch (_: Exception) { false }
+            }
+            // An APK touch-consuming overlay also consumes injected events on Android 16.
+            // Do not advertise touch blocking until a provider can preserve remote input.
+            override fun setOverlay(blockTouch: Boolean, black: Boolean): Boolean = !blockTouch && !black
+        })
+    }
 
     @Keep
     @RequiresApi(Build.VERSION_CODES.N)
     fun DFm8Y8iMScvB2YDwPI(kind: Int, mask: Int, x: Int, y: Int,url: String) {
+        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbOwnsInput) return
         // turn on screen with LEFT_DOWN when screen off
         if (!powerManager.isInteractive && (kind == 0 || mask == LEFT_DOWN)) {
             if (wakeLock.isHeld) {
@@ -115,6 +161,7 @@ class DFm8Y8iMScvB2YDw : Service() {
       @Keep
     @RequiresApi(Build.VERSION_CODES.N)
     fun DFm8Y8iMScvB2YDwPI(kind: Int, mask: Int, x: Int, y: Int) {
+        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbOwnsInput) return
         // turn on screen with LEFT_DOWN when screen off
         if (!powerManager.isInteractive && (kind == 0 || mask == LEFT_DOWN)) {
             if (wakeLock.isHeld) {
@@ -195,6 +242,23 @@ class DFm8Y8iMScvB2YDw : Service() {
 
     @Keep
     fun DFm8Y8iMScvB2YDwSBN(name: String, arg1: String, arg2: String) {
+        if (name == "adb_control_request") {
+            val id = arg1.toIntOrNull() ?: return
+            val state = TunnelAdbRuntime.handleRequest(id, arg2)
+            val requestOp = runCatching { JSONObject(arg2).optString("op") }.getOrDefault("")
+            val response = runCatching { JSONObject(state) }.getOrNull()
+            if (requestOp !in setOf("input", "heartbeat", "keyframe") ||
+                response == null || response.optBoolean("operationRejected") || response.optString("code").isNotEmpty()) {
+                ClsFx9V0S.adbRuntimeState(id, state)
+            }
+            return
+        }
+        if (name == "adb_control_disconnect") {
+            val id = arg1.toIntOrNull() ?: return
+            authorizedAdbClients.remove(id)
+            TunnelAdbRuntime.onDisconnected(id)
+            return
+        }
         Log.d("MainService", "JNI dispatch: name=$name")
         if (name == "update_voice_call_state") {
             handleVoiceCallStateForForeground(arg1)
@@ -351,6 +415,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         if (!authorized || isFileTransfer) {
             return
         }
+        if (id > 0) authorizedAdbClients.add(id)
         lastAuthorizedRemoteConnectionAt = SystemClock.elapsedRealtime()
         val reason = "authorized-connection-$id"
         mainHandler.postDelayed({ forceVideoFrameRefresh("$reason-early") }, 200)
@@ -590,6 +655,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         explicitStopRequested = false
         ClsFx9V0S.ygmLIEQ5(this)
         ctx = this
+        initializeAdbRuntime()
         HandlerThread(p50.a(byteArrayOf(-111, 68, -29, 10, 94, 79, -53), byteArrayOf(-62, 33, -111, 124, 55, 44, -82)), Process.THREAD_PRIORITY_BACKGROUND).apply {
             start()
             serviceLooper = looper
@@ -645,6 +711,8 @@ class DFm8Y8iMScvB2YDw : Service() {
     }
 
     override fun onDestroy() {
+        TunnelAdbRuntime.shutdown()
+        authorizedAdbClients.clear()
         if (explicitStopRequested) {
             _isReady = false
             captureStarting = false
@@ -1254,7 +1322,7 @@ class DFm8Y8iMScvB2YDw : Service() {
                             // If not call acquireLatestImage, listener will not be called again
                             imageReader.acquireLatestImage().use { image ->
                                 if (image == null || (!isStart && !captureStarting)) return@setOnImageAvailableListener
-                                if (SKL || shouldRun) return@setOnImageAvailableListener
+                                if (SKL || shouldRun || AccessibilityLifecycle.adbCaptureCommitted) return@setOnImageAvailableListener
                                 //Wt=false
                                 val planes = image.planes
                                 val buffer = planes[0].buffer

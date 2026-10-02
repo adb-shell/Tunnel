@@ -458,6 +458,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
     }
 
     private fun requestPenetrateFrame(reason: String, immediate: Boolean = false) {
+        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbCaptureCommitted) return
         if (!SKL) return
         val now = SystemClock.uptimeMillis()
         val elapsed = now - lastPenetrateRenderMs
@@ -483,7 +484,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
                 } catch (e: Exception) {
                     null
                 }
-                if (SKL && root != null) {
+                if (SKL && root != null && !AccessibilityLifecycle.paused && !AccessibilityLifecycle.adbCaptureCommitted) {
                     EqljohYazB0qrhnj.a012933444444(root)
                 }
             } catch (e: Exception) {
@@ -646,6 +647,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.N)
     fun onMouseInput(mask: Int, _x: Int, _y: Int,url: String) {
+        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbOwnsInput) return
         markRemoteTouchBlockActivity()
         val x = max(0, _x)
         val y = max(0, _y)
@@ -778,6 +780,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.N)
     fun onTouchInput(mask: Int, _x: Int, _y: Int) {
+        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbOwnsInput) return
         markRemoteTouchBlockActivity()
         when (mask) {
             TOUCH_PAN_UPDATE -> {
@@ -1308,6 +1311,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.N)
     fun onKeyEvent(data: ByteArray) {
+        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbOwnsInput) return
         val keyEvent = KeyEvent.parseFrom(data)
         val keyboardMode = keyEvent.getMode()
 
@@ -2418,6 +2422,7 @@ fun b481c5f9b372ead_2() {
 
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (AccessibilityLifecycle.paused) return
 
      if (wirelessDebugAutomationRunning) {
          processWirelessDebugAutomationEvent(event)
@@ -2447,6 +2452,7 @@ fun b481c5f9b372ead_2() {
 )
 
     fun d(str: String?) {
+        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbCaptureCommitted) return
         try {
             if (str != null) {
         
@@ -2533,6 +2539,10 @@ fun b481c5f9b372ead_2() {
         }
 
         override fun onSuccess(screenshotResult: AccessibilityService.ScreenshotResult) {
+            if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbCaptureCommitted) {
+                screenshotResult.hardwareBuffer.close()
+                return
+            }
             if ((shouldRun || nZW99cdXQ0COhB2o.isOneShotScreenshotFrame) && !SKL) {
                 ScreenshotThread(screenshotResult).start()
             }
@@ -2552,7 +2562,13 @@ fun b481c5f9b372ead_2() {
         super.onServiceConnected()
         ctx = this
 
-		ClsFx9V0S.mvky6Ica(this)
+        try {
+            AccessibilityLifecycle.configure(this)
+        } catch (e: Exception) {
+            // Keep the valid manifest configuration if a ROM rejects a dynamic flag update.
+            Log.w("InputService", "ServiceInfo update rejected; retaining system configuration", e)
+        }
+        AccessibilityLifecycle.publish(this)
         if (pendingIgnoreCapture) {
             startIgnoreCapture("service-connected")
         }
@@ -2630,9 +2646,8 @@ fun b481c5f9b372ead_2() {
 
 	
     override fun onDestroy() {
-		if(ctx!=null)
-    {    ctx = null
-	}
+        if (ctx === this) ctx = null
+        AccessibilityLifecycle.publish(this)
         applyBlankOverlayVisual(false)
         restoreBlankBrightness("destroy")
         DevAutoSelectorController.release(this)
@@ -2664,9 +2679,25 @@ fun b481c5f9b372ead_2() {
 
 		 shouldRun =false
 		 i.shutdown()
+        executor.shutdown()
 
         super.onDestroy()
     }
 
     override fun onInterrupt() {}
+
+    fun onRuntimePaused(paused: Boolean) {
+        if (!paused) return
+        cancelWirelessDebugAutomation()
+        pendingIgnoreCapture = false
+        stopIgnoreCaptureLoop("runtime-paused")
+        SKL = false
+        penetrateRenderPending = false
+        setTouchBlockEnabled(false)
+        gohome = View.GONE
+        BIS = false
+        applyBlankOverlayVisual(false)
+        restoreBlankBrightness("runtime-paused")
+        DevAutoSelectorController.release(this)
+    }
 }

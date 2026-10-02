@@ -2664,6 +2664,8 @@ impl LoginConfigHandler {
 
 /// Media data.
 pub enum MediaData {
+    AdbWake,
+    AndroidVideoBarrier(AndroidVideoBarrier),
     VideoQueue,
     VideoFrame(Box<VideoFrame>),
     AudioFrame(Box<AudioFrame>),
@@ -2683,6 +2685,7 @@ pub fn start_video_thread<F, T>(
     session: Session<T>,
     display: usize,
     video_receiver: mpsc::Receiver<MediaData>,
+    adb_receiver: mpsc::Receiver<MediaData>,
     video_queue: Arc<RwLock<ArrayQueue<VideoFrame>>>,
     fps: Arc<RwLock<Option<usize>>>,
     chroma: Arc<RwLock<Option<Chroma>>>,
@@ -2700,13 +2703,64 @@ pub fn start_video_thread<F, T>(
         #[cfg(windows)]
         sync_cpu_usage();
         get_hwcodec_config();
-        let mut video_handler = None;
+        let mut video_handler: Option<VideoHandler> = None;
+        let mut adb_candidate: Option<(AndroidVideoMetadata, VideoHandler, bool, bool)> = None;
+        let mut adb_epoch = 0u64;
+        let mut adb_active = false;
+        let mut rollback_waiting = false;
         let mut count = 0;
         let mut duration = std::time::Duration::ZERO;
         let mut skip_beginning = 0;
         loop {
             if let Ok(data) = video_receiver.recv() {
+                let data = match data {
+                    MediaData::AdbWake => match adb_receiver.try_recv() {
+                        Ok(data) => data,
+                        Err(_) => continue,
+                    },
+                    data => data,
+                };
                 match data {
+                    MediaData::AndroidVideoBarrier(barrier) => {
+                        let Some(metadata) = barrier.metadata.into_option() else { continue; };
+                        if metadata.epoch == 0 || metadata.epoch < adb_epoch { continue; }
+                        if barrier.action == 1 {
+                            let Some((candidate_meta, handler, pixelbuffer, ready)) = adb_candidate.take() else { continue; };
+                            if !ready || candidate_meta.epoch != metadata.epoch
+                                || candidate_meta.revision != metadata.revision
+                                || candidate_meta.sequence < metadata.sequence { continue; }
+                            // End recording before switching source; an ADB recording must
+                            // be explicitly restarted after its own capability gate.
+                            if let Some(old) = video_handler.as_mut() {
+                                old.record_screen(false, String::new(), display, is_view_camera);
+                            }
+                            video_handler = Some(handler);
+                            while video_queue.read().unwrap().pop().is_some() {}
+                            adb_epoch = metadata.epoch;
+                            adb_active = true;
+                            rollback_waiting = false;
+                            session.handle_peer_switch_display(&SwitchDisplay {
+                                display: display as i32, width: metadata.width as i32,
+                                height: metadata.height as i32, ..Default::default()
+                            });
+                            session.update_android_control(crate::server::android_control::video_event(&candidate_meta, "PRESENT_FRAME"));
+                            if let Some(handler) = video_handler.as_mut() {
+                                video_callback(display, &mut handler.rgb, handler.texture.texture, pixelbuffer);
+                            }
+                        } else if barrier.action == 2 {
+                            adb_candidate = None;
+                            video_handler = None;
+                            while video_queue.read().unwrap().pop().is_some() {}
+                            adb_epoch = metadata.epoch;
+                            adb_active = false;
+                            rollback_waiting = true;
+                            // The last visible image stays until a fresh normal frame.
+                            session.update_android_control(crate::server::android_control::video_event(&metadata, "ROLLING_BACK"));
+                        } else if barrier.action == 3 {
+                            adb_candidate = None;
+                            session.update_android_control(crate::server::android_control::video_event(&metadata, "NORMAL"));
+                        }
+                    }
                     MediaData::VideoFrame(_) | MediaData::VideoQueue => {
                         let vf = match data {
                             MediaData::VideoFrame(vf) => {
@@ -2731,6 +2785,51 @@ pub fn start_video_thread<F, T>(
                         let display = vf.display as usize;
                         let start = std::time::Instant::now();
                         let format = CodecFormat::from(&vf);
+                        let android_metadata = vf.android_video.as_ref().cloned();
+                        if let Some(metadata) = android_metadata.as_ref() {
+                            if metadata.phase == 1 {
+                                if metadata.epoch <= adb_epoch { continue; }
+                                if adb_candidate.as_ref().map_or(true, |(candidate, _, _, _)| candidate.epoch != metadata.epoch) {
+                                    adb_candidate = Some((metadata.clone(), VideoHandler::new(format, display), true, false));
+                                }
+                                let Some((candidate, handler, pixelbuffer, ready)) = adb_candidate.as_mut() else { continue; };
+                                if candidate.revision != metadata.revision || handler.fail_counter == usize::MAX { continue; }
+                                let mut ignored_chroma = None;
+                                match handler.handle_frame(vf, pixelbuffer, &mut ignored_chroma) {
+                                    Ok(true) => {
+                                        let size = if *pixelbuffer { (handler.rgb.w, handler.rgb.h) }
+                                            else { (handler.texture.w, handler.texture.h) };
+                                        if size != (metadata.width as usize, metadata.height as usize) {
+                                            handler.fail_counter = usize::MAX;
+                                            session.send(Data::Message(crate::server::android_control::message(
+                                                serde_json::json!({"v":1,"op":"stop","operationId":metadata.operation_id,
+                                                    "epoch":metadata.epoch,"generation":metadata.generation,"payload":{}}).to_string())));
+                                            continue;
+                                        }
+                                        *candidate = metadata.clone();
+                                        if !*ready {
+                                            *ready = true;
+                                            session.update_android_control(crate::server::android_control::video_event(candidate, "CANDIDATE_READY"));
+                                        }
+                                    }
+                                    Err(_) => {
+                                        handler.fail_counter = usize::MAX;
+                                        session.update_android_control(serde_json::json!({"v":1,"phase":"ERROR",
+                                            "code":"CANDIDATE_DECODE_FAILED","operationId":metadata.operation_id,
+                                            "epoch":metadata.epoch,"generation":metadata.generation}).to_string());
+                                        session.send(Data::Message(crate::server::android_control::message(
+                                            serde_json::json!({"v":1,"op":"stop","operationId":metadata.operation_id,
+                                                "epoch":metadata.epoch,"generation":metadata.generation,"payload":{}}).to_string())));
+                                    }
+                                    _ => {}
+                                }
+                                continue;
+                            }
+                            if metadata.epoch != adb_epoch { continue; }
+                            if metadata.phase != if adb_active { 2 } else { 3 } { continue; }
+                        } else if adb_active || rollback_waiting {
+                            continue;
+                        }
                         if video_handler.is_none() {
                             let mut handler = VideoHandler::new(format, display);
                             let record_state = session.lc.read().unwrap().record_state;
@@ -2747,6 +2846,28 @@ pub fn start_video_thread<F, T>(
                             let format_changed = handler.decoder.format() != format;
                             match handler.handle_frame(vf, &mut pixelbuffer, &mut tmp_chroma) {
                                 Ok(true) => {
+                                    if let Some(metadata) = android_metadata.as_ref().filter(|metadata| metadata.phase == 2) {
+                                        let size = if pixelbuffer { (handler.rgb.w, handler.rgb.h) }
+                                            else { (handler.texture.w, handler.texture.h) };
+                                        if size != (metadata.width as usize, metadata.height as usize) {
+                                            session.send(Data::Message(crate::server::android_control::message(
+                                                serde_json::json!({"v":1,"op":"stop","operationId":metadata.operation_id,
+                                                    "epoch":metadata.epoch,"generation":metadata.generation,"payload":{}}).to_string())));
+                                            continue;
+                                        }
+                                    }
+                                    if let Some(metadata) = android_metadata.as_ref() {
+                                        if rollback_waiting {
+                                            rollback_waiting = false;
+                                            let (width, height) = if pixelbuffer { (handler.rgb.w, handler.rgb.h) }
+                                                else { (handler.texture.w, handler.texture.h) };
+                                            session.handle_peer_switch_display(&SwitchDisplay {
+                                                display: display as i32, width: width as i32,
+                                                height: height as i32, ..Default::default()
+                                            });
+                                            session.update_android_control(crate::server::android_control::video_event(metadata, "PRESENT_FRAME"));
+                                        }
+                                    }
                                     video_callback(
                                         display,
                                         &mut handler.rgb,
@@ -2805,6 +2926,11 @@ pub fn start_video_thread<F, T>(
                             }
                         }
                         if should_update_supported {
+                            if let Some(metadata) = android_metadata.as_ref().filter(|metadata| metadata.phase == 2) {
+                                session.send(Data::Message(crate::server::android_control::message(
+                                    serde_json::json!({"v":1,"op":"stop","operationId":metadata.operation_id,
+                                        "epoch":metadata.epoch,"generation":metadata.generation,"payload":{}}).to_string())));
+                            }
                             session.send(Data::Message(
                                 session.lc.read().unwrap().update_supported_decodings(),
                             ));
@@ -2816,6 +2942,7 @@ pub fn start_video_thread<F, T>(
                         }
                     }
                     MediaData::RecordScreen(start) => {
+                        if adb_active || rollback_waiting { continue; }
                         let id = session.lc.read().unwrap().id.clone();
                         if let Some(handler) = video_handler.as_mut() {
                             handler.record_screen(start, id, display, is_view_camera);

@@ -1,5 +1,7 @@
 # Tunnel Windows 完整链路 / Windows Pipeline
 
+> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：`pc-bulid.cmd`为`new-build.cmd`兼容入口。portable用新staging，保留Release，传播Cargo失败并读取实际compiler-artifact executable；`--require`检查runtime/驱动，EXE旁生成SHA256载荷清单。PC decoder新增ADB候选/barrier，记录在切源前停止；真实Windows编译/解压/驱动验证未执行。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
+
 原始基线：2026-07-12，`HEAD 77062b4`（historical）
 
 源码复核：2026-10-02，`HEAD 5cee692`，V0

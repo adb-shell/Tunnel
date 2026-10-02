@@ -1,5 +1,7 @@
 # Tunnel 项目总览 / Project Overview
 
+> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：新增受控远程 ADB 源码链；本地同意、单 owner、typed 操作与 H264 投屏已接入。P0—P6运行验收仍未完成。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
+
 最近源码复核：2026-10-02
 源码基线：`HEAD 5cee692` / `CS-BL-2026-10-02-5cee692`
 接管角色：Tunnel Principal Engineer

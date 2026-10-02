@@ -1,5 +1,23 @@
 # Tunnel Task History
 
+## T-2026-10-03-001 后续：首次测试源码云端交付
+
+- 用户明确授权提交当前ADB源码与文档并推送 `origin/test`，提交说明为“ADB版本首次测试”。
+- 目标：`https://github.com/adb-shell/Tunnel.git` 的 `refs/heads/test`；提交前远端和本地起点均为 `bc50fe5b2061970e4e88ff58bbd76c7827de1159`。
+- 操作范围：stage/commit/普通push；结果核验当前commit与远端ref。服务器编译、真机验收及发布不在此次操作范围，V1—V5仍NOT_RUN。
+
+## T-2026-10-03-001：ADB全链源码与首轮故障修复
+
+- 状态：source delivered / handoff至服务器验证；未宣称P6验收通过。
+- 用户明确补充正式Android/Windows构建均不在本地，LADB为native来源，OnePlus ACE6T/iQOO Neo9均Android16；要求直接完成P0—P6源码后测试。
+- 开始：test/bc50fe5b2061970e4e88ff58bbd76c7827de1159，干净工作树；全程既有worktree。
+- 源码：本地ADB配对/连接/互斥、LADB锁定供应、helper和H264/JNI/relay、PC事务切换/输入/顶栏、手机scoped consent、截图/节点/显示、A11y复查/暂停/自身关闭/设置、Windows portable。
+- 文档：ADB_REMOTE_IMPLEMENTATION_GUIDE、任务/基线、AI_ENGINEERING相关领域、ADR0014/D017、External Registry、测试矩阵和全局记忆。
+- 证据：V0跨域review，配置及Python AST、diff静态检查；build/test/analyze/codegen/device NOT_RUN。未取得binary/已生成安装包，不声称ROM兼容实测。
+- 限制：ADB防触摸不能保证保留注入故明确拒绝；安全A11y重新启用需要手机settings确认；secure画面不绕过；单owner。指南记录其余输入/设备验证边界。
+- 下一步：用户在正式服务器配套构建PC/APK/helper，按指南双Android16与Windows自解压/驱动验收，带版本/hash/脱敏日志反馈。无需修改原checkout或自动同步云端。
+- Git/发布：未stage/commit/push；未版本/签名/服务变更。CE-20261003-T001-01；STATE-20261003-001。
+
 ## T-2026-10-02-004：Tunnel 产品身份迁移
 
 - Timestamp：2026-10-02 Asia/Shanghai；Owner：tunnel-master。

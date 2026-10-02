@@ -366,11 +366,20 @@ impl Subscriber for ConnInner {
 
     #[inline]
     fn send(&mut self, msg: Arc<Message>) {
+        #[cfg(target_os = "android")]
+        if matches!(&msg.union, Some(message::Union::VideoFrame(_)))
+            && !super::android_control::permit_normal_video(self.id) {
+            // Release the old capture service's pacing credit even though its
+            // frame is intentionally excluded from this source transaction.
+            video_service::notify_video_frame_fetched(self.id, None);
+            return;
+        }
         // Send SwitchDisplay on the same channel as VideoFrame to avoid send order problems.
         let tx_by_video = match &msg.union {
             Some(message::Union::VideoFrame(_)) => true,
             Some(message::Union::Misc(misc)) => match &misc.union {
                 Some(misc::Union::SwitchDisplay(_)) => true,
+                Some(misc::Union::AndroidVideoBarrier(_)) => true,
                 _ => false,
             },
             _ => false,
@@ -569,6 +578,7 @@ impl Connection {
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         std::thread::spawn(move || Self::handle_input(_rx_input, tx_cloned));
         let mut second_timer = crate::rustdesk_interval(time::interval(Duration::from_secs(1)));
+        let mut adb_timer = time::interval(Duration::from_millis(16));
         #[cfg(target_os = "android")]
         let mut tunnel_status_tick = 0u8;
 
@@ -598,6 +608,25 @@ impl Connection {
             tokio::select! {
                 // biased; // video has higher priority // causing test_delay_timer failed while transferring big file
 
+                _ = adb_timer.tick(), if cfg!(target_os = "android") => {
+                    #[cfg(target_os = "android")]
+                    if let Some(message) = super::android_control::poll(id, conn.adb_allowed()) {
+                        if let Some(message::Union::Misc(misc)) = &message.union {
+                            if let Some(misc::Union::AndroidVideoBarrier(barrier)) = &misc.union {
+                                // Discard old source frames before this ordered source barrier.
+                                while rx_video.try_recv().is_ok() {}
+                                if barrier.action == 2 { conn.refresh_video_display(None); }
+                            }
+                        }
+                        // A blocked video write must not hold the helper/input lease forever.
+                        if !matches!(time::timeout(Duration::from_secs(3), conn.stream.send(&message)).await, Ok(Ok(()))) {
+                            conn.on_close("Android ADB channel write timeout", false).await;
+                            break;
+                        }
+                    }
+                    #[cfg(target_os = "android")]
+                    if super::android_control::take_normal_refresh(id) { conn.refresh_video_display(None); }
+                },
                 Some(data) = rx_from_cm.recv() => {
                     match data {
                         ipc::Data::Authorize => {
@@ -645,6 +674,8 @@ impl Connection {
                             log::info!("Change permission {} -> {}", name, enabled);
                             if &name == "keyboard" {
                                 conn.keyboard = enabled;
+                                #[cfg(target_os = "android")]
+                                if !enabled { super::android_control::permission_revoked(id); }
                                 conn.send_permission(Permission::Keyboard, enabled).await;
                                 if let Some(s) = conn.server.upgrade() {
                                     s.write().unwrap().subscribe(
@@ -824,6 +855,14 @@ impl Connection {
                     }
                 }
                 Some((instant, value)) = rx_video.recv() => {
+                    #[cfg(target_os = "android")]
+                    if !super::android_control::permit_normal_video(id) {
+                        video_service::notify_video_frame_fetched(id, Some(instant.into()));
+                        continue;
+                    }
+                    #[cfg(target_os = "android")]
+                    let value = super::android_control::decorate_normal(id, &value)
+                        .map(Arc::new).unwrap_or(value);
                     if !conn.video_ack_required {
                         video_service::notify_video_frame_fetched(id, Some(instant.into()));
                     }
@@ -1795,6 +1834,18 @@ impl Connection {
         self.keyboard && !self.disable_keyboard
     }
 
+    #[cfg(target_os = "android")]
+    fn adb_allowed(&self) -> bool {
+        self.adb_view_allowed() && self.peer_keyboard_enabled()
+    }
+
+    #[cfg(target_os = "android")]
+    fn adb_view_allowed(&self) -> bool {
+        self.authorized && self.stream.is_secured() && self.is_remote()
+            && self.services_subed && !self.closed
+            && super::android_control::capture_permitted(self.inner.id())
+    }
+
     fn clipboard_enabled(&self) -> bool {
         self.clipboard && !self.disable_clipboard
     }
@@ -2319,6 +2370,11 @@ impl Connection {
             match msg.union {
                 #[allow(unused_mut)]
                 Some(message::Union::MouseEvent(mut me)) => {
+                    #[cfg(target_os = "android")]
+                    if super::android_control::route_mouse(self.inner.id(), &me, self.adb_allowed())
+                        || !self.peer_keyboard_enabled() || super::android_control::blocks_legacy_input(self.inner.id()) {
+                        return true;
+                    }
                     if self.is_authed_view_camera_conn() {
                         return true;
                     }
@@ -2341,6 +2397,11 @@ impl Connection {
                     self.update_auto_disconnect_timer();
                 }
                 Some(message::Union::PointerDeviceEvent(pde)) => {
+                    #[cfg(target_os = "android")]
+                    if super::android_control::route_pointer(self.inner.id(), &pde, self.adb_allowed())
+                        || !self.peer_keyboard_enabled() || super::android_control::blocks_legacy_input(self.inner.id()) {
+                        return true;
+                    }
                     if self.is_authed_view_camera_conn() {
                         return true;
                     }
@@ -2385,6 +2446,10 @@ impl Connection {
                 Some(message::Union::KeyEvent(..)) => {}
                 #[cfg(any(target_os = "android"))]
                 Some(message::Union::KeyEvent(mut me)) => {
+                    if super::android_control::route_key(self.inner.id(), &me, self.adb_allowed())
+                        || !self.peer_keyboard_enabled() || super::android_control::blocks_legacy_input(self.inner.id()) {
+                        return true;
+                    }
                     if self.is_authed_view_camera_conn() {
                         return true;
                     }
@@ -2858,7 +2923,23 @@ impl Connection {
                     Some(misc::Union::Option(o)) => {
                         self.update_options(&o).await;
                     }
+                    Some(misc::Union::AndroidControl(control)) => {
+                        #[cfg(target_os = "android")]
+                        {
+                            let h264 = self.lr.option.as_ref()
+                                .and_then(|option| option.supported_decoding.as_ref())
+                                .map_or(false, |decoding| decoding.ability_h264 > 0);
+                            if let Some(message) = super::android_control::request(
+                                self.inner.id(), &control.json, self.adb_allowed(), self.adb_view_allowed(), h264) {
+                                allow_err!(self.stream.send(&message).await);
+                            }
+                        }
+                        #[cfg(not(target_os = "android"))]
+                        { let _ = control; }
+                    }
                     Some(misc::Union::RefreshVideo(r)) => {
+                        #[cfg(target_os = "android")]
+                        if super::android_control::refresh_current_source(self.inner.id(), self.adb_allowed()) { return true; }
                         if r {
                             // Refresh all videos.
                             // Compatibility with old versions and sciter(remote).
@@ -2867,6 +2948,8 @@ impl Connection {
                         self.update_auto_disconnect_timer();
                     }
                     Some(misc::Union::RefreshVideoDisplay(display)) => {
+                        #[cfg(target_os = "android")]
+                        if super::android_control::refresh_current_source(self.inner.id(), self.adb_allowed()) { return true; }
                         self.refresh_video_display(Some(display as usize));
                         self.update_auto_disconnect_timer();
                     }
@@ -3064,6 +3147,17 @@ impl Connection {
                     // TODO: Maybe we can do a voice call from cm directly.
                 }
                 Some(message::Union::ScreenshotRequest(request)) => {
+                    // The legacy screenshot service reads the MediaProjection cache.
+                    // Never label that stale image as an ADB capture.
+                    #[cfg(target_os = "android")]
+                    if super::android_control::leased() {
+                        let mut response = Message::new();
+                        response.set_screenshot_response(ScreenshotResponse { sid: request.sid,
+                            msg: "Screenshot export is unavailable during Android ADB capture".into(),
+                            ..Default::default() });
+                        self.send(response).await;
+                        return true;
+                    }
                     if let Some(tx) = self.inner.tx.clone() {
                         crate::video_service::set_take_screenshot(
                             request.display as _,
@@ -3501,6 +3595,12 @@ impl Connection {
                 .user_custom_fps(self.inner.id(), o.custom_fps as _);
         }
         if let Some(q) = o.supported_decoding.clone().take() {
+            #[cfg(target_os = "android")]
+            super::android_control::decoder_changed(self.inner.id(), q.ability_h264 > 0);
+            #[cfg(target_os = "android")]
+            if let Some(option) = self.lr.option.as_mut() {
+                option.supported_decoding = Some(q.clone()).into();
+            }
             scrap::codec::Encoder::update(scrap::codec::EncodingUpdate::Update(self.inner.id(), q));
         }
         if let Ok(q) = o.lock_after_session_end.enum_value() {
@@ -3603,6 +3703,8 @@ impl Connection {
         if let Ok(q) = o.disable_keyboard.enum_value() {
             if q != BoolOption::NotSet {
                 self.disable_keyboard = q == BoolOption::Yes;
+                #[cfg(target_os = "android")]
+                if self.disable_keyboard { super::android_control::permission_revoked(self.inner.id()); }
                 if let Some(s) = self.server.upgrade() {
                     s.write().unwrap().subscribe(
                         super::clipboard_service::NAME,
@@ -3790,6 +3892,8 @@ impl Connection {
     }
 
     async fn on_close(&mut self, reason: &str, lock: bool) {
+        #[cfg(target_os = "android")]
+        super::android_control::revoke(self.inner.id());
         if self.closed {
             return;
         }

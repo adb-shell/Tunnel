@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit, offline P0 helper build; never downloads tools or overwrites staged assets."""
+"""Explicit, offline helper build with verified, recoverable staging; never downloads tools."""
 
 import argparse
 import datetime
@@ -65,14 +65,61 @@ def stage(jar, manifest):
     within(assets, REPOSITORY)
     assets.mkdir(parents=True, exist_ok=True)
     destination = assets / "adb-mirror-p0"
-    # mkdir is the exclusive reservation. Never delete/reuse a partial or prior staging directory.
-    destination.mkdir(exist_ok=False)
-    for source, name in ((jar, "helper.jar"), (manifest, "manifest.json")):
-        with source.open("rb") as incoming, (destination / name).open("xb") as outgoing:
-            shutil.copyfileobj(incoming, outgoing)
-    if sha256(destination / "helper.jar") != sha256(jar):
-        raise ValueError("Staged helper hash mismatch; retain partial directory for review")
-    return destination
+    lock = assets / ".adb-mirror-stage.lock"
+    temporary = assets / (".adb-mirror-next-" + uuid.uuid4().hex)
+    backup = assets / (".adb-mirror-previous-" + uuid.uuid4().hex)
+
+    def validate_directory(directory):
+        within(directory, assets)
+        if directory.is_symlink() or not directory.is_dir():
+            raise ValueError("Helper stage must be a real directory")
+        if {item.name for item in directory.iterdir()} != {"helper.jar", "manifest.json"}:
+            raise ValueError("Helper stage contains unexpected files; retain it for review")
+        for name in ("helper.jar", "manifest.json"):
+            path = directory / name
+            if path.is_symlink() or not path.is_file():
+                raise ValueError("Helper stage contains a non-regular file")
+        data = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+        if (data.get("schema") != 1 or data.get("protocol") not in (1, 2)
+                or data.get("implementation") != "tunnel-local-adb-p0"
+                or data.get("entryPoint") != ENTRY_POINT
+                or data.get("sha256") != sha256(directory / "helper.jar")
+                or data.get("size") != (directory / "helper.jar").stat().st_size):
+            raise ValueError("Existing helper stage is not a verified compatible artifact")
+
+    def remove_verified_directory(directory):
+        # Only these two validated files are owned here. Never recursively remove a path.
+        validate_directory(directory)
+        (directory / "helper.jar").unlink()
+        (directory / "manifest.json").unlink()
+        directory.rmdir()
+
+    # Exclusive staging prevents concurrent builds mixing jar and manifest generations.
+    with lock.open("x", encoding="ascii") as reservation:
+        reservation.write(str(os.getpid()) + "\n")
+    try:
+        if destination.exists() or destination.is_symlink():
+            validate_directory(destination)
+        temporary.mkdir(exist_ok=False)
+        for source, name in ((jar, "helper.jar"), (manifest, "manifest.json")):
+            with source.open("rb") as incoming, (temporary / name).open("xb") as outgoing:
+                shutil.copyfileobj(incoming, outgoing)
+        validate_directory(temporary)
+        if sha256(temporary / "helper.jar") != sha256(jar):
+            raise ValueError("Staged helper hash mismatch; retain temporary directory for review")
+        if destination.exists():
+            destination.rename(backup)
+        try:
+            temporary.rename(destination)
+        except OSError:
+            if backup.exists() and not destination.exists():
+                backup.rename(destination)
+            raise
+        if backup.exists():
+            remove_verified_directory(backup)
+        return destination
+    finally:
+        lock.unlink()
 
 
 def main():
@@ -80,7 +127,7 @@ def main():
     parser.add_argument("--android-jar", required=True, help="Android SDK platform android-34/android.jar")
     parser.add_argument("--d8-jar", required=True, help="Existing Android SDK build-tools lib/d8.jar")
     parser.add_argument("--jdk-bin", required=True, help="Explicit JDK bin directory (JDK 17 recommended)")
-    parser.add_argument("--stage", action="store_true", help="Explicit first-time copy into Android native P0 assets")
+    parser.add_argument("--stage", action="store_true", help="Verify and atomically replace the generated Android helper assets")
     args = parser.parse_args()
 
     android_jar = required_file(args.android_jar, "android.jar")
@@ -99,8 +146,6 @@ def main():
         raise ValueError("P0 requires the explicit Android SDK API 34 platform")
     check_jar(android_jar, "android/media/MediaCodec.class")
     check_jar(d8_jar, "com/android/tools/r8/D8.class")
-    if args.stage and (REPOSITORY / "flutter/android/app/src/main/assets/adb-mirror-p0").exists():
-        raise ValueError("P0 asset directory already exists; staging never overwrites it")
 
     source_roots = (ROOT / "protocol/src/main/java", ROOT / "server/src/main/java")
     sources = sorted(path for directory in source_roots for path in directory.rglob("*.java"))
@@ -159,7 +204,7 @@ def main():
             or any(sha256(path) != resource_hashes[path.relative_to(ROOT).as_posix()] for _, path in resources)):
         raise ValueError("Build input changed during build; output retained but cannot be staged")
     manifest = output / "manifest.json"
-    data = {"schema": 1, "protocol": 1, "sha256": sha256(jar), "size": jar.stat().st_size,
+    data = {"schema": 1, "protocol": 2, "sha256": sha256(jar), "size": jar.stat().st_size,
             "upstreamCommit": UPSTREAM_COMMIT, "entryPoint": ENTRY_POINT,
             "implementation": "tunnel-local-adb-p0", "sourceTreeSha256": tree_digest,
             "sourceFiles": source_hashes, "resourceFiles": resource_hashes, "toolInputs": tools,

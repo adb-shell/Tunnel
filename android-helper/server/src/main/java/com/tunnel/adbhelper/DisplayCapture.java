@@ -4,7 +4,7 @@
  * Copyright (C) 2018-2026 Romain Vimont
  * Licensed under the Apache License, Version 2.0; see LICENSE.scrcpy.
  * Tunnel modifications: display 0 only, non-secure mirroring, bounded snapshot,
- * fail on display changes, no input/GL/power/audio/new-display support.
+ * report display changes to the owning encoder; no secure/new-display support.
  */
 package com.tunnel.adbhelper;
 

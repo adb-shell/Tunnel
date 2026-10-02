@@ -720,6 +720,10 @@ impl InvokeUiSession for FlutterHandler {
         self.push_event("update_tunnel_status", &[("status", &json)], &[]);
     }
 
+    fn update_android_control(&self, json: String) {
+        self.push_event("android_control", &[("status", &json)], &[]);
+    }
+
     fn set_connection_type(&self, is_secured: bool, direct: bool) {
         self.push_event(
             "connection_ready",

@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/tytydraco/LADB",
+  "commit": "60f48029cf9d8e0bc848ca41a7bd76694d4ab796",
+  "artifactKind": "upstream-prebuilt-not-source-rebuilt",
+  "observed": "2026-10-03",
+  "artifacts": {
+    "arm64-v8a": {"path": "app/src/main/jniLibs/arm64-v8a/libadb.so", "gitBlobSha1": "572b479326f7b501938c3d57ee3f7da26a443610", "size": 5142600, "elfClass": 2, "elfMachine": 183},
+    "armeabi-v7a": {"path": "app/src/main/jniLibs/armeabi-v7a/libadb.so", "gitBlobSha1": "69826a330fa73251c55aae179b6a3bd0be571e5b", "size": 3747472, "elfClass": 1, "elfMachine": 40},
+    "x86": {"path": "app/src/main/jniLibs/x86/libadb.so", "gitBlobSha1": "90b46d8bd0d8a2b0df0f09714d29f58ab0b31623", "size": 5865124, "elfClass": 1, "elfMachine": 3},
+    "x86_64": {"path": "app/src/main/jniLibs/x86_64/libadb.so", "gitBlobSha1": "86cd05197bcda866b931bb3a85a20e10e1fb4b3a", "size": 5417704, "elfClass": 2, "elfMachine": 62}
+  },
+  "notices": {
+    "LICENSE.adb": {"path": "app/src/main/jniLibs/LICENSE", "gitBlobSha1": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64", "size": 11357},
+    "LICENSE.ladb": {"path": "LICENSE", "gitBlobSha1": "e2293ed95c2ee8a1b5eac793a646fa214bf67a7b", "size": 1428}
+  }
+}

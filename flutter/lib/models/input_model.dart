@@ -371,7 +371,8 @@ class InputModel {
 
   late final SessionID sessionId;
 
-  bool get keyboardPerm => parent.target!.ffiModel.keyboard;
+  bool get keyboardPerm => parent.target!.ffiModel.keyboard &&
+      !parent.target!.androidModeModel.inputFrozen;
   String get id => parent.target?.id ?? '';
   String? get peerPlatform => parent.target?.ffiModel.pi.platform;
   bool get isViewOnly => parent.target!.ffiModel.viewOnly;
@@ -501,6 +502,7 @@ class InputModel {
   }
 
   KeyEventResult handleRawKeyEvent(RawKeyEvent e) {
+    if (parent.target?.androidModeModel.inputFrozen == true) return KeyEventResult.handled;
     if (isViewOnly) return KeyEventResult.handled;
     if (isViewCamera) return KeyEventResult.handled;
     if (!isInputSourceFlutter) {
@@ -556,6 +558,7 @@ class InputModel {
   }
 
   KeyEventResult handleKeyEvent(KeyEvent e) {
+    if (parent.target?.androidModeModel.inputFrozen == true) return KeyEventResult.handled;
     if (isViewOnly) return KeyEventResult.handled;
     if (isViewCamera) return KeyEventResult.handled;
     if (!isInputSourceFlutter) {
@@ -871,6 +874,8 @@ class InputModel {
 
   /// Send mouse press event.
   Future<void> sendMouse(String type, MouseButtons button, {String url = ''}) async {
+    if (await parent.target?.androidModeModel.sideAction(type, url) == true) return;
+    if (parent.target?.androidModeModel.inputFrozen == true) return;
     final isAndroidControlCommand = peerPlatform == kPeerPlatformAndroid &&
         const {
           'wheelblank',

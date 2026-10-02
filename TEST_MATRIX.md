@@ -175,6 +175,8 @@ Never include token、password、credential、production URL/IP、peer/device ID
 
 ## 14. Proposed Remote ADB Suite
 
+2026-10-03：P0—P6源码已扩展，当前运行入口/范围见[实现指南](docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)，用户要求先完成源码后服务器验证。测试机为OnePlus ACE6T/iQOO Neo9 Android16；ADBM运行结果仍全部NOT_RUN。新增首轮重点：A11y已授权未绑定/返回/重建、native/helper缺件构建失败、mDNS手工回退与取消、换源真实呈现ACK/旧帧、权限撤销与屏幕恢复、portable实际Cargo路径及驱动清单。下方P0-only描述保留为T003历史阶段，不是当前实现范围。
+
 `ADBM-01`—`ADBM-30` 的前置条件、动作、结果和阶段统一维护于[ADB投屏方案第14节](docs/plans/ADB_REMOTE_MIRRORING_PLAN.md#14-验收矩阵与性能目标)，避免两处复制。运行状态全部 `NOT_RUN`。T003新增protocol/target/identity/process的JUnit源码与本地H264诊断入口，但不等于任何整项ADBM通过；正式命令与部分覆盖见[P0交接](docs/plans/ADB_P0_VALIDATION_RUNBOOK.md)。
 
 覆盖本机授权/helper/codec、输入与epoch切换、无障碍pause/disable/enable、其他服务共存、UiAutomation独占、侧按钮、弱网/资源上限/旧端/多窗口、回滚及产物来源。ADBM与AND-01—06/08、FLT-02—07、NET-01—06、E2E-01联合验收。现有AND-06的local-only基线保持；ADR-0014虽已接受分阶段实施，正式remote行为合同仍须P0与后续相应测试。

@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.SystemClock
 import com.tunnel.app.BuildConfig
+import com.tunnel.app.adb.TunnelAdbManager
 import com.tunnel.app.adb.probe.BoundedProcessRunner
 import com.tunnel.app.adb.probe.LocalAdbIdentityProbe
 import com.tunnel.app.adb.probe.LocalAdbTargetPolicy
@@ -45,7 +46,8 @@ object TunnelAdbPrototype {
         if (current != null) return@synchronized snapshot
         if (unavailable) return@synchronized emptyState() + ("reason" to "RESTART_APP_REQUIRED")
         if (Build.VERSION.SDK_INT !in 30..36) return@synchronized emptyState() + ("reason" to "UNSUPPORTED_ANDROID")
-        val run = Run(context.applicationContext, serial)
+        val lease = TunnelAdbManager.acquireMirrorLease() ?: return@synchronized emptyState() + ("reason" to "LOCAL_ADB_BUSY")
+        val run = Run(context.applicationContext, serial, lease)
         current = run
         snapshot = emptyState() + mapOf("active" to true, "phase" to "VERIFYING")
         run.worker = Thread({ execute(run) }, "tunnel-adb-p0").apply { isDaemon = true; start() }
@@ -192,6 +194,7 @@ object TunnelAdbPrototype {
                 publish(run, mapOf("cleanupComplete" to cleanup.succeeded))
             }
             artifact?.file?.delete()
+            if (threadsStopped && processStopped) run.lease.close()
             watchdog.interrupt()
             synchronized(lock) {
                 if (!threadsStopped || !processStopped) unavailable = true
@@ -205,7 +208,7 @@ object TunnelAdbPrototype {
 
     private class Failure(val code: String) : IOException()
 
-    private class Run(val context: Context, val serial: String) {
+    private class Run(val context: Context, val serial: String, val lease: Closeable) {
         val startedAt = SystemClock.elapsedRealtime()
         val failure = AtomicReference<String?>(null)
         @Volatile var worker: Thread? = null

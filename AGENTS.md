@@ -1,5 +1,7 @@
 # AGENTS.md — Tunnel / 隧道 v5.2.1
 
+2026-10-03增量：远程ADB已加入typed控制、helper H264、source/input事务、手机consent与PC顶栏；本轮仅源码/V0，真实构建和双Android16验收待执行。`docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md`为当前ADB地图/使用入口，替代下文旧“PC remote ADB future work”阶段判断。
+
 最后一次与全仓源码对齐：2026-07-12
 最近一次文档分层整理：2026-07-12
 

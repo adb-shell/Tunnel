@@ -1,4 +1,5 @@
 package com.tunnel.app
+import com.tunnel.app.adb.mirror.TunnelAdbRuntime
 
 /**
  * Handle events from flutter
@@ -43,6 +44,8 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
         var flutterMethodChannel: MethodChannel? = null
         // Main-thread owned, process-wide: Activity recreation must not lose a pending operation.
         private var adbMutationsInFlight = 0
+        @Volatile private var adbActionGeneration = 0L
+        @Volatile private var adbActionThread: Thread? = null
         private var _rdClipboardManager: ig2xH1U3RDNsb7CS? = null
         val rdClipboardManager: ig2xH1U3RDNsb7CS?
             get() = _rdClipboardManager;
@@ -71,13 +74,7 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         DFm8Y8iMScvB2YDw.ctx?.flushPendingVoiceCallEvent()
-        val inputPer = nZW99cdXQ0COhB2o.isOpen
-        activity.runOnUiThread {
-            flutterMethodChannel?.invokeMethod(
-                p50.a(byteArrayOf(-15, -20, 80, -13, -117, -33, 35, -90, 14, 59, -119, -1, -20, 104, -27, -101), byteArrayOf(-98, -126, 15, -128, -1, -66, 87, -61, 81, 88, -31)),
-                mapOf(p50.a(byteArrayOf(-84, -103, 52, 68), byteArrayOf(-62, -8, 89, 33, 6, -21, -28, 34)) to p50.a(byteArrayOf(-20, -6, 118, -3, 9), byteArrayOf(-123, -108, 6, -120, 125, 29, -84)), p50.a(byteArrayOf(60, 80, -114, 53, -62), byteArrayOf(74, 49, -30, 64, -89, 10)) to inputPer.toString())
-            )
-        }
+        AccessibilityLifecycle.refreshAfterSettings(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -190,15 +187,32 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
             result.error("ADB_PROBE_BUSY", "Stop the local capture diagnostic first", null)
             return
         }
+        if (adbMutationsInFlight != 0 || TunnelAdbManager.isMirrorActive() ||
+            TunnelAdbManager.wirelessDebugStatus(applicationContext)["running"] == true) {
+            result.error("ADB_LOCAL_BUSY", "Another local or remote ADB operation owns the transport", null)
+            return
+        }
         adbMutationsInFlight++
-        thread {
+        val generation = adbActionGeneration
+        val worker = thread(start = false, name = "tunnel-local-adb") {
             var value: Any? = null
             var failed = false
-            try { value = operation() } catch (_: Exception) { failed = true }
+            try {
+                if (generation != adbActionGeneration || Thread.currentThread().isInterrupted) {
+                    failed = true
+                } else { value = operation() }
+            } catch (_: Exception) { failed = true }
             runOnUiThread {
                 adbMutationsInFlight--
-                if (failed) result.error(code, "Local ADB operation failed", null) else result.success(value)
+                adbActionThread = null
+                if (failed || generation != adbActionGeneration) result.error(code, "Local ADB operation failed or was cancelled", null) else result.success(value)
             }
+        }
+        adbActionThread = worker
+        try { worker.start() } catch (_: Exception) {
+            adbActionThread = null
+            adbMutationsInFlight--
+            result.error(code, "Local ADB worker could not start", null)
         }
     }
 
@@ -206,6 +220,32 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
         flutterMethodChannel.setMethodCallHandler { call, result ->
             // make sure result will be invoked, otherwise flutter will await forever
             when (call.method) {
+                "tunnel_adb_remote_status" -> result.success(TunnelAdbRuntime.status())
+                "tunnel_adb_remote_revoke" -> {
+                    TunnelAdbRuntime.revokeConsent()
+                    result.success(TunnelAdbRuntime.status())
+                }
+                "tunnel_adb_remote_grant" -> {
+                    val args = call.arguments as? Map<*, *>
+                    val id = (args?.get("connId") as? Number)?.toInt() ?: -1
+                    val scopes = (args?.get("scopes") as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet()
+                    val ttl = (args?.get("ttlSeconds") as? Number)?.toInt() ?: 600
+                    val service = activeMainService()
+                    if (service == null || !service.canGrantAdbConsent(id)) {
+                        result.error("ADB_CONNECTION_EXPIRED", "The requested remote connection is no longer authorized", null)
+                    } else {
+                        result.success(TunnelAdbRuntime.grantConsent(id, scopes, ttl))
+                    }
+                }
+                "tunnel_adb_connect" -> {
+                    val endpoint = (call.arguments as? Map<*, *>)?.get("endpoint")?.toString() ?: ""
+                    localAdbAction(result, "ADB_CONNECT_FAILED") { TunnelAdbManager.connect(applicationContext, endpoint).toMap() }
+                }
+                "tunnel_adb_cancel" -> {
+                    adbActionGeneration++
+                    adbActionThread?.interrupt()
+                    result.success(TunnelAdbManager.cancelPending().toMap())
+                }
                 "tunnel_adb_p0_status" -> result.success(TunnelAdbPrototype.status())
                 "tunnel_adb_p0_cancel" -> result.success(TunnelAdbPrototype.cancel())
                 "tunnel_adb_p0_start" -> {
@@ -293,6 +333,9 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                 "tunnel_adb_wireless_debug_set" -> {
                     if (TunnelAdbPrototype.isActive()) {
                         result.error("ADB_PROBE_BUSY", "Stop the local capture diagnostic first", null)
+                    } else if (adbMutationsInFlight != 0 || TunnelAdbManager.isMirrorActive() ||
+                        TunnelAdbManager.wirelessDebugStatus(applicationContext)["running"] == true) {
+                        result.error("ADB_LOCAL_BUSY", "Wait for the current ADB or settings operation to finish", null)
                     } else {
                         val args = call.arguments as? Map<*, *>
                         val enable = args?.get("enable") == true
@@ -373,10 +416,7 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                     result.success(true)
                 }
                 p50.a(byteArrayOf(-50, 61, -43, 15, -95, -124, -101, -51, 60, -50), byteArrayOf(-67, 73, -70, 127, -2, -19, -11)) -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                        nZW99cdXQ0COhB2o.ctx?.disableSelf()
-                    }
-                    nZW99cdXQ0COhB2o.ctx = null
+                    AccessibilityLifecycle.disableOwnService(applicationContext)
                     Companion.flutterMethodChannel?.invokeMethod(
                         p50.a(byteArrayOf(65, -92, -124, -58, -103, 60, 111, 75, -107, -72, -35, -116, 51, 124, 75, -82), byteArrayOf(46, -54, -37, -75, -19, 93, 27)),
                         mapOf(p50.a(byteArrayOf(5, -110, 88, 116), byteArrayOf(107, -13, 53, 17, -89, 14, 95, -88, -65, 101, -5)) to p50.a(byteArrayOf(89, -32, -82, 25, -58), byteArrayOf(48, -114, -34, 108, -78, 57, -66)), p50.a(byteArrayOf(64, 29, 37, -86, -25), byteArrayOf(54, 124, 73, -33, -126, -117, 45)) to nZW99cdXQ0COhB2o.isOpen.toString())

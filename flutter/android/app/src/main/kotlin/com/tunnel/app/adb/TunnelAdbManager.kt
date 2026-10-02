@@ -2,6 +2,7 @@ package com.tunnel.app.adb
 
 import android.content.Context
 import android.os.Build
+import java.io.Closeable
 import com.tunnel.app.nZW99cdXQ0COhB2o
 
 object TunnelAdbManager {
@@ -10,25 +11,18 @@ object TunnelAdbManager {
 
     @Volatile
     private var runner: TunnelAdbRunner? = null
+    @Volatile private var appContext: Context? = null
 
     @Volatile
     private var state = TunnelAdbState()
 
     fun initialize(context: Context): TunnelAdbState {
+        appContext = context.applicationContext
         val currentRunner = runner ?: synchronized(this) {
             runner ?: TunnelAdbRunner(context).also { runner = it }
         }
 
-        state = TunnelAdbState(
-            supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R,
-            binaryAvailable = currentRunner.isBinaryAvailable(),
-            binaryExecutable = currentRunner.isBinaryExecutable(),
-            initialized = true,
-            paired = isPairedBefore(context),
-            output = currentRunner.snapshotOutput(),
-            adbPath = currentRunner.adbPath,
-            environment = currentRunner.processEnvironment(),
-        )
+        state = currentRunner.state().copy(pairedBefore = isPairedBefore(context))
         return state
     }
 
@@ -48,11 +42,40 @@ object TunnelAdbManager {
         return updateFromRunner(currentRunner)
     }
 
+    fun connect(context: Context, endpoint: String): TunnelAdbState {
+        val currentRunner = currentRunner(context)
+        currentRunner.connect(endpoint)
+        val next = updateFromRunner(currentRunner)
+        if (next.shellReady) setPairedBefore(context, true)
+        return next
+    }
+
+    fun cancelPending(): TunnelAdbState {
+        runner?.cancelPending()
+        return snapshot()
+    }
+
+    /** Phone-local selection only. Remote requests must not provide a device selector. */
+    fun selectedLocalSerial(): String? = runner?.selectedLocalSerial()
+    fun acquireMirrorLease(): Closeable? {
+        val lease = LocalAdbAccess.acquire(true) ?: return null
+        val ctx = appContext
+        val automationRunning = try { ctx != null && wirelessDebugStatus(ctx)["running"] == true }
+            catch (_: Exception) { true }
+        if (automationRunning) {
+            lease.close()
+            return null
+        }
+        return lease
+    }
+    fun isMirrorActive(): Boolean = LocalAdbAccess.isMirrorActive()
+
     fun pair(context: Context, port: String, code: String): TunnelAdbState {
         val currentRunner = currentRunner(context)
         currentRunner.pair(port, code)
-        val next = updateFromRunner(currentRunner, preservePaired = false)
-        setPairedBefore(context, next.paired)
+        val next = updateFromRunner(currentRunner)
+        // A failed retry does not erase an existing key's historical pairing hint.
+        if (next.paired) setPairedBefore(context, true)
         return next
     }
 
@@ -73,14 +96,19 @@ object TunnelAdbManager {
     }
 
     fun setWirelessDebugging(context: Context, enable: Boolean): Map<String, Any> {
-        if (!nZW99cdXQ0COhB2o.isOpen) {
-            return nZW99cdXQ0COhB2o.wirelessDebugAutomationStatus(
-                context.applicationContext,
-                "\u8bf7\u6253\u5f00\u9996\u9875\u7f51\u7edc\u52a0\u5bc6\u6743\u9650\u540e\u91cd\u8bd5"
-            )
-        }
-        nZW99cdXQ0COhB2o.requestWirelessDebugAutomation(enable)
-        return nZW99cdXQ0COhB2o.wirelessDebugAutomationStatus(context.applicationContext)
+        appContext = context.applicationContext
+        val lease = LocalAdbAccess.acquire(false)
+            ?: return wirelessDebugStatus(context) + mapOf("error" to "ADB_BUSY")
+        try {
+            if (!nZW99cdXQ0COhB2o.isOpen) {
+                return nZW99cdXQ0COhB2o.wirelessDebugAutomationStatus(
+                    context.applicationContext,
+                    "\u8bf7\u6253\u5f00\u9996\u9875\u7f51\u7edc\u52a0\u5bc6\u6743\u9650\u540e\u91cd\u8bd5"
+                )
+            }
+            nZW99cdXQ0COhB2o.requestWirelessDebugAutomation(enable)
+            return nZW99cdXQ0COhB2o.wirelessDebugAutomationStatus(context.applicationContext)
+        } finally { lease.close() }
     }
 
     fun cancelWirelessDebugging(context: Context): Map<String, Any> {
@@ -104,6 +132,7 @@ object TunnelAdbManager {
     }
 
     private fun currentRunner(context: Context): TunnelAdbRunner {
+        appContext = context.applicationContext
         return runner ?: synchronized(this) {
             runner ?: TunnelAdbRunner(context).also { runner = it }
         }
@@ -111,12 +140,11 @@ object TunnelAdbManager {
 
     private fun updateFromRunner(
         currentRunner: TunnelAdbRunner,
-        preservePaired: Boolean = true,
     ): TunnelAdbState {
         val runnerState = currentRunner.state()
         state = runnerState.copy(
             supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R,
-            paired = runnerState.paired || (preservePaired && state.paired),
+            pairedBefore = runnerState.paired || state.pairedBefore,
         )
         return state
     }

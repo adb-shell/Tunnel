@@ -16,17 +16,20 @@ import java.util.Arrays;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
-/** P0 local-only authenticated framing. No shell, file or input operations exist.
+/** Local authenticated framing. Only typed, bounded operations exist; never shell strings.
  * Callers must set socket deadlines before authentication/read and cancel blocked writes
  * by closing the socket. HMAC authenticates records; it does not encrypt video.
  */
 public final class AdbWire {
     public static final String LOOPBACK_HOST = "127.0.0.1";
-    public static final int VERSION = 1, CHANNEL_VIDEO = 1, CHANNEL_CONTROL = 2;
+    public static final int VERSION = 2, CHANNEL_VIDEO = 1, CHANNEL_CONTROL = 2;
     public static final int CAPABILITIES = 1, VIDEO_CONFIG = 2, VIDEO_FRAME = 3;
     public static final int REQUEST_KEYFRAME = 4, STOP = 5, PING = 6, PONG = 7;
+    public static final int OPERATION = 8, RESULT = 9;
     public static final int FLAG_KEY_FRAME = 1, CODEC_H264 = 1;
     public static final int CAP_VIDEO = 1, CAP_KEYFRAME = 2;
+    public static final int CAP_INPUT = 4, CAP_SCREENSHOT = 8, CAP_TREE = 16, CAP_DISPLAY = 32;
+    public static final int ALL_CAPS = CAP_VIDEO | CAP_KEYFRAME | CAP_INPUT | CAP_SCREENSHOT | CAP_TREE | CAP_DISPLAY;
     public static final int MAX_PAYLOAD = 8 * 1024 * 1024, MAX_CONFIG = 64 * 1024;
     public static final int MAX_SIDE = 4096, MAX_PIXELS = 8 * 1024 * 1024;
     private static final int MAGIC = 0x54414442, HEADER_SIZE = 52, NONCE_SIZE = 32; // TADB
@@ -45,7 +48,7 @@ public final class AdbWire {
             if (secret == null || secret.length != 32 || epoch <= 0 || videoPort < 1 || videoPort > 65535
                     || controlPort < 1 || controlPort > 65535 || videoPort == controlPort
                     || maxSize < 256 || maxSize > 1920 || fps < 1 || fps > 60
-                    || bitrate < 128000 || bitrate > 16000000 || durationSeconds < 1 || durationSeconds > 30)
+                    || bitrate < 128000 || bitrate > 16000000 || durationSeconds < 1 || durationSeconds > 3600)
                 throw invalid("bootstrap bounds");
             this.secret = secret.clone(); this.epoch = epoch;
             this.videoPort = videoPort; this.controlPort = controlPort; this.maxSize = maxSize;
@@ -92,7 +95,7 @@ public final class AdbWire {
             this.width = width; this.height = height; this.payload = payload;
             if (kind == CAPABILITIES) {
                 ByteBuffer b = bytes(payload);
-                if ((b.getInt() & ~CODEC_H264) != 0 || (b.getInt() & ~(CAP_VIDEO | CAP_KEYFRAME)) != 0)
+                if ((b.getInt() & ~CODEC_H264) != 0 || (b.getInt() & ~ALL_CAPS) != 0)
                     throw invalid("capability bits");
             }
         }
@@ -216,8 +219,8 @@ public final class AdbWire {
         private void checkDirection(int kind, boolean fromClient) throws IOException {
             boolean allowed = channel == CHANNEL_VIDEO
                     ? !fromClient && (kind == VIDEO_CONFIG || kind == VIDEO_FRAME)
-                    : fromClient ? kind == REQUEST_KEYFRAME || kind == STOP || kind == PING
-                    : kind == CAPABILITIES || kind == PONG;
+                    : fromClient ? kind == REQUEST_KEYFRAME || kind == STOP || kind == PING || kind == OPERATION
+                    : kind == CAPABILITIES || kind == PONG || kind == RESULT;
             if (!allowed) throw invalid("channel or direction");
         }
         private void ensureOpen() throws IOException { if (closed) throw invalid("closed session"); }
@@ -258,11 +261,13 @@ public final class AdbWire {
         if (kind == VIDEO_CONFIG || kind == VIDEO_FRAME) {
             if (config == 0 || width <= 0 || height <= 0 || width > MAX_SIDE || height > MAX_SIDE
                     || (long) width * height > MAX_PIXELS || length == 0) throw invalid("video bounds");
-            if (kind == VIDEO_CONFIG ? flags != 0 || pts != 0 || length > MAX_CONFIG
+            if (kind == VIDEO_CONFIG ? (flags != 0 && flags != 2 && flags != 4) || pts != 0 || length > MAX_CONFIG
                     : (flags & ~FLAG_KEY_FRAME) != 0) throw invalid("video flags");
         } else {
             if (flags != 0 || config != 0 || pts != 0 || width != 0 || height != 0) throw invalid("control metadata");
             if (kind == CAPABILITIES) { if (length != 8) throw invalid("capability size"); }
+            else if (kind == OPERATION) { if (length != AdbCommands.COMMAND_SIZE) throw invalid("operation size"); }
+            else if (kind == RESULT) { if (length < 12 || length > 4 * 1024 * 1024) throw invalid("result size"); }
             else if (kind == REQUEST_KEYFRAME || kind == STOP || kind == PING || kind == PONG) {
                 if (length != 0) throw invalid("control size");
             } else throw invalid("record kind");
@@ -284,7 +289,7 @@ public final class AdbWire {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(key, "HmacSHA256"));
-            mac.update(("Tunnel/ADB/P0/v1/" + purpose + "\0").getBytes(StandardCharsets.US_ASCII));
+            mac.update(("Tunnel/ADB/v2/" + purpose + "\0").getBytes(StandardCharsets.US_ASCII));
             for (byte[] part : data) mac.update(part);
             return mac.doFinal();
         } catch (GeneralSecurityException e) { throw new IOException("ADB protocol cryptography unavailable", e); }

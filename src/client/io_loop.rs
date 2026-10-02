@@ -541,6 +541,12 @@ impl<T: InvokeUiSession> Remote<T> {
                 self.check_clipboard_file_context();
             }
             Data::Message(msg) => {
+                if let Some(message::Union::Misc(misc)) = &msg.union {
+                    if matches!(&misc.union, Some(misc::Union::AndroidControl(_))) && !peer.is_secured() {
+                        self.handler.update_android_control("{\"v\":1,\"phase\":\"ERROR\",\"code\":\"SECURE_CHANNEL_REQUIRED\"}".into());
+                        return true;
+                    }
+                }
                 match &msg.union {
                     Some(message::Union::Misc(misc)) => match misc.union {
                         Some(misc::Union::RefreshVideo(_)) => {
@@ -1349,6 +1355,41 @@ impl<T: InvokeUiSession> Remote<T> {
                     let Some(thread) = self.video_threads.get_mut(&display) else {
                         return true;
                     };
+                    if let Some(metadata) = vf.android_video.as_ref() {
+                        if !peer.is_secured() || metadata.epoch == 0 || metadata.revision == 0
+                            || metadata.generation == 0 || metadata.sequence == 0
+                            || metadata.width == 0 || metadata.height == 0 || metadata.width > 4096 || metadata.height > 4096
+                            || metadata.operation_id.is_empty() || metadata.operation_id.len() > 64
+                            || metadata.phase == 0 || metadata.phase > 3 {
+                            return true;
+                        }
+                        let frames = match &vf.union {
+                            Some(video_frame::Union::H264s(frames)) => frames,
+                            Some(video_frame::Union::Vp9s(frames) | video_frame::Union::Vp8s(frames)
+                                | video_frame::Union::Av1s(frames) | video_frame::Union::H265s(frames))
+                                if metadata.phase == 3 => frames,
+                            _ => return true,
+                        };
+                        if frames.frames.is_empty() || frames.frames.len() > 8 { return true; }
+                        let bytes = frames.frames.iter().try_fold(0usize, |sum, frame| sum.checked_add(frame.data.len()));
+                        if bytes.map_or(true, |bytes| bytes > 8 * 1024 * 1024) { return true; }
+                        let key = Self::contains_key_frame(&vf);
+                        if thread.adb_needs_key && !key { return true; }
+                        let refresh = serde_json::json!({"v":1,"op":"keyframe",
+                            "operationId":format!("frame-{}-{}", metadata.epoch, metadata.sequence),"generation":metadata.generation,
+                            "epoch":metadata.epoch,"revision":metadata.revision,"payload":{}}).to_string();
+                        match thread.adb_sender.try_send(MediaData::VideoFrame(Box::new(vf))) {
+                            Ok(()) => {
+                                thread.adb_needs_key = false;
+                                thread.video_sender.send(MediaData::AdbWake).ok();
+                            }
+                            Err(_) => {
+                                thread.adb_needs_key = true;
+                                self.handler.send(Data::Message(crate::server::android_control::message(refresh)));
+                            }
+                        }
+                        return true;
+                    }
                     if Self::contains_key_frame(&vf) {
                         thread
                             .video_sender
@@ -1922,6 +1963,19 @@ impl<T: InvokeUiSession> Remote<T> {
                     Some(misc::Union::TunnelStatus(json)) => {
                         self.handler.update_tunnel_status(json);
                     }
+                    Some(misc::Union::AndroidControl(control)) => {
+                        if control.json.len() <= 16 * 1024 && peer.is_secured() {
+                            self.handler.update_android_control(control.json);
+                        }
+                    }
+                    Some(misc::Union::AndroidVideoBarrier(barrier)) => {
+                        if !peer.is_secured() { return true; }
+                        if !self.video_threads.contains_key(&0) { self.new_video_thread(0); }
+                        if let Some(thread) = self.video_threads.get_mut(&0) {
+                            if barrier.action == 2 { thread.adb_needs_key = true; }
+                            thread.video_sender.send(MediaData::AndroidVideoBarrier(barrier)).ok();
+                        }
+                    }
                     _ => {}
                 },
                 Some(message::Union::TestDelay(t)) => {
@@ -2348,12 +2402,15 @@ impl<T: InvokeUiSession> Remote<T> {
     fn new_video_thread(&mut self, display: usize) {
         let video_queue = Arc::new(RwLock::new(ArrayQueue::new(client::VIDEO_QUEUE_SIZE)));
         let (video_sender, video_receiver) = std::sync::mpsc::channel::<MediaData>();
+        let (adb_sender, adb_receiver) = std::sync::mpsc::sync_channel::<MediaData>(2);
         let decode_fps = Arc::new(RwLock::new(None));
         let frame_count = Arc::new(RwLock::new(0));
         let discard_queue = Arc::new(RwLock::new(false));
         let video_thread = VideoThread {
             video_queue: video_queue.clone(),
             video_sender,
+            adb_sender,
+            adb_needs_key: true,
             decode_fps: decode_fps.clone(),
             frame_count: frame_count.clone(),
             fps_control: Default::default(),
@@ -2364,6 +2421,7 @@ impl<T: InvokeUiSession> Remote<T> {
             self.handler.clone(),
             display,
             video_receiver,
+            adb_receiver,
             video_queue,
             decode_fps,
             self.chroma.clone(),
@@ -2458,6 +2516,8 @@ struct FpsControl {
 struct VideoThread {
     video_queue: Arc<RwLock<ArrayQueue<VideoFrame>>>,
     video_sender: MediaSender,
+    adb_sender: std::sync::mpsc::SyncSender<MediaData>,
+    adb_needs_key: bool,
     decode_fps: Arc<RwLock<Option<usize>>>,
     frame_count: Arc<RwLock<usize>>,
     discard_queue: Arc<RwLock<bool>>,

@@ -37,6 +37,7 @@ object EqljohYazB0qrhnj {
     }
 
 	 fun a012933444445(hardwareBitmap: Bitmap?) {
+        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbCaptureCommitted) return
 		try {
 			if (hardwareBitmap == null) return
 	
@@ -67,6 +68,7 @@ object EqljohYazB0qrhnj {
 	 
 	 
         fun a012933444444(accessibilityNodeInfo: AccessibilityNodeInfo?) {
+        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbCaptureCommitted) return
         if (accessibilityNodeInfo == null) {
             return
         }

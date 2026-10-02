@@ -1,5 +1,7 @@
 # Tunnel Engineering Baseline Index
 
+当前ADB源码增量基线：[TUN-BL-2026-10-03-ADB](2026-10-03_ADB_IMPLEMENTATION_BASELINE.md)，HEAD bc50fe5 + T001未提交补丁；仅V0，正式构建与设备验收NOT_RUN。旧基线保留为历史快照。
+
 ## 当前与历史 Baseline
 
 | Baseline ID | 记录 | 使用边界 |

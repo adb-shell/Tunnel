@@ -3,7 +3,7 @@
  * Copyright (C) 2018 Genymobile
  * Copyright (C) 2018-2026 Romain Vimont
  * Licensed under the Apache License, Version 2.0; see server/LICENSE.scrcpy.
- * Tunnel modifications: video-only environment, no audio/provider/input APIs.
+ * Tunnel modifications: bounded shell context setup, no audio/provider/permission adoption.
  */
 package com.tunnel.adbhelper;
 

@@ -59,3 +59,5 @@ libsciter.dylib
 flutter/web/
 # Explicitly staged local ADB P0 build artifacts are never source assets.
 /flutter/android/app/src/main/assets/adb-mirror-p0/
+/flutter/android/app/src/main/assets/adb-provenance/
+/flutter/android/app/src/main/assets/.adb-mirror-*

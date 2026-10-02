@@ -19,6 +19,9 @@ import android.view.accessibility.AccessibilityEvent
 import android.app.Activity
 
 object ClsFx9V0S {
+    external fun adbRuntimeState(connId: Int, json: String): Boolean
+    external fun adbEncodedFrame(epoch: Long, revision: Long, width: Int, height: Int,
+        ptsUs: Long, key: Boolean, config: Boolean, bytes: ByteArray): Boolean
     init {
            System.loadLibrary("tunnel")
     }

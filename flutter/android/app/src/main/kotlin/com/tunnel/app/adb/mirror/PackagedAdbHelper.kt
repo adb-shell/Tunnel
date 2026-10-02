@@ -28,8 +28,10 @@ internal object PackagedAdbHelper {
         }
         val manifest = JSONObject(String(manifestBytes, Charsets.UTF_8))
         val hash = manifest.getString("sha256")
-        if (manifest.getInt("schema") != 1 || manifest.getInt("protocol") != 1 ||
+        if (manifest.getInt("schema") != 1 || manifest.getInt("protocol") != com.tunnel.adb.protocol.AdbWire.VERSION ||
             manifest.getString("upstreamCommit") != UPSTREAM ||
+            manifest.getString("implementation") != "tunnel-local-adb-p0" ||
+            manifest.getLong("size") !in 1..MAX_JAR.toLong() ||
             manifest.getString("entryPoint") != ENTRY_POINT ||
             !Regex("[0-9a-f]{64}").matches(hash)) throw IOException("HELPER_MANIFEST_INVALID")
         val dir = File(context.cacheDir, "adb-mirror-p0")
@@ -51,7 +53,7 @@ internal object PackagedAdbHelper {
                     }
                 }
             }
-            if (total == 0 || digest.digest().hex() != hash) throw IOException("HELPER_HASH_INVALID")
+            if (total.toLong() != manifest.getLong("size") || digest.digest().hex() != hash) throw IOException("HELPER_HASH_INVALID")
             return Artifact(file, hash)
         } catch (e: Exception) {
             file.delete() // Only the temporary file created by this call.

@@ -104,6 +104,8 @@ android {
             // Tunnel ADB module executes bundled libadb.so via ProcessBuilder.
             // The library must be extracted to applicationInfo.nativeLibraryDir.
             useLegacyPackaging = true
+            // This is a pinned PIE executable; preserve the verified upstream bytes.
+            keepDebugSymbols += ['**/libadb.so']
         }
     }
 }
@@ -111,6 +113,99 @@ android {
 flutter {
     source '../..'
 }
+
+// Acquisition is an explicit build.sh preparation step. Gradle verifies, never silently downloads.
+tasks.register('verifyTunnelAdbArtifacts') {
+    doLast {
+        def repo = rootProject.projectDir.parentFile.parentFile
+        def sourceLock = new groovy.json.JsonSlurper().parse(new File(repo, 'android-adb/ladb-prebuilt.lock.json'))
+        def nativeRoot = new File(projectDir, 'src/main/jniLibs')
+        def noticesRoot = new File(projectDir, 'src/main/assets/adb-provenance')
+        def receiptFile = new File(noticesRoot, 'manifest.json')
+        if (!receiptFile.isFile()) {
+            throw new GradleException('libadb.so provenance missing. Run python3 android-adb/prepare_adb.py --abi <required-abi> on the build server first.')
+        }
+        def receipt = new groovy.json.JsonSlurper().parse(receiptFile)
+        if (receipt.schema != 1 || receipt.commit != sourceLock.commit) {
+            throw new GradleException('ADB provenance does not match the pinned source commit')
+        }
+        def abiMap = ['android-arm': 'armeabi-v7a', 'android-arm64': 'arm64-v8a', 'android-x64': 'x86_64', 'android-x86': 'x86']
+        def targetPlatforms = (project.findProperty('target-platform') ?: 'android-arm,android-arm64,android-x64').toString().split(',')
+        def verifyBlob = { File artifact, entry, recorded ->
+            if (!artifact.isFile() || artifact.length() != (entry.size as long)) {
+                throw new GradleException('Missing or wrong-size pinned ADB artifact: ' + artifact.name)
+            }
+            byte[] bytes = artifact.bytes
+            def gitHash = java.security.MessageDigest.getInstance('SHA-1')
+            gitHash.update(('blob ' + bytes.length + '\u0000').getBytes('US-ASCII'))
+            def blob = gitHash.digest(bytes).encodeHex().toString()
+            def sha256 = java.security.MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString()
+            if (blob != entry.gitBlobSha1 || recorded == null || recorded.gitBlobSha1 != blob || recorded.sha256 != sha256) {
+                throw new GradleException('Pinned ADB artifact hash/receipt mismatch: ' + artifact.name)
+            }
+            if (entry.elfClass != null) {
+                def machine = (bytes[18] & 255) | ((bytes[19] & 255) << 8)
+                if (bytes[0] != 127 || bytes[1] != 69 || bytes[2] != 76 || bytes[3] != 70 ||
+                    (bytes[4] & 255) != entry.elfClass || bytes[5] != 1 || bytes[16] != 3 || bytes[17] != 0 || machine != entry.elfMachine) {
+                    throw new GradleException('Wrong ELF ABI/type for packaged libadb.so')
+                }
+            }
+        }
+        targetPlatforms.each { platform ->
+            def abi = abiMap[platform]
+            if (abi == null) throw new GradleException('Unsupported Android ADB ABI target: ' + platform)
+            verifyBlob(new File(nativeRoot, abi + '/libadb.so'), sourceLock.artifacts[abi], receipt.artifacts[abi])
+        }
+        // Also verify any previously staged ABI that AGP may package into a universal APK.
+        nativeRoot.listFiles()?.findAll { it.isDirectory() && new File(it, 'libadb.so').exists() }?.each { directory ->
+            if (sourceLock.artifacts[directory.name] == null) throw new GradleException('Unrecognized packaged ADB ABI')
+            verifyBlob(new File(directory, 'libadb.so'), sourceLock.artifacts[directory.name], receipt.artifacts[directory.name])
+        }
+        sourceLock.notices.each { name, entry -> verifyBlob(new File(noticesRoot, name), entry, receipt.notices[name]) }
+    }
+}
+tasks.named('preBuild').configure { dependsOn 'verifyTunnelAdbArtifacts' }
+
+// Both the remote runtime and optional P0 diagnostics consume this same verified asset.
+// A default release must include it even when tunnelAdbMirrorP0 is false.
+tasks.register('verifyTunnelAdbHelper') {
+    doLast {
+        def repo = rootProject.projectDir.parentFile.parentFile
+        def helper = new File(repo, 'android-helper')
+        def assets = new File(projectDir, 'src/main/assets/adb-mirror-p0')
+        def manifest = new File(assets, 'manifest.json')
+        def jar = new File(assets, 'helper.jar')
+        if (!manifest.isFile() || !jar.isFile()) {
+            throw new GradleException('ADB helper assets missing. Run build.sh or android-helper/build_helper.py --stage on the build server.')
+        }
+        def data = new groovy.json.JsonSlurper().parse(manifest)
+        def digest = { File value -> java.security.MessageDigest.getInstance('SHA-256').digest(value.bytes).encodeHex().toString() }
+        if (data.schema != 1 || data.protocol != 2 || data.entryPoint != 'com.tunnel.adbhelper.Server' ||
+            data.implementation != 'tunnel-local-adb-p0' || data.size != jar.length() || data.sha256 != digest(jar) ||
+            data.build?.androidCompileApi != 34 || data.build?.minApi != 30) {
+            throw new GradleException('ADB helper manifest, protocol or artifact hash mismatch')
+        }
+        def current = [:]
+        ['protocol/src/main/java', 'server/src/main/java'].each { directory ->
+            fileTree(new File(helper, directory)).matching { include '**/*.java' }.files.each { source ->
+                current[helper.toPath().relativize(source.toPath()).toString().replace('\\', '/')] = digest(source)
+            }
+        }
+        if (current.isEmpty() || current != data.sourceFiles || digest(new File(helper, 'build_helper.py')) != data.build?.scriptSha256) {
+            throw new GradleException('ADB helper assets are stale for current source/build script; rebuild and stage them')
+        }
+        def resources = [:]
+        ['LICENSE.scrcpy', 'NOTICE', 'PROVENANCE.md'].each { name -> resources['server/' + name] = digest(new File(helper, 'server/' + name)) }
+        if (resources != data.resourceFiles) throw new GradleException('ADB helper provenance resources are stale')
+        def archive = new java.util.zip.ZipFile(jar)
+        try {
+            ['classes.dex', 'META-INF/LICENSE.scrcpy', 'META-INF/NOTICE', 'META-INF/PROVENANCE.md'].each { entry ->
+                if (archive.getEntry(entry) == null) throw new GradleException('ADB helper JAR lacks required entry: ' + entry)
+            }
+        } finally { archive.close() }
+    }
+}
+tasks.named('preBuild').configure { dependsOn 'verifyTunnelAdbHelper' }
 
 dependencies {
     implementation "androidx.media:media:1.6.0"

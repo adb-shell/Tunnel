@@ -1,6 +1,17 @@
 # Tunnel Decision Log
 
-最后更新：2026-07-12
+## D-017：远程ADB先完成全链源码，再集中服务器验收
+
+- 日期：2026-10-03；accepted；Approved by：当前用户明确要求直接完成P0—P6之后自行编译测试。
+- Amends：D-015/ADR-0014实施顺序；保留旧批准记录，P0未通过不能写成PASS。ADR-0007仅有限typed控制扩展，任意shell仍local-only。
+- Decision：PC/APK/helper配套源码、单owner本机consent/scopes/TTL、H264独立bounded入口、epoch/barrier呈现后input、截图/节点换源；不绕过安全画面、不写其他A11y服务。
+- Evidence：来源与源码/V0；服务器编译、Android16双ROM、ADBM与驱动/portable运行NOT_RUN。构建环境由用户在其他服务器持有，本机未执行。
+- Limits：无安全原子单服务启用时打开手机settings要求本机确认；防触摸provider尚不能保证ADB注入可用，明确unsupported。不据此宣称完美兼容。
+- Assets：固定LADB预编译commit/blob，服务器生成receipt并按ABI/哈希核验；helper protocol2源码配套构建。
+- Rollback：撤销自身lease/helper/输入/显示改动；普通MP仍有效才可恢复画面，失效须本机明确授权；不kill全局ADB。
+- Related：T-2026-10-03-001；TUN-BL-2026-10-03-ADB；docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md。
+
+最后更新：2026-10-03
 
 > 这里记录可由源码、Git 历史或用户明确指令证明的重大决定。历史条目属于 retrospective record，不表示原提交时存在正式 ADR。未来决定必须记录备选项、风险、批准人和验证结果。
 

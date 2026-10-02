@@ -1,5 +1,7 @@
 # Tunnel 构建系统 / Build System
 
+> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：正式构建不在本机。build.sh准备固定LADB预编译件与protocol2 helper；Gradle preBuild检查ABI/blob/SHA receipt及helper源树/产物hash，P0诊断flag仍默认false且不影响正常remote helper打包。Windows portable按Cargo真实产物路径复制并检查驱动。原“native来源完全缺失”“无helper构建hook”描述仅属于此前快照。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
+
 接管基线：2026-07-12  
 最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
 状态：`verified` + `verification-required`

@@ -51,6 +51,12 @@ class ServerModel with ChangeNotifier {
   bool _coreServiceStarted = false; // Android connection/id service status
   bool _mediaOk = false;
   bool _inputOk = false;
+  String accessibilityState = 'unknown';
+
+  void updateAccessibilityState(Map<dynamic, dynamic> state) {
+    accessibilityState = state['state']?.toString() ?? 'unknown';
+    notifyListeners();
+  }
   bool _audioOk = false;
   bool _fileOk = false;
   bool _clipboardOk = false;
@@ -535,7 +541,9 @@ class ServerModel with ChangeNotifier {
         _isStart = value;
         break;
       case "input":
-        if (_inputOk != value) {
+        // A service can be temporarily unbound on OEM ROMs, or deliberately paused
+        // while ADB owns input. Only an explicit user action revokes keyboard consent.
+        if (value && _inputOk != value) {
           bind.mainSetOption(
               key: kOptionEnableKeyboard,
               value: value ? defaultOptionYes : 'N');

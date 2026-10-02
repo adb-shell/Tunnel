@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Looper
 import android.os.SystemClock
+import com.tunnel.app.adb.LocalAdbProcessSpec
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -79,15 +80,9 @@ class LocalAdbIdentityProbe(context: Context) {
             target = LocalAdbTargetPolicy.validate(serial) ?: return result(AdbProbeReason.TARGET_NOT_LOCAL)
             // No discovery or implicit target selection; the existing local ADB page owns transport.
             if (!existingServerReachable()) return result(AdbProbeReason.SERVER_UNAVAILABLE)
-            val prefix = listOf(adb.absolutePath, "-H", "127.0.0.1", "-P", "5037", "-s", target!!.serial)
-            val environment = mapOf(
-                "HOME" to appContext.filesDir.absolutePath,
-                "TMPDIR" to appContext.cacheDir.absolutePath,
-                "PATH" to "/system/bin:/system/xbin",
-                "ANDROID_ROOT" to "/system",
-                "ANDROID_DATA" to "/data",
-                "LD_LIBRARY_PATH" to appContext.applicationInfo.nativeLibraryDir,
-            )
+            val spec = LocalAdbProcessSpec(appContext)
+            val prefix = spec.command(target!!, emptyList())
+            val environment = spec.environment
             val transport = BoundedProcessRunner.run(prefix + "get-state", appContext.filesDir, environment)
             if (!transport.succeeded) return result(processReason(transport, AdbProbeReason.TRANSPORT_UNAVAILABLE))
             if (transport.stdout.toString(Charsets.US_ASCII).trim() != "device") {

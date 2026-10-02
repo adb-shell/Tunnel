@@ -1,8 +1,15 @@
 # Tunnel AI Changelog
 
+## T-2026-10-03-001：ADB全链源码交付与验证交接
+
+- Result：受控remote视频/输入/模式/本机consent与PC顶栏源码接入；A11y授权返回/绑定处理、libadb供应缺口、portable打包链修复。
+- Scope：用户改为先实现后服务器集中验证；OnePlus ACE6T/iQOO Neo9 Android16。源码覆盖P0—P6各层，实际阶段验收仍NOT_RUN；防触摸及A11y重新启用限制明确记录。
+- Evidence：V0静态，不是编译或真机通过；没有本机build/test/analyze/codegen/device/Git/release。
+- Guide：docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md；Event CE-20261003-T001-01；D-017/ADR-0014补充；TUN-BL-2026-10-03-ADB。
+
 Schema Version：`1.0`  
 Coverage Start：2026-07-12  
-Last Updated：2026-10-02（Asia/Shanghai）
+Last Updated：2026-10-03（Asia/Shanghai）
 Mode：`append-only task-level index`
 
 ## T-2026-10-02-004：Tunnel 产品与工程命名迁移

@@ -1,5 +1,7 @@
 # Tunnel Android 完整链路 / Android Pipeline
 
+> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：无障碍服务保留framework ServiceInfo，移除硬编码JNI flags调用；enabled/bound/paused/inputAvailable分别报告。ADB helper用DONT_SUPPRESS独立UiAutomation，截图/节点进入H264；不写全局服务列表、不隐式请求MP。手机测试目标Android16两种ROM；全部修订运行验证未执行。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
+
 最后源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，`T-2026-10-02-001`，V0 静态证据。旧 `77062b4` 为历史文档快照，不能据此推断当前 Git ancestry。
 
 本次复核的逐符号证据、状态 owner、发现及后续定位见 [Android / Flutter Audit](audits/2026-10-02/ANDROID_FLUTTER_AUDIT.md)。本文的“必须/不得”是维护目标，不表示所有实现已满足，更不表示真机验证通过。

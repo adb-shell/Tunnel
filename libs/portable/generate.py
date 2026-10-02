@@ -1,110 +1,165 @@
 #!/usr/bin/env python3
-
-import os
-import optparse
-from hashlib import md5
-import brotli
+"""Build a portable payload and copy the actual Cargo artifact to its destination."""
+import argparse
 import datetime
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
 
-# 4GB maximum
-length_count = 4
-# encoding
-encoding = 'utf-8'
-# Keep the marker in sync with IDENTIFIER in src/bin_reader.rs.
+import brotli
+
+# Keep in sync with IDENTIFIER in src/bin_reader.rs.
 PACKAGE_MARKER = b'tunnel'
-
-# output: {path: (compressed_data, file_md5)}
-
-
-def generate_md5_table(folder: str, level) -> dict:
-    res: dict = dict()
-    curdir = os.curdir
-    os.chdir(folder)
-    for root, _, files in os.walk('.'):
-        # remove ./
-        for f in files:
-            md5_generator = md5()
-            full_path = os.path.join(root, f)
-            print(f"Processing {full_path}...")
-            f = open(full_path, "rb")
-            content = f.read()
-            content_compressed = brotli.compress(
-                content, quality=level)
-            md5_generator.update(content)
-            md5_code = md5_generator.hexdigest().encode(encoding=encoding)
-            res[full_path] = (content_compressed, md5_code)
-    os.chdir(curdir)
-    return res
+MAX_FIELD_LENGTH = (1 << 32) - 1
 
 
-def write_package_metadata(md5_table: dict, output_folder: str, exe: str):
-    output_path = os.path.join(output_folder, "data.bin")
-    with open(output_path, "wb") as f:
-        f.write(PACKAGE_MARKER)
-        for path in md5_table.keys():
-            (compressed_data, md5_code) = md5_table[path]
-            data_length = len(compressed_data)
-            path = path.encode(encoding=encoding)
-            # path length & path
-            f.write((len(path)).to_bytes(length=length_count, byteorder='big'))
-            f.write(path)
-            # data length & compressed data
-            f.write(data_length.to_bytes(
-                length=length_count, byteorder='big'))
-            f.write(compressed_data)
-            # md5 code
-            f.write(md5_code)
-        # end
-        f.write(PACKAGE_MARKER)
-        # executable
-        f.write(exe.encode(encoding='utf-8'))
-    print(f"Metadata has been written to {output_path}")
+def contained_file(folder, value):
+    supplied = Path(value)
+    # Accept both absolute paths and the historical folder-relative CLI spelling.
+    candidate = supplied if supplied.is_absolute() else supplied.resolve()
+    if not candidate.is_file():
+        candidate = folder / supplied
+    candidate = candidate.resolve(strict=True)
+    candidate.relative_to(folder)
+    if not candidate.is_file():
+        raise ValueError('Startup executable must be a file inside the staging folder')
+    return candidate
 
-def write_app_metadata(output_folder: str):
-    output_path = os.path.join(output_folder, "app_metadata.toml")
-    with open(output_path, "w") as f:
-        f.write(f"timestamp = {int(datetime.datetime.now().timestamp() * 1000)}\n")
-    print(f"App metadata has been written to {output_path}")
 
-def build_portable(output_folder: str, target: str):
-    os.chdir(output_folder)
+def checked_relative(value):
+    relative = Path(value)
+    if relative.is_absolute() or '..' in relative.parts:
+        raise ValueError('Required payload paths must be relative to the staging folder')
+    return relative
+
+
+def write_payload(folder, output_folder, executable, level, required):
+    for name in required:
+        target = folder / checked_relative(name)
+        target.resolve(strict=True).relative_to(folder)
+        if not target.exists() or (target.is_dir() and not any(target.rglob('*'))):
+            raise ValueError(f'Required payload is missing or empty: {name}')
+    entries = sorted(p for p in folder.rglob('*') if p.is_file())
+    if not entries:
+        raise ValueError('Staging folder is empty')
+    output_path = output_folder / 'data.bin'
+    pending = output_folder / 'data.bin.new'
+    records = []
+    with pending.open('wb') as stream:
+        stream.write(PACKAGE_MARKER)
+        for path in entries:
+            if path.is_symlink():
+                raise ValueError(f'Symlink is not accepted in the payload: {path.name}')
+            path.resolve(strict=True).relative_to(folder)
+            name = './' + path.relative_to(folder).as_posix()
+            name_bytes = name.encode('utf-8')
+            content = path.read_bytes()
+            compressed = brotli.compress(content, quality=level)
+            if max(len(name_bytes), len(compressed)) > MAX_FIELD_LENGTH:
+                raise ValueError(f'Payload entry exceeds the format limit: {name}')
+            stream.write(len(name_bytes).to_bytes(4, 'big'))
+            stream.write(name_bytes)
+            stream.write(len(compressed).to_bytes(4, 'big'))
+            stream.write(compressed)
+            stream.write(hashlib.md5(content).hexdigest().encode('ascii'))
+            records.append({'path': name, 'size': len(content),
+                            'sha256': hashlib.sha256(content).hexdigest()})
+            print(f'Packed {name} ({len(content)} bytes)', flush=True)
+        stream.write(PACKAGE_MARKER)
+        stream.write(('./' + executable.relative_to(folder).as_posix()).encode('utf-8'))
+    os.replace(pending, output_path)
+    (output_folder / 'app_metadata.toml').write_text(
+        f'timestamp = {int(datetime.datetime.now().timestamp() * 1000)}\n', encoding='utf-8')
+    (output_folder / 'payload-manifest.json').write_text(
+        json.dumps({'format': 1, 'marker': PACKAGE_MARKER.decode(),
+                    'executable': executable.relative_to(folder).as_posix(),
+                    'files': records}, indent=2) + '\n', encoding='utf-8')
+    return output_path
+
+
+def build_portable(output_folder, target):
+    command = ['cargo', 'build', '--manifest-path', str(output_folder / 'Cargo.toml'),
+               '--package', 'tunnel-portable-packer', '--bin', 'tunnel-portable-packer',
+               '--release', '--message-format=json-render-diagnostics', '--color', 'never']
     if target:
-        os.system("cargo build --release --target " + target)
-    else:
-        os.system("cargo build --release")
+        command.extend(['--target', target])
+    print('Building tunnel-portable-packer', flush=True)
+    artifact = None
+    with subprocess.Popen(command, cwd=output_folder, stdout=subprocess.PIPE,
+                          text=True, encoding='utf-8', errors='replace') as process:
+        for line in process.stdout:
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                print(line, end='', flush=True)
+                continue
+            if message.get('reason') == 'compiler-message':
+                rendered = message.get('message', {}).get('rendered')
+                if rendered:
+                    print(rendered, end='', file=sys.stderr, flush=True)
+            elif (message.get('reason') == 'compiler-artifact'
+                  and message.get('target', {}).get('name') == 'tunnel-portable-packer'
+                  and 'bin' in message.get('target', {}).get('kind', [])
+                  and message.get('executable')):
+                artifact = Path(message['executable']).resolve()
+        return_code = process.wait()
+    if return_code != 0:
+        raise RuntimeError(f'Cargo portable build failed (exit {return_code})')
+    if artifact is None or not artifact.is_file():
+        raise RuntimeError('Cargo did not report an existing portable executable')
+    return artifact
 
-# Linux: python3 generate.py -f ../tunnel-portable-packer/test -o . -e ./test/main.py
-# Windows: python3 .\generate.py -f ..\tunnel\flutter\build\windows\runner\Debug\ -o . -e ..\tunnel\flutter\build\windows\runner\Debug\tunnel.exe
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('-f', '--folder', default='./tunnel')
+    parser.add_argument('-o', '--output', dest='output_folder', default='.')
+    parser.add_argument('-e', '--executable', default='tunnel.exe')
+    parser.add_argument('-t', '--target')
+    parser.add_argument('-l', '--level', type=int, default=6)
+    parser.add_argument('--dist', help='Copy the built executable here (honors CARGO_TARGET_DIR)')
+    parser.add_argument('--require', action='append', default=[],
+                        help='Require a staged file/directory, repeat for each driver asset')
+    options = parser.parse_args()
+    if not 0 <= options.level <= 11:
+        parser.error('Compression level must be between 0 and 11')
+    folder = Path(options.folder).resolve(strict=True)
+    output_folder = Path(options.output_folder).resolve(strict=True)
+    if not folder.is_dir() or not (output_folder / 'Cargo.toml').is_file():
+        parser.error('Use an existing staging folder and the portable Cargo project directory')
+    # Output must not be recursively packed as an input.
+    if output_folder == folder or folder in output_folder.parents:
+        parser.error('The portable project directory must be outside the staging folder')
+    executable = contained_file(folder, options.executable)
+    payload = write_payload(folder, output_folder, executable, options.level, options.require)
+    artifact = build_portable(output_folder, options.target)
+    if artifact.stat().st_size < payload.stat().st_size:
+        raise RuntimeError('Reported executable is too small to contain the current payload')
+    if os.name == 'nt':
+        with artifact.open('rb') as stream:
+            if stream.read(2) != b'MZ':
+                raise RuntimeError('Portable artifact does not have a Windows PE header')
+    if options.dist:
+        destination = Path(options.dist).resolve()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination != artifact:
+            pending = destination.with_suffix(destination.suffix + '.new')
+            shutil.copy2(artifact, pending)
+            os.replace(pending, destination)
+        shutil.copy2(output_folder / 'payload-manifest.json',
+                     destination.with_suffix(destination.suffix + '.payload.json'))
+        print(f'Portable output: {destination}', flush=True)
+    else:
+        print(f'Portable output: {artifact}', flush=True)
 
 
 if __name__ == '__main__':
-    parser = optparse.OptionParser()
-    parser.add_option("-f", "--folder", dest="folder",
-                      help="folder to compress")
-    parser.add_option("-o", "--output", dest="output_folder",
-                      help="the root of portable packer project, default is './'")
-    parser.add_option("-e", "--executable", dest="executable",
-                      help="specify startup file in --folder, default is tunnel.exe")
-    parser.add_option("-t", "--target", dest="target",
-                      help="the target used by cargo")
-    parser.add_option("-l", "--level", dest="level", type="int",
-                      help="compression level, default is 11, highest", default=11)
-    (options, args) = parser.parse_args()
-    folder = options.folder or './tunnel'
-    output_folder = os.path.abspath(options.output_folder or './')
-
-    if not options.executable:
-        options.executable = 'tunnel.exe'
-    if not options.executable.startswith(folder):
-        options.executable = folder + '/' + options.executable
-    exe: str = os.path.abspath(options.executable)
-    if not exe.startswith(os.path.abspath(folder)):
-        print("The executable must locate in source folder")
-        exit(-1)
-    exe = '.' + exe[len(os.path.abspath(folder)):]
-    print("Executable path: " + exe)
-    print("Compression level: " + str(options.level))
-    md5_table = generate_md5_table(folder, options.level)
-    write_package_metadata(md5_table, output_folder, exe)
-    write_app_metadata(output_folder)
-    build_portable(output_folder, options.target)
+    try:
+        main()
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        print(f'Portable packaging failed: {error}', file=sys.stderr)
+        sys.exit(1)

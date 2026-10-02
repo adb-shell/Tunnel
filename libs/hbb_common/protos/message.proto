@@ -33,6 +33,29 @@ message VideoFrame {
     EncodedVideoFrames av1s = 13;
   }
   int32 display = 14;
+  // Absent for the existing capture path. Never infer authority from metadata.
+  AndroidVideoMetadata android_video = 15;
+}
+
+message AndroidVideoMetadata {
+  uint64 epoch = 1;
+  uint64 revision = 2;
+  uint64 sequence = 3;
+  uint32 width = 4;
+  uint32 height = 5;
+  string operation_id = 6;
+  uint64 generation = 7;
+  // 1=candidate, 2=active, 3=normal rollback. Ordered barriers change sources.
+  uint32 phase = 8;
+}
+
+// Versioned, bounded and strictly validated by both endpoints. No shell strings.
+message AndroidControl { string json = 1; }
+
+message AndroidVideoBarrier {
+  AndroidVideoMetadata metadata = 1;
+  // 1=activate candidate, 2=rollback to normal capture, 3=cancel candidate.
+  uint32 action = 2;
 }
 
 message IdPk {
@@ -843,6 +866,8 @@ message Misc {
     int32 follow_current_display = 38;
     // Tunnel: Android controlled-end feature status JSON push.
     string tunnel_status = 39;
+    AndroidControl android_control = 40;
+    AndroidVideoBarrier android_video_barrier = 41;
   }
 }
 

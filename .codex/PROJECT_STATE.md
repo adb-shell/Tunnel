@@ -1,9 +1,9 @@
 # Tunnel Project State
 
 Schema Version：`1.0`  
-State Revision：`STATE-20261002-004`
-Last Updated：2026-10-02（Asia/Shanghai）
-Observed At：2026-10-02（Asia/Shanghai）
+State Revision：`STATE-20261003-002`
+Last Updated：2026-10-03（Asia/Shanghai）
+Observed At：2026-10-03（Asia/Shanghai）
 Evidence Scope：`repository-observed / V0 / external and runtime verification pending`
 
 > 本文件是截至 `Observed At` 的当前状态快照，不是生产实时监控，也不替代源码、`docs/AI_ENGINEERING/`、ADR 或 Baseline。新会话必须用只读检查确认其新鲜度；发现漂移时记录 conflict/stale，不得用本文件覆盖源码事实或改写旧 Baseline。
@@ -14,10 +14,10 @@ Evidence Scope：`repository-observed / V0 / external and runtime verification p
 |---|---|---|
 | Product/runtime | `Tunnel` | source + `PROJECT_MEMORY.md` |
 | Rust / Flutter version | `5.2.1` / `5.2.1+59` | manifests + Baseline |
-| Baseline ID | `TUN-BL-2026-10-02-IDENTITY` | `docs/BASELINE/BASELINE_INDEX.md`；当前未提交身份迁移 |
+| Baseline ID | `TUN-BL-2026-10-03-ADB` | `docs/BASELINE/BASELINE_INDEX.md`；HEAD+当前源码补丁 |
 | Branch | test（独立worktree） | 本任务只读Git观察；用户选择后续在worktree开发 |
-| HEAD | `532637a7b4084ec8ebf7deddbab12982628b1c1c` | 较业务baseline仅文档提交；本轮未做Git写入 |
-| Worktree | T002方案/T003默认关闭P0源码保留；T004全仓品牌身份、包路径和消费者迁移；未stage/commit | T-2026-10-02-004；每次会话重查 |
+| ADB实施起点 | `bc50fe5b2061970e4e88ff58bbd76c7827de1159` | 初始干净；后续交付提交由Git log确认 |
+| Source delivery | ADB全链源码、本地配对/native供应、A11y适配、portable及文档；用户授权提交“ADB版本首次测试”并推送origin/test | T-2026-10-03-001；每次会话重查当前HEAD与远端ref |
 | Highest completed verification | `V0` repository/document/schema checks | `TEST_MATRIX.md` + task records |
 | Formal build/runtime evidence | `NOT_RUN / VERIFICATION-REQUIRED` | 本轮未执行；未提供绑定当前HEAD的正式证据 |
 | Release readiness | `BLOCKED` | security、external assets、V2—V4、signing/SBOM/rollback gaps |
@@ -33,7 +33,7 @@ Evidence Scope：`repository-observed / V0 / external and runtime verification p
 | External infrastructure | incomplete / external | `EXTERNAL_ASSET_REGISTRY.md` |
 | Formal build/device/integration validation | not executed | `TEST_MATRIX.md` |
 | Commercial release gate | not satisfied | Security Model + External Registry |
-| Remote ADB mirroring | 方案接受分阶段实施；默认关闭的本机P0源码已加，remote未接入；P0未通过 | docs/plans/ADB_P0_VALIDATION_RUNBOOK.md；ADR-0014 accepted, staged |
+| Remote ADB mirroring | 全链源码接入；本机consent默认无授权；设备P0—P6未验收 | docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md；ADR-0014 amended |
 
 ## 3. Current Blocking Areas
 
@@ -43,7 +43,7 @@ Evidence Scope：`repository-observed / V0 / external and runtime verification p
 | Transport/auth/privacy/logs | `SEC-002`—`SEC-019` applicable items | source-reviewed；auth前connect、日志、terminal owner等未动态复现 | domain + Security / G1—G2 |
 | Backend and data | `EXT-SVC-001`—`003`, `EXT-DATA-001` | server/source/schema/owner missing | backend/infra owner |
 | ZEGO service | `EXT-SVC-004`, `EXT-SVC-005` | partial/external；incident and lock drift | API/Security owner |
-| Android native assets | `EXT-BIN-ADB-001`、`EXT-REF-ADB-002`、`EXT-REF-ADB-003` | 当前MISSING；旧local-only/hash仅历史 | Android/Release owner |
+| Android native assets | `EXT-BIN-ADB-001`、`EXT-REF-ADB-002`、`EXT-REF-ADB-003` | 官方LADB固定blob供应脚本/receipt校验；本地binary仍未取得 | Android/Release owner |
 | Remote ADB helper | EXT-SRC-ADB-HELPER-001、EXT-BIN-ADB-HELPER-001 | SOURCE_IMPORTED / V0；binary NOT_BUILT；P0未运行 | Android/Release/Security |
 | Windows native assets | `EXT-WIN-001`—`009` applicable items | external/generated/unverified | Windows/Release/Security owner |
 | Build/sign/release | `EXT-SIGN-*`, `EXT-BUILD-*`, `EXT-CI-001`, `EXT-REL-001` | formal environments and custody incomplete | Release owner / G2—G3 |
@@ -54,12 +54,12 @@ Evidence Scope：`repository-observed / V0 / external and runtime verification p
 - Active task registry：`CURRENT_WORK.md`。
 - Detailed task history：`TASK_HISTORY.md`。
 - Latest completed AI task：`T-2026-10-02-004`（身份迁移源码/V0；runtime未验）。
-- Current active task：T-2026-10-02-003，paused / T6；用户要求先改名后编译；不是整体P0完成。
-- Latest recorded modification event：`CE-20261002-T004-01`。
-- Latest governance decision：`D-014`（accepted and synchronized）。
-- Architecture decisions：ADR-0014 / D-015 accepted for staged implementation；ADR-0007的local-only边界在P0证据门前保持。
+- Current implementation：T-2026-10-03-001承接T003；全链源码与V0交付，正式服务器/两台Android16验收待执行；状态以CURRENT_WORK为准。
+- Latest recorded modification event：`CE-20261003-T001-01`。
+- Latest architecture amendment：`D-017`（先全链源码、后服务器验收）；治理决定D-014仍保持。
+- Architecture decisions：ADR-0014 / D-015由D-017追记用户顺序调整；有限typed远程范围扩展ADR-0007，任意shell仍local-only。
 - Identity decision：ADR-0015 / D-016 accepted；supersedes ADR-0002；新Android包com.tunnel.app、ORG com.tunnel；配置/授权独立，外部broker另行部署，证书未变。
-- 本轮Decision assessment：用户明确授权身份迁移源码与必要路径移动，工作树交付；未执行C3构建/设备/Git。
+- 本轮Decision assessment：用户明确要求先完成P0—P6源码及三项故障修复；仅工作树源码/V0，未执行本地构建/设备/Git/发布。
 - Coverage / feature navigation：`docs/AI_ENGINEERING/audits/2026-10-02/README.md`、`docs/AI_ENGINEERING/12_FEATURE_MAP.md`。
 
 ## 5. Standing Authority State

@@ -259,7 +259,7 @@ if not "!build_code!"=="0" goto fail
 echo [SUCCESS] 3. Build Tunnel Windows release
 
 set "RELEASE_DIR=%ROOT_FOLDER%\flutter\build\windows\x64\runner\Release"
-set "STAGING_DIR=%ROOT_FOLDER%\tunnel"
+set "STAGING_DIR=%ROOT_FOLDER%\target\portable-stage-%RANDOM%-%RANDOM%"
 set "OUTPUT_DIR=%ROOT_FOLDER%\PC-Bulid"
 set "FINAL_EXE=%OUTPUT_DIR%\%FOLDER_NAME%.exe"
 set "PORTABLE_DIR=%ROOT_FOLDER%\libs\portable"
@@ -280,14 +280,17 @@ if not exist "%RELEASE_DIR%\dylib_virtual_display.dll" (
     goto fail
 )
 
-if exist "%STAGING_DIR%" rmdir /s /q "%STAGING_DIR%"
+if exist "%STAGING_DIR%" (
+    echo [ERROR] Staging path already exists; rerun to allocate a fresh path.
+    goto fail
+)
 echo.
-echo ========== Step: 4. Move Release files ==========
-echo [COMMAND] robocopy "%RELEASE_DIR%" "%STAGING_DIR%" /E /MOVE
-robocopy "%RELEASE_DIR%" "%STAGING_DIR%" /E /MOVE
+echo ========== Step: 4. Copy Release files ==========
+echo [COMMAND] robocopy "%RELEASE_DIR%" "%STAGING_DIR%" /E
+robocopy "%RELEASE_DIR%" "%STAGING_DIR%" /E
 set "robocopy_release_code=!errorlevel!"
 if !robocopy_release_code! gtr 7 goto fail
-echo [SUCCESS] 4. Move Release files
+echo [SUCCESS] 4. Copy Release files
 
 set "dll_file=%DEVENV%\third-party\RustDeskTempTopMostWindow\WindowInjection\x64\Release\WindowInjection.dll"
 if not exist "%dll_file%" set "dll_file=%ROOT_FOLDER%\WindowInjection.dll"
@@ -369,13 +372,13 @@ if errorlevel 1 goto fail
 echo.
 echo ========== Step: 5. Remove dpiAware from portable manifest ==========
 echo [COMMAND] powershell -NoProfile -Command remove dpiAware lines
-powershell -NoProfile -Command "$p = '%MANIFEST_FILE%'; $lines = [System.IO.File]::ReadAllLines($p); $filtered = New-Object 'System.Collections.Generic.List[string]'; foreach ($line in $lines) { if ($line -notmatch 'dpiAware') { [void]$filtered.Add($line) } }; [System.IO.File]::WriteAllLines($p, $filtered.ToArray(), (New-Object System.Text.UTF8Encoding($false)))"
+powershell -NoProfile -Command "$p = $env:MANIFEST_FILE; $lines = [System.IO.File]::ReadAllLines($p); $filtered = New-Object 'System.Collections.Generic.List[string]'; foreach ($line in $lines) { if ($line -notmatch 'dpiAware') { [void]$filtered.Add($line) } }; [System.IO.File]::WriteAllLines($p, $filtered.ToArray(), (New-Object System.Text.UTF8Encoding($false)))"
 if errorlevel 1 goto restore_manifest_fail
 echo [SUCCESS] 5. Remove dpiAware from portable manifest
 
 :: Re-pin packager paths before the final portable stage.
 :: This keeps the packaging hand-off deterministic even after nested CMD/PowerShell calls.
-set "STAGING_DIR=%ROOT_FOLDER%\tunnel"
+:: Keep the fresh STAGING_DIR allocated in step 4; do not reset it here.
 set "OUTPUT_DIR=%ROOT_FOLDER%\PC-Bulid"
 set "FINAL_EXE=%OUTPUT_DIR%\%FOLDER_NAME%.exe"
 set "PORTABLE_DIR=%ROOT_FOLDER%\libs\portable"
@@ -411,10 +414,10 @@ echo [SUCCESS] 6. Install portable packer Python requirements
 echo.
 echo ========== Step: 7. Generate portable self-extract EXE ==========
 echo [WORKDIR] "%PORTABLE_DIR%"
-echo [COMMAND] python .\generate.py -f "%STAGING_DIR%" -o . -e "%STAGING_DIR%\tunnel.exe"
+echo [COMMAND] python generate.py --dist "%FINAL_EXE%" with required runtime and driver assets
 pushd "%PORTABLE_DIR%"
 if errorlevel 1 goto restore_manifest_fail
-python .\generate.py -f "%STAGING_DIR%" -o . -e "%STAGING_DIR%\tunnel.exe"
+python .\generate.py -f "%STAGING_DIR%" -o . -e "%STAGING_DIR%\tunnel.exe" --dist "%FINAL_EXE%" --require tunnel.dll --require dylib_virtual_display.dll --require WindowInjection.dll --require usbmmidd_v2 --require drivers/RustDeskPrinterDriver --require printer_driver_adapter.dll
 set "portable_pack_code=!errorlevel!"
 popd
 if not "!portable_pack_code!"=="0" (
@@ -427,13 +430,15 @@ echo [SUCCESS] 7. Generate portable self-extract EXE
 if exist "%MANIFEST_BACKUP%" move /Y "%MANIFEST_BACKUP%" "%MANIFEST_FILE%" >nul
 
 if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
-if not exist "%ROOT_FOLDER%\target\release\tunnel-portable-packer.exe" (
-    echo [ERROR] Missing tunnel-portable-packer.exe:
-    echo         "%ROOT_FOLDER%\target\release\tunnel-portable-packer.exe"
+if not exist "%FINAL_EXE%" (
+    echo [ERROR] Portable packer did not produce the requested output:
+    echo         "%FINAL_EXE%"
     goto fail
 )
-move /Y "%ROOT_FOLDER%\target\release\tunnel-portable-packer.exe" "%FINAL_EXE%" >nul
-if errorlevel 1 goto fail
+if not exist "%FINAL_EXE%.payload.json" (
+    echo [ERROR] Portable payload manifest is missing.
+    goto fail
+)
 
 if exist "%PORTABLE_DIR%\data.bin" del /q "%PORTABLE_DIR%\data.bin"
 if exist "%PORTABLE_DIR%\app_metadata.toml" del /q "%PORTABLE_DIR%\app_metadata.toml"

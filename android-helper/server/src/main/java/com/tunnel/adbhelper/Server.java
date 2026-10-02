@@ -4,8 +4,10 @@ import android.os.Build;
 import android.os.Looper;
 import android.os.Process;
 import android.os.SystemClock;
+import android.graphics.Bitmap;
 
 import com.tunnel.adb.protocol.AdbWire;
+import com.tunnel.adb.protocol.AdbCommands;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -16,8 +18,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
-/** Local, short-lived ADB capture diagnostic. Not a remote-control server. */
+/** Authenticated local helper; the APK owns consent, endpoint scope and remote lease. */
 public final class Server {
     private Server() { }
 
@@ -57,6 +61,7 @@ public final class Server {
             lifecycle.startStdinMonitor();
             ShellEnvironment.prepare();
             lifecycle.setMainLooper(Looper.myLooper());
+            lifecycle.startAutomation();
             final AdbWire.Bootstrap captureOptions = options;
             captureThread = new Thread(() -> {
                 // Upstream prepares a Looper here for affected vendor encoders.
@@ -78,7 +83,10 @@ public final class Server {
             if (options != null) options.close();
             lifecycle.stop("STOPPED");
             if (captureThread != null) {
-                try { captureThread.join(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                try { captureThread.join(750); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            }
+            if (lifecycle.automationThread != null) {
+                try { lifecycle.automationThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             }
             lifecycle.finished.set(true);
             // The only log is a bounded error code; no identifiers, keys, paths, or frames.
@@ -119,6 +127,8 @@ public final class Server {
         private final AtomicBoolean keyframe = new AtomicBoolean();
         private final AtomicBoolean finished = new AtomicBoolean();
         private final AtomicInteger frames = new AtomicInteger();
+        private final AtomicBoolean releaseInput = new AtomicBoolean();
+        private final ArrayBlockingQueue<AdbCommands.Command> operations = new ArrayBlockingQueue<>(64);
         private final List<Socket> sockets = new ArrayList<>();
         private final Object controlWriteLock = new Object();
         private volatile AdbWire.Session control;
@@ -130,6 +140,12 @@ public final class Server {
         private volatile long controlWriteSince;
         private volatile long stoppedAt;
         private volatile boolean captureRunning;
+        private volatile int automationCapabilities;
+        private volatile long operationSince;
+        private volatile Thread automationThread;
+        private volatile int captureMode;
+        private int fallbackMode;
+        private Bitmap bitmap;
         private volatile String reason = "STOPPED";
         private long epoch;
         private long controlSequence;
@@ -164,8 +180,17 @@ public final class Server {
 
         void captureStarted(int seconds) throws IOException {
             if (stop.get()) throw new IOException("STOPPED");
-            captureRunning = true;
-            deadline = SystemClock.elapsedRealtime() + seconds * 1000L;
+            if (!captureRunning) {
+                deadline = SystemClock.elapsedRealtime() + seconds * 1000L;
+                captureRunning = true;
+            }
+        }
+
+        void displayChanged() { releaseInput.set(true); }
+        int captureMode() { return captureMode; }
+        synchronized Bitmap takeBitmap() { Bitmap value = bitmap; bitmap = null; return value; }
+        private synchronized void offerBitmap(Bitmap value) {
+            if (bitmap != null) bitmap.recycle(); bitmap = value;
         }
 
         void frameSent() { frames.incrementAndGet(); }
@@ -180,7 +205,61 @@ public final class Server {
         }
 
         void sendCapabilities() throws IOException {
-            sendCapabilities(AdbWire.CODEC_H264, AdbWire.CAP_VIDEO | AdbWire.CAP_KEYFRAME);
+            sendCapabilities(captureRunning ? AdbWire.CODEC_H264 : 0,
+                    (captureRunning ? AdbWire.CAP_VIDEO | AdbWire.CAP_KEYFRAME : 0) | automationCapabilities);
+        }
+
+        private void result(AdbCommands.Result result) throws IOException {
+            synchronized (controlWriteLock) {
+                writeControl(AdbWire.Packet.of(AdbWire.RESULT, 0, epoch, 0, ++controlSequence, 0, 0, 0, result.encode()));
+            }
+        }
+
+        void startAutomation() {
+            automationThread = new Thread(() -> {
+                ShellAutomation automation = new ShellAutomation();
+                try {
+                    operationSince = SystemClock.elapsedRealtime();
+                    try { automation.connect(); } catch (Exception unavailable) { automation.close(); }
+                    operationSince = 0;
+                    automationCapabilities = automation.capabilities();
+                    sendCapabilities();
+                    long nextFrame = 0;
+                    while (!stop.get()) {
+                        if (releaseInput.getAndSet(false)) automation.releaseInput();
+                        AdbCommands.Command command = operations.poll(40, TimeUnit.MILLISECONDS);
+                        if (command != null) {
+                            operationSince = SystemClock.elapsedRealtime();
+                            AdbCommands.Result reply;
+                            if (command.operation == AdbCommands.CAPTURE_MODE) {
+                                try {
+                                    Bitmap first = command.a == 0 || command.a == 3 ? null : automation.frame(command.a);
+                                    offerBitmap(first); fallbackMode = command.b; captureMode = command.a; releaseInput.set(true); nextFrame = 0;
+                                    reply = new AdbCommands.Result(command.id, AdbCommands.OK, new byte[0]);
+                                } catch (Exception unavailable) {
+                                    automation.revokeMode(command.a);
+                                    reply = new AdbCommands.Result(command.id, AdbCommands.UNSUPPORTED, new byte[0]);
+                                }
+                            } else reply = automation.execute(command);
+                            operationSince = 0;
+                            result(reply);
+                        }
+                        if ((captureMode == 1 || captureMode == 2) && SystemClock.elapsedRealtime() >= nextFrame) {
+                            operationSince = SystemClock.elapsedRealtime();
+                            try { offerBitmap(automation.frame(captureMode)); }
+                            catch (Exception lost) { automation.revokeMode(captureMode); captureMode = fallbackMode; offerBitmap(null); releaseInput.set(true); }
+                            finally { operationSince = 0; }
+                            nextFrame = SystemClock.elapsedRealtime() + (captureMode == 2 ? 500 : 200);
+                        }
+                        int next = automation.capabilities();
+                        if (next != automationCapabilities) { automationCapabilities = next; sendCapabilities(); }
+                    }
+                } catch (Exception failure) {
+                    if (!stop.get()) stop("OPERATION_CHANNEL_FAILED");
+                } finally { automation.close(); offerBitmap(null); }
+            }, "tunnel-adb-operations");
+            automationThread.setDaemon(true);
+            automationThread.start();
         }
 
         private void sendCapabilities(int codecMask, int capabilityMask) throws IOException {
@@ -205,16 +284,23 @@ public final class Server {
             Thread reader = new Thread(() -> {
                 long interval = SystemClock.elapsedRealtime();
                 int count = 0;
+                long lastOperationId = 0;
                 try {
                     while (!stop.get()) {
                         AdbWire.Packet packet = control.read();
                         long now = SystemClock.elapsedRealtime();
                         if (now - interval >= 1000) { interval = now; count = 0; }
-                        if (++count > 60) { stop("CONTROL_RATE_LIMIT"); return; }
+                        if (++count > 240) { stop("CONTROL_RATE_LIMIT"); return; }
                         lastControl = now;
                         if (packet.kind == AdbWire.PING) pong();
                         else if (packet.kind == AdbWire.REQUEST_KEYFRAME) requestKeyframe();
                         else if (packet.kind == AdbWire.STOP) { stop("STOP_REQUESTED"); return; }
+                        else if (packet.kind == AdbWire.OPERATION) {
+                            AdbCommands.Command command = AdbCommands.Command.decode(packet.payloadCopy());
+                            if (command.id <= lastOperationId) { stop("OPERATION_REPLAY"); return; }
+                            lastOperationId = command.id;
+                            if (!operations.offer(command)) result(new AdbCommands.Result(command.id, AdbCommands.BUSY, new byte[0]));
+                        }
                         else { stop("CONTROL_INVALID"); return; }
                     }
                 } catch (IOException failure) {
@@ -253,6 +339,8 @@ public final class Server {
                         stop(captureRunning ? (frames.get() > 0 ? "DURATION_COMPLETE" : "NO_FRAME_BEFORE_TIMEOUT") : "STARTUP_TIMEOUT");
                     } else if (lastControl != 0 && now - lastControl > 5000) {
                         stop("HEARTBEAT_TIMEOUT");
+                    } else if (operationSince != 0 && now - operationSince > 10000) {
+                        stop("OPERATION_TIMEOUT");
                     } else if ((videoWriteSince != 0 && now - videoWriteSince > 2000)
                             || (controlWriteSince != 0 && now - controlWriteSince > 2000)) {
                         stop("WRITE_TIMEOUT");
@@ -270,6 +358,10 @@ public final class Server {
             stoppedAt = SystemClock.elapsedRealtime();
             stop.set(true);
             keyframe.set(false);
+            releaseInput.set(true);
+            operations.clear();
+            Thread operationsOwner = automationThread;
+            if (operationsOwner != null) operationsOwner.interrupt();
             synchronized (sockets) {
                 for (Socket socket : sockets) {
                     try { socket.close(); } catch (IOException ignored) { }

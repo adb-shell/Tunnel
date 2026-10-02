@@ -2,9 +2,9 @@
 
 日期：2026-10-02；任务：[T-2026-10-02-002](ADB_REMOTE_MIRRORING_TASK.md)。
 
-状态：`accepted for staged implementation / P0 local prototype source added / runtime NOT_RUN`。2026-10-02 用户要求开始实施；当前进度与实际入口见 [P0 验证交接](ADB_P0_VALIDATION_RUNBOOK.md)。下文 P1—P6 与 PC 使用教程仍是待实现的目标合同。
+状态：2026-10-03用户要求先完成全链源码、后在外部服务器集中编译。T001已接入PC/relay受控入口、helper视频/输入、模式及本机同意；当前实现和限制见[交接指南](ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。原P0验证记录保留；P0—P6运行验收全部待执行，下文目标合同不等于已全部PASS。
 
-规划源码：`test / 532637a7b4084ec8ebf7deddbab12982628b1c1c`；业务基线 `CS-BL-2026-10-02-5cee692`。所有开发在独立 worktree；T002 完成规划，T003 开始默认关闭的本机原型源码。没有开放 PC/relay 远程入口。
+原规划源码：`test / 532637a7b4084ec8ebf7deddbab12982628b1c1c`；当前实现基线 `TUN-BL-2026-10-03-ADB`。所有开发在独立worktree；远程入口需用户主动请求和手机本机同意，不自动授权。
 
 ## 1. 结论与验收边界
 

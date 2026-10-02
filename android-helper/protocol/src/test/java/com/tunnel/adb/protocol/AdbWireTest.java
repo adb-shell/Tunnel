@@ -24,6 +24,32 @@ public class AdbWireTest {
     }
     private static byte[] secret() { byte[] key = new byte[32]; Arrays.fill(key, (byte) 0x5a); return key; }
 
+    @Test public void typedOperationsRejectUnknownFieldsAndTruncations() throws Exception {
+        byte[] touch = new AdbCommands.Command(1, AdbCommands.TOUCH, 0, 500000, 500000, 720, 1280, 0).encode();
+        for (int length = 0; length < touch.length; length++) {
+            final byte[] truncated = Arrays.copyOf(touch, length);
+            rejects(() -> AdbCommands.Command.decode(truncated));
+        }
+        rejects(() -> new AdbCommands.Command(1, 99, 0, 0, 0, 0, 0, 0));
+        rejects(() -> new AdbCommands.Command(1, AdbCommands.TOUCH, 0, 1000001, 0, 720, 1280, 0));
+        rejects(() -> new AdbCommands.Command(1, AdbCommands.KEY, 0, 29, 0, 1, 0, 0));
+        rejects(() -> new AdbCommands.Command(1, AdbCommands.CAPTURE_MODE, 4, 0, 0, 0, 0, 0));
+        rejects(() -> AdbWire.Packet.of(AdbWire.VIDEO_CONFIG, 6, 9, 1, 1, 0, 720, 1280, new byte[]{1}));
+        rejects(() -> AdbWire.Packet.of(AdbWire.VIDEO_FRAME, 2, 9, 1, 1, 0, 720, 1280, new byte[]{1}));
+    }
+
+    @Test(timeout = 10000) public void typedOperationAndResultRespectAuthenticatedDirection() throws Exception {
+        try (Pair pair = new Pair(AdbWire.CHANNEL_CONTROL, secret())) {
+            byte[] command = new AdbCommands.Command(1, AdbCommands.RELEASE_INPUT, 0, 0, 0, 0, 0, 0).encode();
+            pair.client.write(AdbWire.Packet.of(AdbWire.OPERATION, 0, 9, 0, 1, 0, 0, 0, command));
+            assertEquals(AdbCommands.RELEASE_INPUT, AdbCommands.Command.decode(pair.server.read().payloadCopy()).operation);
+            byte[] body = {10}; AdbCommands.Result result = new AdbCommands.Result(1, AdbCommands.OK, body); body[0] = 0;
+            pair.server.write(AdbWire.Packet.of(AdbWire.RESULT, 0, 9, 0, 1, 0, 0, 0, result.encode()));
+            assertEquals(10, AdbCommands.Result.decode(pair.client.read().payloadCopy()).bodyCopy()[0]);
+            rejects(() -> pair.client.write(AdbWire.Packet.of(AdbWire.RESULT, 0, 9, 0, 2, 0, 0, 0, result.encode())));
+        }
+    }
+
     @Test public void bootstrapIsFixedOwnedBoundedAndRejectsEveryTruncation() throws Exception {
         byte[] input = secret();
         AdbWire.Bootstrap boot = new AdbWire.Bootstrap(input, 9, 1234, 1235, 1280, 30, 4000000, 10);
@@ -37,7 +63,7 @@ public class AdbWireTest {
             rejects(() -> AdbWire.readBootstrap(new ByteArrayInputStream(truncated)));
         }
         rejects(() -> new AdbWire.Bootstrap(secret(), 9, 1, 1, 1280, 30, 4000000, 10));
-        rejects(() -> new AdbWire.Bootstrap(secret(), 9, 1, 2, 1280, 30, 4000000, 31));
+        rejects(() -> new AdbWire.Bootstrap(secret(), 9, 1, 2, 1280, 30, 4000000, 3601));
         boot.close(); read.close(); rejects(read::secretCopy);
     }
 

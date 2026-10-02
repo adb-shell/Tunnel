@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../common.dart';
 import 'home_page.dart';
 import '../widgets/adb_mirror_probe_card.dart';
+import '../widgets/adb_remote_consent_card.dart';
 
 class AdbPage extends StatefulWidget implements PageShape {
   @override
@@ -24,7 +26,9 @@ class AdbPage extends StatefulWidget implements PageShape {
 }
 
 class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
+  static const _localChannel = MethodChannel('mChannel');
   final _commandController = TextEditingController();
+  final _connectController = TextEditingController();
   final _terminalController = ScrollController();
 
   Timer? _pollTimer;
@@ -32,10 +36,15 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
   String _terminalText = "";
   bool _busy = false;
   bool _probeActive = false;
+  bool _mirrorActive = false;
+  bool _pollInFlight = false;
+  bool _debugPollInFlight = false;
   bool _debugBusy = false;
   bool _wirelessDebugEnabled = false;
   bool _shellReady = false;
   bool _serviceRequested = false;
+  int _localGeneration = 0;
+  BuildContext? _pairDialogContext;
   String _lastWirelessDebugMessage = "";
   String _lastWirelessDebugError = "";
 
@@ -50,10 +59,13 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _localGeneration++;
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     _debugPollTimer?.cancel();
+    _localChannel.invokeMethod<void>('tunnel_adb_cancel').catchError((_) {});
     _commandController.dispose();
+    _connectController.dispose();
     _terminalController.dispose();
     super.dispose();
   }
@@ -62,135 +74,137 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshWirelessDebugStatus();
+      _ensurePolling();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      _pollTimer?.cancel();
+      _pollTimer = null;
+      _cancelLocalOperation();
     }
   }
 
-  Future<void> _startAdbFlow() async {
-    setState(() {
-      _busy = true;
-      _serviceRequested = true;
-      _shellReady = false;
-    });
-    _ensurePolling();
-    _appendLocalLine("Requesting pairing information...");
+  bool _isCurrentLocalOperation(int generation) =>
+      mounted && generation == _localGeneration;
 
+  Future<void> _startAdbFlow() async {
+    if (_busy || _probeActive || _mirrorActive) return;
+    final generation = ++_localGeneration;
+    setState(() { _busy = true; _serviceRequested = true; _shellReady = false; });
+    _ensurePolling();
     try {
       final state = await AndroidAdbManager.init();
+      if (!_isCurrentLocalOperation(generation)) return;
       _applyState(state);
-      if (state['paired'] == true) {
-        _appendLocalLine("Paired before. Scanning and starting ADB automatically...");
-        final started = await _startServerAfterPairing();
-        if (started) return;
-        _appendLocalLine("Automatic ADB start failed. Please pair again.");
-      }
-    } catch (e) {
-      _appendLocalLine("ADB init failed: $e");
-    }
-
-    if (!mounted) return;
-    final request = await _showPairDialog();
-    if (!mounted) return;
-
-    if (request == null || request.action == _AdbPairAction.cancel) {
-      _appendLocalLine("Pairing cancelled.");
-      setState(() {
-        _busy = false;
-        _serviceRequested = false;
-      });
-      return;
-    }
-
-    if (request.action == _AdbPairAction.autoScan) {
-      setState(() => _busy = true);
-      _appendLocalLine("Skipping manual input. Scanning for an already paired ADB device...");
-      final started = await _startServerAfterPairing();
-      if (!started) {
-        _appendLocalLine("Automatic scan did not start ADB. Please pair manually or enable wireless debugging.");
-      }
-      return;
-    }
-
-    setState(() => _busy = true);
-    _appendLocalLine("Trying to pair wireless debugging port ${request.port} ...");
-    try {
-      final state = await AndroidAdbManager.pair(
-        port: request.port,
-        code: request.code,
-      );
-      _applyState(state);
-      if (state['paired'] != true) {
-        _appendLocalLine("Pairing did not complete. Please check the port and pairing code.");
-        if (mounted) {
-          setState(() {
-            _busy = false;
-            _serviceRequested = false;
-          });
-        }
+      if (state['binaryAvailable'] != true) {
+        _appendLocalLine('安装包缺少 libadb.so；请使用已准备 ADB 组件的服务器构建重新安装。');
         return;
       }
-      _appendLocalLine("Pairing succeeded. Starting ADB server...");
+      if (state['pairedBefore'] == true || state['paired'] == true) {
+        _appendLocalLine('正在发现已配对的本机 ADB 连接…');
+        if (await _startServerAfterPairing(generation)) return;
+        if (!_isCurrentLocalOperation(generation)) return;
+        _appendLocalLine('未验证到本机连接，请检查无线调试或重新配对。');
+      }
+      if (!_isCurrentLocalOperation(generation)) return;
+      final request = await _showPairDialog();
+      if (!_isCurrentLocalOperation(generation) ||
+          request == null || request.action == _AdbPairAction.cancel) return;
+      if (request.action == _AdbPairAction.autoScan) {
+        await _startServerAfterPairing(generation);
+        return;
+      }
+      _appendLocalLine('正在向本机配对端口提交配对码…');
+      final paired = await AndroidAdbManager.pair(port: request.port, code: request.code);
+      if (!_isCurrentLocalOperation(generation)) return;
+      _applyState(paired);
+      if (paired['paired'] != true) {
+        _appendLocalLine('配对未完成，请检查配对端口和配对码。');
+        return;
+      }
+      _appendLocalLine('配对成功，正在发现连接端口并验证 shell 身份…');
       await Future<void>.delayed(const Duration(seconds: 1));
-      await _startServerAfterPairing();
-    } catch (e) {
-      _appendLocalLine("Pairing request failed: $e");
-      if (mounted) setState(() => _serviceRequested = false);
+      if (!_isCurrentLocalOperation(generation)) return;
+      await _startServerAfterPairing(generation);
+    } catch (_) {
+      if (_isCurrentLocalOperation(generation)) _appendLocalLine('本机 ADB 配对或连接未完成。');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (_isCurrentLocalOperation(generation)) {
+        setState(() { _busy = false; _serviceRequested = _shellReady; });
+      }
     }
   }
 
   Future<void> _stopAdbFlow() async {
+    if (_busy || _probeActive || _mirrorActive) return;
+    final generation = ++_localGeneration;
     setState(() => _busy = true);
-    _appendLocalLine("Stopping ADB service...");
     try {
       final state = await AndroidAdbManager.stop();
+      if (!_isCurrentLocalOperation(generation)) return;
       _applyState(state);
-      if (mounted) {
-        setState(() {
-          _serviceRequested = false;
-          _shellReady = false;
-        });
-      }
-    } catch (e) {
-      _appendLocalLine("ADB stop failed: $e");
+      setState(() { _serviceRequested = false; _shellReady = false; });
+    } catch (_) {
+      if (_isCurrentLocalOperation(generation)) _appendLocalLine('停止本地终端失败。');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (_isCurrentLocalOperation(generation)) setState(() => _busy = false);
     }
   }
 
-  Future<bool> _startServerAfterPairing() async {
-    _appendLocalLine("Starting ADB server...");
-    var started = false;
-    try {
-      final state = await AndroidAdbManager.start();
-      _applyState(state);
-      started = state['shellReady'] == true;
-    } catch (e) {
-      _appendLocalLine("ADB start failed: $e");
-    } finally {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-          if (!_shellReady) {
-            _serviceRequested = false;
-          }
-        });
-      }
+  Future<bool> _startServerAfterPairing(int generation) async {
+    if (!_isCurrentLocalOperation(generation)) return false;
+    final state = await AndroidAdbManager.start();
+    if (!_isCurrentLocalOperation(generation)) return false;
+    _applyState(state);
+    if (state['shellReady'] != true) {
+      _appendLocalLine('未验证到本机 shell；可手动填写无线调试主页的连接端口。');
     }
-    return started;
+    return state['shellReady'] == true;
   }
 
   Future<void> _sendCommand() async {
+    if (_busy || _probeActive || _mirrorActive || !_shellReady) return;
     final command = _commandController.text.trim();
     if (command.isEmpty) return;
     _commandController.clear();
-    _appendLocalLine("> $command");
+    final generation = ++_localGeneration;
+    setState(() => _busy = true);
     try {
       final state = await AndroidAdbManager.command(command);
-      _applyState(state);
-    } catch (e) {
-      _appendLocalLine("Command failed: $e");
+      if (_isCurrentLocalOperation(generation)) _applyState(state);
+    } catch (_) {
+      if (_isCurrentLocalOperation(generation)) _appendLocalLine('本地命令执行失败或超时。');
+    } finally {
+      if (_isCurrentLocalOperation(generation)) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _connectLocal() async {
+    if (_busy || _probeActive || _mirrorActive) return;
+    final endpoint = _connectController.text.trim();
+    if (endpoint.isEmpty || endpoint.length > 80) return;
+    final generation = ++_localGeneration;
+    setState(() => _busy = true);
+    _ensurePolling();
+    try {
+      final state = await _localChannel.invokeMapMethod<String, dynamic>(
+          'tunnel_adb_connect', {'endpoint': endpoint});
+      if (_isCurrentLocalOperation(generation) && state != null) _applyState(state);
+    } catch (_) {
+      if (_isCurrentLocalOperation(generation)) {
+        _appendLocalLine('本机连接失败；请使用无线调试主页的连接端口。');
+      }
+    } finally {
+      if (_isCurrentLocalOperation(generation)) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _cancelLocalOperation() async {
+    _localGeneration++;
+    final dialogContext = _pairDialogContext;
+    if (mounted && dialogContext != null && ModalRoute.of(dialogContext)?.isCurrent == true) {
+      Navigator.of(dialogContext).pop(const _AdbPairDialogResult.cancel());
+    }
+    if (mounted) setState(() { _busy = false; _serviceRequested = _shellReady; });
+    try { await _localChannel.invokeMethod<void>('tunnel_adb_cancel'); } catch (_) {}
   }
 
   Future<void> _toggleWirelessDebug() async {
@@ -260,12 +274,14 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
   }
 
   Future<void> _refreshWirelessDebugStatus() async {
+    if (!mounted || _debugPollInFlight) return;
+    _debugPollInFlight = true;
     try {
       final status = await AndroidAdbManager.wirelessDebugStatus();
       _applyWirelessDebugStatus(status);
     } catch (_) {
       // Keep UI stable when the native side is temporarily unavailable.
-    }
+    } finally { _debugPollInFlight = false; }
   }
 
   void _applyWirelessDebugStatus(
@@ -304,7 +320,9 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
     return showDialog<_AdbPairDialogResult>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (context) {
+        _pairDialogContext = context;
+        return AlertDialog(
         title: const Text("ADB \u914d\u5bf9"),
         content: SingleChildScrollView(
           child: Column(
@@ -312,20 +330,26 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "\u8bf7\u5728 Android \u65e0\u7ebf\u8c03\u8bd5\u7684\u201c\u4f7f\u7528\u914d\u5bf9\u7801\u914d\u5bf9\u8bbe\u5907\u201d\u9875\u9762\u4e2d\u8f93\u5165\u7aef\u53e3\u548c\u914d\u5bf9\u7801\u3002",
+                '请分屏打开系统设置，保持“使用配对码配对设备”窗口开启。此处填写配对端口和 6 位配对码；连接端口位于无线调试主页。自动发现仍需要您输入配对码。',
                 style: Theme.of(context).textTheme.bodyMedium,
               ).marginOnly(bottom: 12),
               TextField(
                 controller: portController,
-                keyboardType: TextInputType.number,
+                keyboardType: TextInputType.text,
+                maxLength: 80,
                 decoration: const InputDecoration(
-                  labelText: "\u7aef\u53e3",
+                  labelText: '配对端口或本机 IP:配对端口',
                   border: OutlineInputBorder(),
                 ),
               ).marginOnly(bottom: 12),
               TextField(
                 controller: codeController,
                 keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                autocorrect: false,
+                enableSuggestions: false,
                 decoration: const InputDecoration(
                   labelText: "\u914d\u5bf9\u7801",
                   border: OutlineInputBorder(),
@@ -346,16 +370,17 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
                 ),
                 const Spacer(),
                 TextButton(
-                  onPressed: () => Navigator.of(context)
-                      .pop(const _AdbPairDialogResult.autoScan()),
-                  child: const Text("\u81ea\u52a8"),
+                  onPressed: () => Navigator.of(context).pop(codeController.text.length == 6
+                      ? _AdbPairDialogResult.manualPair(port: 'auto', code: codeController.text)
+                      : const _AdbPairDialogResult.autoScan()),
+                  child: const Text('自动发现'),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: () {
                     Navigator.of(context).pop(_AdbPairDialogResult.manualPair(
-                      port: portController.text,
-                      code: codeController.text,
+                      port: portController.text.trim(),
+                      code: codeController.text.trim(),
                     ));
                   },
                   child: const Text("\u914d\u5bf9"),
@@ -364,20 +389,28 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
             ),
           ),
         ],
-      ),
+        );
+      },
     ).whenComplete(() {
+      _pairDialogContext = null;
       portController.dispose();
       codeController.dispose();
     });
   }
 
   void _ensurePolling() {
-    _pollTimer ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
+    _pollTimer ??= Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (HomePage.homeKey.currentState?.selectedIndex != 1) {
+        if (_busy) _cancelLocalOperation();
+        return;
+      }
       _refreshTerminalOutput();
     });
   }
 
   Future<void> _refreshTerminalOutput() async {
+    if (!mounted || _pollInFlight) return;
+    _pollInFlight = true;
     try {
       final statusFuture = AndroidAdbManager.status();
       final outputFuture = AndroidAdbManager.output();
@@ -386,6 +419,8 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
       if (!mounted) return;
 
       var changed = false;
+      final mirrorActive = state['mirrorActive'] == true;
+      if (_mirrorActive != mirrorActive) { _mirrorActive = mirrorActive; changed = true; }
       final nextShellReady = state['shellReady'] == true;
       if (_shellReady != nextShellReady) {
         _shellReady = nextShellReady;
@@ -403,7 +438,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
       _scrollTerminalToBottom();
     } catch (_) {
       // Keep the terminal stable if the native side is temporarily unavailable.
-    }
+    } finally { _pollInFlight = false; }
   }
 
   void _applyState(Map<String, dynamic> state) {
@@ -411,6 +446,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
     final output = state['output']?.toString();
     setState(() {
       _shellReady = state['shellReady'] == true;
+      _mirrorActive = state['mirrorActive'] == true;
       if (_shellReady) {
         _serviceRequested = true;
       }
@@ -422,6 +458,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
   }
 
   void _appendLocalLine(String line) {
+    if (!mounted) return;
     final now = DateTime.now();
     final stamp =
         "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
@@ -433,7 +470,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
 
   void _scrollTerminalToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_terminalController.hasClients) return;
+      if (!mounted || !_terminalController.hasClients) return;
       _terminalController.jumpTo(_terminalController.position.maxScrollExtent);
     });
   }
@@ -448,8 +485,9 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
           child: ListView(
             padding: const EdgeInsets.only(bottom: 24),
             children: [
+              const AdbRemoteConsentCard(),
               AdbMirrorProbeCard(
-                blocked: _busy || _debugBusy,
+                blocked: _busy || _debugBusy || _mirrorActive,
                 isPageVisible: () => HomePage.homeKey.currentState?.selectedIndex == 1,
                 onActiveChanged: (active) {
                   if (mounted && _probeActive != active) setState(() => _probeActive = active);
@@ -462,7 +500,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "\u540e\u7eed\u65e0\u7ebf\u8c03\u8bd5\u3001\u914d\u5bf9\u72b6\u6001\u548c\u8fdc\u7a0b\u547d\u4ee4\u7ec4\u4ef6\u90fd\u4f1a\u653e\u5728\u8fd9\u91cc\u3002",
+                      '配对后自动发现连接端口，也可手动输入本机 Wi-Fi 地址或 127.0.0.1:连接端口。仅 uid 2000 验证成功才显示就绪。',
                       style: TextStyle(color: MyTheme.darkGray),
                     ).marginOnly(bottom: 8),
                     SizedBox(
@@ -476,14 +514,29 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
                               )
                             : null,
                         onPressed:
-                            _busy || _probeActive ? null : (adbRunning ? _stopAdbFlow : _startAdbFlow),
+                            _busy || _probeActive || _mirrorActive ? null : (adbRunning ? _stopAdbFlow : _startAdbFlow),
                         label: Text(_busy
                             ? "\u5904\u7406\u4e2d"
                             : adbRunning
-                                ? "\u505c\u6b62\u670d\u52a1"
-                                : "\u542f\u52a8\u670d\u52a1"),
+                                ? '停止本地终端'
+                                : '配对 / 自动连接'),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _connectController,
+                      enabled: !_busy && !_probeActive && !_mirrorActive,
+                      maxLength: 80,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      decoration: const InputDecoration(labelText: '本机 IP:连接端口（不是配对端口）'),
+                    ),
+                    Wrap(spacing: 8, children: [
+                      TextButton(onPressed: _busy || _probeActive || _mirrorActive ? null : _connectLocal,
+                          child: const Text('手动连接')),
+                      TextButton(onPressed: _busy ? _cancelLocalOperation : null,
+                          child: const Text('取消本地操作')),
+                    ]),
                   ],
                 ),
               ),
@@ -510,7 +563,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
                                 foregroundColor: Colors.white,
                               )
                             : null,
-                        onPressed: _probeActive ? null : _toggleWirelessDebug,
+                        onPressed: _busy || _probeActive || _mirrorActive ? null : _toggleWirelessDebug,
                         label: Text(_debugBusy
                             ? "\u505c\u6b62\u6267\u884c"
                             : _wirelessDebugEnabled
@@ -528,7 +581,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
               ),
               _AdbCommandCard(
                 controller: _commandController,
-                enabled: _shellReady && !_probeActive,
+                enabled: _shellReady && !_probeActive && !_mirrorActive && !_busy,
                 onSubmitted: _sendCommand,
               ),
             ],

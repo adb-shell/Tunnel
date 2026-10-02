@@ -603,6 +603,14 @@ impl<T: InvokeUiSession> Session<T> {
     }
 
     pub fn set_option(&self, k: String, mut v: String) {
+        if k == crate::server::android_control::OPTION {
+            if crate::server::android_control::parse(&v).is_some() {
+                self.send(Data::Message(crate::server::android_control::message(v)));
+            } else {
+                self.update_android_control("{\"v\":1,\"phase\":\"ERROR\",\"code\":\"MALFORMED\"}".into());
+            }
+            return;
+        }
         let mut lc = self.lc.write().unwrap();
         if k.eq("remote_dir") {
             v = lc.get_all_remote_dir(v);
@@ -1614,6 +1622,7 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn close_success(&self);
     fn update_quality_status(&self, qs: QualityStatus);
     fn update_tunnel_status(&self, json: String);
+    fn update_android_control(&self, _json: String) {}
     fn set_connection_type(&self, is_secured: bool, direct: bool);
     fn set_fingerprint(&self, fingerprint: String);
     fn job_error(&self, id: i32, err: String, file_num: i32);

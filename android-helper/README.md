@@ -1,8 +1,8 @@
-# Android local ADB mirroring P0 helper
+# Android ADB mirroring helper
 
 状态：源码原型；本次未编译、未运行协议测试、未安装 APK、未执行设备探针。
 
-本目录只用于手机本地的有限时长采集验证，不接入 PC/relay 生产视频，不提供远程输入或任意 shell。入口是 `com.tunnel.adbhelper.Server`，源码见 [server](server/src/main/java/com/tunnel/adbhelper/Server.java)、[server README](server/README.md) 和 [provenance](server/PROVENANCE.md)。完整产品方案见 [ADB_REMOTE_MIRRORING_PLAN.md](../docs/plans/ADB_REMOTE_MIRRORING_PLAN.md)。
+2026-10-03 本目录扩展为受控远程投屏的手机本地 helper；原 P0 10 秒诊断入口保留，正常远程入口由 APK `TunnelAdbRuntime` 管理本机同意、scope 和控制者租约。helper 不直接开放公网，不提供任意 shell。入口是 `com.tunnel.adbhelper.Server`，源码见 [server](server/src/main/java/com/tunnel/adbhelper/Server.java)、[server README](server/README.md) 和 [provenance](server/PROVENANCE.md)。完整产品方案见 [ADB_REMOTE_MIRRORING_PLAN.md](../docs/plans/ADB_REMOTE_MIRRORING_PLAN.md)。
 
 ## 源码与协议
 
@@ -13,11 +13,11 @@
 
 `AdbWire.authenticateClient` 的 client 指 APK，`authenticateServer` 的 server 指 helper，与哪个进程先建立 TCP 连接无关。仅使用 `127.0.0.1`；两条独立 socket 分别承载 VIDEO 和 CONTROL。握手绑定版本、channel、epoch 和双方随机 nonce；方向分离的 HMAC 密钥保护每条记录。HMAC 提供认证和完整性，不提供媒体加密；它不是公网协议。
 
-P0 消息只有 CAPABILITIES、VIDEO_CONFIG、VIDEO_FRAME、REQUEST_KEYFRAME、STOP、PING、PONG，没有 input/file/shell 操作。每条 channel 每个方向的 sequence 从 1 连续递增；一个 Session 固定 epoch。VIDEO_CONFIG 包含独立的 H264 codec configuration，之后首帧必须标 KEY_FRAME。收到 config 不能当作成功解码首帧。`ptsUs` 是微秒；未来接 Rust 视频时再明确转换为其毫秒时基。
+Wire VERSION=2：CAPABILITIES、VIDEO_CONFIG、VIDEO_FRAME、REQUEST_KEYFRAME、STOP、PING、PONG，以及 OPERATION/RESULT。`AdbCommands` 只允许固定数值结构的触摸、按键、导航、截图、节点、display power、释放输入和选择采集模式；没有 file/shell/Intent/component/settings 接口。CAPTURE_MODE 的 a=0/1/2/3 分别 live/snapshot/hierarchy/paused，b=0/3 指 provider 丢失后返回 live/paused；其余字段必须 0。每条 channel 每个方向 sequence 从 1 连续递增；一个 helper Session 固定 epoch。VIDEO_CONFIG flags 0=live、2=snapshot、4=hierarchy，其 payload 仍是 Annex-B SPS/PPS，首帧必须是 IDR。Runtime 将 helper epoch 映射到 Rust 分配的网络 epoch；旋转/换源/恢复先私有 RECONFIGURE 握手，再发送新 CONFIG/IDR。`ptsUs` 始终是微秒，解码/呈现成功另行确认。
 
 每包长度在分配前校验；最大 AU 8 MiB、config 64 KiB、最长边 4096、总像素 8 Mi。Packet 复制入参并只提供 `payloadCopy()`，不保存调用方可变数组。读写错误永久关闭 Session。调用方仍须设置 socket 读期限、限制出入队列和通过关闭 socket 取消卡住的写入；framing 本身不会创建超时线程。
 
-握手及数据记录使用 magic `TADB`（`0x54414442`）。启动配置经 stdin 传固定 70 字节 big-endian Bootstrap：`TABT`（`0x54414254`）、version u16、32-byte secret、epoch i64、videoPort/controlPort/maxSize/fps/bitrate/durationSeconds 六个 i32。secret 不放 argv、环境变量、URL 或日志。`Bootstrap.close()` 清理自己的副本，调用方也应清理 `secretCopy()` 返回的副本。Bootstrap 时长上限 30 秒，建议初始配置最长边 1280、15/30fps、4Mbps、10秒；能力探针结果不代表产品运行验收通过。
+握手及数据记录使用 magic `TADB`（`0x54414442`）。启动配置经 stdin 传固定 70 字节 big-endian Bootstrap：`TABT`（`0x54414254`）、version u16、32-byte secret、epoch i64、videoPort/controlPort/maxSize/fps/bitrate/durationSeconds 六个 i32。secret 不放 argv、环境变量、URL 或日志。`Bootstrap.close()` 清理自己的副本，调用方也应清理 `secretCopy()` 返回的副本。Bootstrap 硬上限 3600 秒，不因旋转重置；P0 仍 20 秒 helper 上限/10 秒采样。远程同意最长 3600 秒、控制者心跳 15 秒过期，正常 EOF/撤销更早终止。能力探针结果不代表产品运行验收通过。
 
 ## 离线构建
 
@@ -41,6 +41,6 @@ python android-helper/build_helper.py --android-jar '<SDK>/platforms/android-34/
 python android-helper/build_helper.py --android-jar '<SDK>/platforms/android-34/android.jar' --d8-jar '<SDK>/build-tools/<approved-version>/lib/d8.jar' --jdk-bin '<JDK>/bin' --stage
 ```
 
-仅首次创建 `flutter/android/app/src/main/assets/adb-mirror-p0/`，复制 `helper.jar` 后最后写入 `manifest.json`。这是 Android native assets，与 `context.assets.open("adb-mirror-p0/...")` 一致，不需要 Flutter pubspec 条目。缺少父 assets 目录时只在已确认的仓库范围内创建。目标目录只要存在即拒绝，包含空目录或先前失败的部分 stage；不删除、不覆盖、不自动修复。失败残留须由 owner 检查并在明确批准的替换任务中处理。APK 必须校验两件套和 hash，不能将缺 manifest 的 jar 视作可运行资产。
+创建或安全替换 `flutter/android/app/src/main/assets/adb-mirror-p0/`。这是 Android native assets，与 `context.assets.open("adb-mirror-p0/...")` 一致，不需要 Flutter pubspec 条目。已有目录必须仅含真实文件 `helper.jar` 与 `manifest.json`，且 entryPoint、schema、implementation、size/hash 自洽；否则保留并拒绝。脚本使用排他锁、临时目录和旧目录备份 rename，成功后只删除已验证的旧两文件；替换失败恢复旧目录，不递归清理未知文件。崩溃遗留锁/备份由构建负责人检查。`build.sh` 普通构建也准备 helper，Gradle `preBuild` 核对 protocol 2、当前源码/脚本/来源文件 hash，拒绝陈旧或不完整资产，与默认关闭的 P0 诊断开关独立。APK 运行时仍必须再次核验两件套和 hash。
 
-`--stage` 不是 APK 构建、设备授权、发布、签名或 Git 提交。协议 JUnit、helper build、APK build 和真机采集各自回填验证结果；全部尚为 `NOT_RUN` 时，不得启用生产远程 ADB 按钮。
+`--stage` 不是 APK 构建、设备授权、发布、签名或 Git 提交。协议 JUnit、helper build、APK build 和真机采集各自回填验证结果；当前源码入口可供服务器构建验证，全部尚为 `NOT_RUN` 时不得称为已通过生产验收。

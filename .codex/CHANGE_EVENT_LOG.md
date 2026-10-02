@@ -1,8 +1,22 @@
 # Tunnel Change Event Log
 
+## CE-20261003-T001-01：ADB全链、首轮故障修复与交付知识同步
+
+- Timestamp：2026-10-03 Asia/Shanghai；Task T-2026-10-03-001。
+- Actor：root tunnel-master及Android/local、Rust/protocol、helper三个受托agent；相互V0复核。
+- Permission：用户明确继续ADB、修复A11y/native/portable并直接完成P0—P6源码后自行在服务器编译；不包含本机执行/设备/Git/发布。
+- Files：android-adb、android-helper、Android adb/mirror/probe/runtime/manifest配置、Flutter adb页面/授权卡/remote顶栏/model/input、message.proto、Rust client/server/JNI encoded、build.sh/new-build.cmd/pc-bulid.cmd/portable，及对应docs和.codex。
+- Delta：固定LADB预编译来源/ABI/receipt；本地有限命令、手动连接/自动发现与租约；受控typed远程同意/视频/输入/side模式；候选/barrier/Flutter帧ACK；A11y保留系统ServiceInfo和绑定状态复查；portable真实Cargo产物和驱动载荷校验。
+- Review fixes：generation过期响应、Activity取消入队竞态、本机授权卡晚轮询、端点终止phase、候选失败回退、输入hover/按下释放、权限/能力丢失、超时与队列边界；新epoch作废旧Flutter帧回调；presented须匹配已发barrier及有效sequence；撤键盘权限仍允许原加密会话回退确认；电源键不得绕过display scope。
+- Source/Generated：新增源码和构建配方；没有运行protobuf/FRB/codegen，没下载native binary或创建APK/EXE。
+- Decision / Baseline：D-017追记ADR-0014；TUN-BL-2026-10-03-ADB；旧历史记录保留。
+- Verification：Python AST/JSON/XML语法、git diff --check、全链静态审查；V1—V5 NOT_RUN。完整限制及验证入口见docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md。
+- Git / Build / Delete / External / Release：none；无移动/删除项目资产，无本机构建/测试/analyze/codegen，无原checkout修改，无签名或发布。
+- State：源码交付/正式验证handoff；不是P0—P6真机全部通过。
+
 Schema Version：`1.0`  
 Coverage Start：2026-07-12  
-Last Updated：2026-10-02（Asia/Shanghai）
+Last Updated：2026-10-03（Asia/Shanghai）
 Mode：`append-only logical persisted-change events`
 
 > 一个 Change Event 是一次逻辑完整的代码/文档持久化修改批次，不是每次按键、每个 patch hunk、只读调查或对话消息。本文件建立前的精确 edit-event 历史无法重建，只能按已知 Task 做 aggregate backfill。日志自身的创建/追加属于对应事件，不递归生成第二条事件。

@@ -1,6 +1,8 @@
 # Tunnel Project Memory
 
-最后更新：2026-10-02
+最后更新：2026-10-03
+
+当前ADB增量T-2026-10-03-001：用户已要求先交付P0—P6源码，再在其他服务器编译、以OnePlus ACE6T/iQOO Neo9 Android16测试。实现/路径/限制和验证见 `docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md`；仅V0，不是设备PASS。T003暂停已由继续指令解除并承接，旧P0-only描述仅为历史阶段。
 用途：AI 会话的稳定入口，不替代源码和完整工程文档。
 
 ## 1. Entry and Source of Truth
@@ -60,7 +62,7 @@
 - Android 真实 RGBA/Texture frame 必须清 PC waiting。
 - controller 当前强制 relay；受控端仍保留 rendezvous/direct/NAT compatibility code。
 - Windows 当前 virtual display implementation 是 Amyuni；RustDesk IDD 分支是 dormant。
-- Android ADB 是设备本地 LADB 子系统，不是 PC remote ADB protocol。
+- Android ADB包含本地LADB与受控remote协议；PC只经既有加密会话发送typed操作，手机本机consent/scopes/TTL，任意shell仍local-only。
 - ZEGO 媒体不走原 RustDesk audio service；peer protocol 只传 invitation/control state。
 - `verify_login()` 的 legacy UI bypass 不等于产品 API、hbbs 或 endpoint authentication bypass。
 - terminal已实现进程内persistent registry与service-ID reattach；不等于跨重启耐久化，peer-owner隔离仍待验证。
@@ -110,7 +112,7 @@
 - 产品 backend/OpenAPI/DB/schema/migration/backup。
 - ZEGO broker 独立受控 project/commit、dependency lock、production provenance 和 credential ownership；当前 deployment script 只内嵌了部分 Go server source。
 - ADB binary、Windows driver/helper 的 source revision、license 和 hashes。
-- 当前`ADB-CODE/`、`LADB/`、`flutter/android/app/src/main/jniLibs/`均不存在；旧本机hash不等于当前资产已取得。
+- 当前本机仍未获取native二进制；`android-adb/ladb-prebuilt.lock.json`固定官方LADB commit/blob/ABI，服务器prepare与Gradle校验补齐供应；旧本机hash不等于当前资产已取得。helper protocol2须重新构建，普通remote打包独立于P0诊断flag。
 - 正式 Android/Windows build 与 regression evidence。
 
 这些缺口未补齐前，不得宣称全系统接管或发布就绪。

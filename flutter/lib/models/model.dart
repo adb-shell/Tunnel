@@ -45,6 +45,7 @@ import '../common.dart';
 import '../utils/image.dart' as img;
 import '../common/widgets/dialog.dart';
 import 'input_model.dart';
+import 'android_mode_model.dart';
 import 'platform_model.dart';
 
 import 'package:flutter_hbb/generated_bridge.dart'
@@ -515,6 +516,8 @@ class FfiModel with ChangeNotifier {
         parent.target?.qualityMonitorModel.updateQualityStatus(evt);
       } else if (name == 'update_tunnel_status') {
         parent.target?.tunnelStatusModel.updateFromEvent(evt);
+      } else if (name == 'android_control') {
+        parent.target?.androidModeModel.onEvent(evt);
       } else if (name == 'update_block_input_state') {
         updateBlockInputState(evt, peerId);
       } else if (name == 'update_privacy_mode') {
@@ -1131,6 +1134,7 @@ class FfiModel with ChangeNotifier {
 
   void reconnect(OverlayDialogManager dialogManager, SessionID sessionId,
       bool forceRelay) {
+    parent.target?.androidModeModel.reset();
     final effectiveForceRelay = isPeerAndroid || forceRelay;
     bind.sessionReconnect(sessionId: sessionId, forceRelay: effectiveForceRelay);
     if (!isPeerAndroid) {
@@ -3320,6 +3324,7 @@ class FFI {
   late final PeerTabModel peerTabModel; // global
   late final QualityMonitorModel qualityMonitorModel; // session
   late final TunnelStatusModel tunnelStatusModel; // session
+  late final AndroidModeModel androidModeModel; // session, never global
   late final RecordingModel recordingModel; // session
   late final InputModel inputModel; // session
   late final ElevationModel elevationModel; // session
@@ -3351,6 +3356,7 @@ class FFI {
     groupModel = GroupModel(WeakReference(this));
     qualityMonitorModel = QualityMonitorModel(WeakReference(this));
     tunnelStatusModel = TunnelStatusModel(WeakReference(this));
+    androidModeModel = AndroidModeModel(WeakReference(this));
     recordingModel = RecordingModel(WeakReference(this));
     inputModel = InputModel(WeakReference(this));
     elevationModel = ElevationModel(WeakReference(this));
@@ -3585,6 +3591,7 @@ class FFI {
         if (message is EventToUI_Event) {
           if (message.field0 == "close") {
             closed = true;
+            androidModeModel.reset();
             debugPrint('Exit session event loop');
             return;
           }
@@ -3596,9 +3603,14 @@ class FFI {
             debugPrint('json.decode fail1(): $e, ${message.field0}');
           }
           if (event != null) {
-            await cb(event);
+            if (event['name'] == 'android_control') {
+              androidModeModel.onEvent(event);
+            } else {
+              await cb(event);
+            }
           }
         } else if (message is EventToUI_Rgba) {
+          final adbPresentationToken = androidModeModel.presentationToken;
           final display = message.field0;
           // Fetch the image buffer from rust codes.
           final sz = platformFFI.getRgbaSize(sessionId, display);
@@ -3610,6 +3622,7 @@ class FFI {
           if (rgba != null) {
             onEvent2UIRgba();
             await imageModel.onRgba(display, rgba);
+            androidModeModel.onFrameAvailable(adbPresentationToken);
           } else {
             platformFFI.nextRgba(sessionId, display);
           }
@@ -3624,6 +3637,7 @@ class FFI {
           }
           textureModel.setTextureType(display: display, gpuTexture: gpuTexture);
           onEvent2UIRgba();
+          androidModeModel.onFrameAvailable(androidModeModel.presentationToken);
         }
       }();
     });
@@ -3677,6 +3691,7 @@ class FFI {
   /// Close the remote session.
   Future<void> close({bool closeSession = true}) async {
     closed = true;
+    androidModeModel.reset();
     chatModel.close();
     await zegoVoiceCallModel.leave();
     // Close all terminal models

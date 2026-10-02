@@ -21,6 +21,46 @@ use std::sync::atomic::{AtomicPtr, Ordering::SeqCst};
 use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 
+/// Copies one bounded Annex-B access unit into Rust-owned memory.
+#[no_mangle]
+pub extern "system" fn Java_pkg2230_ClsFx9V0S_adbEncodedFrame(
+    env: JNIEnv, _class: JClass, epoch: jlong, revision: jlong,
+    width: jint, height: jint, pts_us: jlong, key: jboolean,
+    config: jboolean, bytes: jni::objects::JByteArray,
+) -> jboolean {
+    if epoch <= 0 || revision <= 0 || width <= 0 || height <= 0 || pts_us < 0 {
+        return 0;
+    }
+    let limit = if config != 0 { super::encoded::MAX_CONFIG } else { super::encoded::MAX_ACCESS_UNIT };
+    let length = match env.get_array_length(&bytes) {
+        Ok(length) if length > 0 && length as usize <= limit => length,
+        _ => return 0,
+    };
+    let data = match env.convert_byte_array(&bytes) {
+        Ok(data) if data.len() == length as usize => data,
+        _ => return 0,
+    };
+    super::encoded::push(epoch as u64, revision as u64, width as u32, height as u32,
+        pts_us, key != 0, config != 0, data) as jboolean
+}
+
+#[no_mangle]
+pub extern "system" fn Java_pkg2230_ClsFx9V0S_adbRuntimeState(
+    mut env: JNIEnv, _class: JClass, conn_id: jint, json: JString,
+) -> jboolean {
+    // Java's UTF-16 length bounds allocation before conversion to UTF-8.
+    let length = match env.call_method(&json, "length", "()I", &[]).and_then(|v| v.i()) {
+        Ok(length) if length > 0 && length as usize <= super::encoded::MAX_STATUS => length,
+        _ => return 0,
+    };
+    let _ = length;
+    let result = match env.get_string(&json) {
+        Ok(value) => super::encoded::push_state(conn_id, value.into()) as jboolean,
+        Err(_) => 0,
+    };
+    result
+}
+
 lazy_static! {
     static ref JVM: RwLock<Option<JavaVM>> = RwLock::new(None);
     static ref MAIN_SERVICE_CTX: RwLock<Option<GlobalRef>> = RwLock::new(None); // MainService -> video service / audio service / info

@@ -760,6 +760,26 @@ finalize_named_apk_to_flutter_dir() {
 }
 
 # ===== 构建模式 =====
+prepare_packaged_adb() {
+  section "准备固定来源的 Android libadb.so"
+  local abi_args=(--abi arm64-v8a)
+  [[ "$BUILD_MODE" == "universal" ]] && abi_args+=(--abi armeabi-v7a --abi x86_64)
+  [[ "${TUNNEL_ADB_OFFLINE:-0}" == "1" ]] && abi_args+=(--offline)
+  require_file "$REPO_ROOT/android-adb/prepare_adb.py"
+  run python3 "$REPO_ROOT/android-adb/prepare_adb.py" "${abi_args[@]}"
+}
+
+prepare_packaged_adb_helper() {
+  section "构建 APK 内固定来源的 ADB helper"
+  local build_tools
+  build_tools="$(detect_android_build_tools_dir)"
+  require_file "$ANDROID_SDK_ROOT/platforms/android-34/android.jar"
+  require_file "$build_tools/lib/d8.jar"
+  run python3 "$REPO_ROOT/android-helper/build_helper.py" \
+    --android-jar "$ANDROID_SDK_ROOT/platforms/android-34/android.jar" \
+    --d8-jar "$build_tools/lib/d8.jar" --jdk-bin "$JAVA_HOME/bin" --stage
+}
+
 build_mode_aarch64() {
   local target="aarch64-linux-android"
   local apk_in
@@ -813,6 +833,8 @@ main() {
   maybe_generate_bridge
   prepare_flutter_project
   prepare_key_properties
+  prepare_packaged_adb
+  prepare_packaged_adb_helper
 
   case "$BUILD_MODE" in
     aarch64) build_mode_aarch64 ;;
