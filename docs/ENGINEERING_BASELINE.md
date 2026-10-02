@@ -822,7 +822,7 @@ Current source truth:
 - Protocol metadata is in `libs/hbb_common/protos/message.proto::VoiceCallRequest`.
 - PC/controller creates ZEGO room metadata through `src/client/helper.rs::request_zego_voice_call_info`.
 - PC/controller hardcodes the ZEGO Token endpoint in `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL`; local override and legacy fallback are intentionally not used.
-- Current PC/controller ZEGO Token endpoint is `http://103.30.77.156:50003`; this endpoint is handled directly by the IP + port token service deployment and does not use a domain or reverse proxy.
+- Current PC/controller ZEGO Token endpoint is `http://43.255.158.22:21113`; this endpoint is handled directly by the IP + port token service deployment and does not use a domain or reverse proxy.
 - PC/controller also hardcodes a Bearer key in `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_API_KEY`; treat it as a deployed client credential that must match the token service `.env`, but do not duplicate the real value in Git-tracked docs.
 - PC/controller token HTTP creation runs through `tokio::task::spawn_blocking(...)` in `src/client/io_loop.rs::Data::NewVoiceCall` so token-service latency does not block the remote-control event loop.
 - `src/client/io_loop.rs::Data::NewVoiceCall` uses `tunnelSessionId = pcPeerId_remotePeerId_reqTimestamp` when requesting the token service. The deployed token API field remains `androidPeerId` for compatibility, but the client now fills it with the current remote peer id so each established PC-controlled endpoint connection gets an isolated 1v1 ZEGO room even if the platform string was not recognized.

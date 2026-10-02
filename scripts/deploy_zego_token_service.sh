@@ -7,11 +7,11 @@ INSTALL_DIR="${INSTALL_DIR%/}"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
 HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-50003}"
+PORT="${PORT:-21113}"
 ZEGO_APP_ID="${ZEGO_APP_ID:-726162948}"
 ZEGO_SERVER_SECRET="${ZEGO_SERVER_SECRET:-360a56369441ee640841cb4c82144186}"
 VOICE_TOKEN_TTL_SECONDS="${VOICE_TOKEN_TTL_SECONDS:-3600}"
-VOICE_API_KEY="${VOICE_API_KEY:-PHFfBRiEXVKFvEGD2cJp}"
+VOICE_API_KEY="${VOICE_API_KEY:-mWYEZss4KTi7mxeWHyPctrHjnRYZizt2PGdWIn7Eh3E=}"
 GOPROXY_VALUE="${GOPROXY_VALUE:-https://goproxy.cn,direct}"
 ACTION=""
 
@@ -167,7 +167,7 @@ type errorResponse struct {
 
 func main() {
 	host := getenv("HOST", "0.0.0.0")
-	port := getenv("PORT", "50003")
+	port := getenv("PORT", "21113")
 
 	http.HandleFunc("/", handleRoot)
 	http.HandleFunc("/api/v1/health", handleHealth)

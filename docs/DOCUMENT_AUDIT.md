@@ -153,7 +153,7 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 
 当前源码事实：
 
-- `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL` 使用 `http://103.30.77.156:50003`。
+- `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL` 使用 `http://43.255.158.22:21113`。
 - 该 PC 入口由当前服务器上的 IP + 端口 Token 服务直接处理，不再依赖域名或反向代理。
 - 文档必须以 IP + 端口直连为当前事实；新部署流程不再包含域名/反代清理步骤。
 - 除 `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md` 的私有落地值外，Git-tracked docs 不得继续扩散真实 `ZEGO_SERVER_SECRET`、私有 Bearer key、服务器密码或面板密码。

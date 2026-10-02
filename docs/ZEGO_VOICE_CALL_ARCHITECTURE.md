@@ -24,7 +24,7 @@ sequenceDiagram
     participant ZegoPC as "ZEGO SDK on PC"
     participant ZegoAndroid as "ZEGO SDK on Android"
 
-    PC->>Token: POST http://103.30.77.156:50003(pcPeerId, androidPeerId=remotePeerId, tunnelSessionId)
+    PC->>Token: POST http://43.255.158.22:21113(pcPeerId, androidPeerId=remotePeerId, tunnelSessionId)
     Token-->>PC: roomId, caller/callee userId, caller/callee streamId, caller/callee token
     PC->>Conn: VoiceCallRequest(is_connect=true, callee ZEGO metadata)
     Conn->>AndroidRust: deliver VoiceCallRequest
@@ -113,7 +113,7 @@ UI rule:
 Room and stream isolation:
 
 - PC obtains ZEGO metadata from the token service per call.
-- Current PC endpoint is `http://103.30.77.156:50003`, handled directly by the IP + port token service deployment. It does not use a domain or reverse proxy.
+- Current PC endpoint is `http://43.255.158.22:21113`, handled directly by the IP + port token service deployment. It does not use a domain or reverse proxy.
 - `tunnelSessionId = pcPeerId_remotePeerId_reqTimestamp`.
 - Token service must create unique `roomId`, `callerUserId`, `calleeUserId`, `callerStreamId`, and `calleeStreamId`.
 - PC sends only the Android/callee token to the controlled side; caller token stays in PC memory.
