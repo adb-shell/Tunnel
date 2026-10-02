@@ -132,6 +132,8 @@ def main():
 
     android_jar = required_file(args.android_jar, "android.jar")
     d8_jar = required_file(args.d8_jar, "d8.jar")
+    lambda_stubs = required_file(d8_jar.parent.parent / "core-lambda-stubs.jar",
+                                 "build-tools core-lambda-stubs.jar")
     jdk = Path(args.jdk_bin).expanduser().resolve(strict=True)
     suffix = ".exe" if os.name == "nt" else ""
     java = required_file(jdk / ("java" + suffix), "java")
@@ -146,6 +148,10 @@ def main():
         raise ValueError("P0 requires the explicit Android SDK API 34 platform")
     check_jar(android_jar, "android/media/MediaCodec.class")
     check_jar(d8_jar, "com/android/tools/r8/D8.class")
+    check_jar(lambda_stubs, "java/lang/invoke/LambdaMetafactory.class")
+    # android.jar alone omits the javac bootstrap API for Java 8 lambdas.
+    # Compile against the SDK stubs; D8 desugars lambdas without packaging them.
+    bootclasspath = os.pathsep.join((str(android_jar), str(lambda_stubs)))
 
     source_roots = (ROOT / "protocol/src/main/java", ROOT / "server/src/main/java")
     sources = sorted(path for directory in source_roots for path in directory.rglob("*.java"))
@@ -162,7 +168,8 @@ def main():
     tree_digest = hashlib.sha256(json.dumps(source_hashes, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     tool_paths = dict((
         ("androidJar", android_jar), ("androidPlatformProperties", properties),
-        ("d8Jar", d8_jar), ("java", java), ("javac", javac)))
+        ("d8Jar", d8_jar), ("coreLambdaStubsJar", lambda_stubs),
+        ("java", java), ("javac", javac)))
     release = jdk.parent / "release"
     if release.is_file():
         tool_paths["jdkRelease"] = release
@@ -182,7 +189,7 @@ def main():
     arguments.write_text("\n".join('"' + source.relative_to(ROOT).as_posix() + '"' for source in sources) + "\n",
                          encoding="utf-8")
     run((javac, "-encoding", "UTF-8", "-source", "8", "-target", "8", "-proc:none",
-         "-bootclasspath", android_jar, "-d", classes, "@" + str(arguments)), ROOT)
+         "-bootclasspath", bootclasspath, "-d", classes, "@" + str(arguments)), ROOT)
     class_files = [(path.relative_to(classes).as_posix(), path) for path in classes.rglob("*.class")]
     if "com/tunnel/adbhelper/Server.class" not in {name for name, _ in class_files}:
         raise ValueError("javac did not produce the P0 entry point")

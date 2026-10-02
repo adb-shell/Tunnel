@@ -1,5 +1,14 @@
 # Tunnel Task History
 
+## T-2026-10-03-002：ADB helper Lambda 编译入口修复
+
+- 请求及授权：用户提供服务器 `javac` 日志，明确要求修复后提交GitHub，提交说明“修复编译脚本”；目标沿用当前 `origin/test`。本侧会话独立执行，不续做主线程ADB功能。
+- 起点：`test/c492b12df4fdf8eca0f64a85d4d16ebab5e4fa2c`，工作区干净；基线引用 `TUN-BL-2026-10-03-ADB`。
+- 原因：helper Java源码使用Lambda，独立javac的bootclasspath仅有android.jar，缺少SDK build-tools的LambdaMetafactory编译stub。
+- 修改：`android-helper/build_helper.py` 加入同一build-tools的core-lambda-stubs.jar，校验JAR入口、跨平台类路径分隔、工具哈希与输入变动检查；同步helper README。
+- 验证及边界：Python AST和类路径/来源记录静态检查、git diff空白检查；未运行helper/APK编译或设备测试。正式服务器需重新执行原build.sh入口确认javac及D8成功。
+- Git：用户授权stage/commit/普通push；远端结果以当前提交和origin/test核对。无架构决定、版本、签名或发布变更。
+
 ## T-2026-10-03-001 后续：首次测试源码云端交付
 
 - 用户明确授权提交当前ADB源码与文档并推送 `origin/test`，提交说明为“ADB版本首次测试”。

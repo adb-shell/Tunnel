@@ -31,6 +31,8 @@ python android-helper/build_helper.py --android-jar '<SDK>/platforms/android-34/
 
 脚本通过 Java 8 source/target 和 Android API 34 bootclasspath 编译共享协议与 server，再由 D8 `--min-api 30` 生成单个 `classes.dex`，最后封装 `helper.jar`；`META-INF/` 同时保留 `LICENSE.scrcpy`、`NOTICE`、`PROVENANCE.md`。命令使用参数数组，不拼接 shell，不运行 helper、APK 或设备。生成 `manifest.json` 包含 artifact SHA-256、protocol、entryPoint、固定 upstream reference commit `2926c06c5dc3064ae6d8db706f1a98a37cfcf3f0`、本地 Java 源码逐文件 hash、源码树 hash、随包许可证/来源文件 hash、构建脚本及显式工具输入 hash。该 upstream 字段是来源参考，不表示本地原型与完整 scrcpy 二进制相同，也不证明供应链已批准。
 
+2026-10-03 编译修复：`javac` bootclasspath 同时包含 `android.jar` 和当前 D8 所属 build-tools 目录下的 `core-lambda-stubs.jar`（与 `lib/` 同级），使用宿主 `os.pathsep` 分隔。仅有 `android.jar` 会在 Lambda 编译时报 `Unable to find method metafactory`。脚本在创建产物前验证 stub 文件和 `java/lang/invoke/LambdaMetafactory.class`，并将其 SHA-256 纳入 `toolInputs.coreLambdaStubsJar` 及构建期间输入变动检查；stub 不打包进 helper。服务器需有完整的已批准 SDK build-tools，本脚本不自动下载。此修复仅经静态检查，须重新执行原 `build.sh` 入口验证。
+
 编译期间源码被改动会拒绝生成可 stage 的成功结果。记录工具 hash 不能替代工具来源审查、JDK runtime 完整性或可复现构建验证。
 
 ## 显式首次 stage
