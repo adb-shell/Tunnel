@@ -6063,7 +6063,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cloudsend"
+name = "tunnel"
 version = "5.2.1"
 dependencies = [
  "android-wakelock",
@@ -6168,7 +6168,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cloudsend-portable-packer"
+name = "tunnel-portable-packer"
 version = "5.2.1"
 dependencies = [
  "brotli",

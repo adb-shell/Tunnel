@@ -1,12 +1,14 @@
-# CloudSend Project Start Here
+# Tunnel Project Start Here
 
 最后更新：2026-10-02
 适用对象：所有 AI、sub-agent、人工开发者、审查者和发布负责人  
-定位：进入 CloudSend 仓库后的唯一第一入口
+定位：进入 Tunnel 仓库后的唯一第一入口
 
 > 本文件只负责启动、分流和权限提醒，不复制完整架构。当前源码始终是实现真相；AI 的强制行为规则以 `.codex/AI_RULES.md` 为准。
 
 ## 1. 五分钟启动顺序
+
+2026-10-02 已完成 Tunnel / tunnel / 隧道的源码身份迁移，Android 包为 `com.tunnel.app`。见 [当前身份与编译验证需求](docs/BASELINE/2026-10-02_TUNNEL_IDENTITY_BASELINE.md)。历史文档专有名称已按用户要求规范化，不能据此推断旧日期的原始品牌；原文以 Git 对象为准。ADB P0 源码保留、默认关闭且尚未运行。
 
 所有新 Codex 会话第一份打开本文件。读到本节后，立即打开 [`.codex/SESSION_START_PROTOCOL.md`](.codex/SESSION_START_PROTOCOL.md) 作为执行细则，再从下列第 2 项继续；该协议不是额外的工程事实层，因此不改变用户规定的 1—8 编号。强制全局记忆读取顺序是：
 
@@ -17,7 +19,7 @@
 5. [`.codex/CHANGELOG_AI.md`](.codex/CHANGELOG_AI.md)：AI task-level 历史索引。
 6. [`.codex/DECISION_LOG.md`](.codex/DECISION_LOG.md)：重大决定流水。
 7. [`docs/ADR/README.md`](docs/ADR/README.md) 与当前任务相关 ADR。
-8. 当前任务相关的 [`.agents/skills/`](.agents/skills/) CloudSend Skill。
+8. 当前任务相关的 [`.agents/skills/`](.agents/skills/) Tunnel Skill。
 
 完成记忆恢复后、开始任何任务动作前，继续按任务激活顺序读取：
 
@@ -52,15 +54,15 @@
 
 ## 2. 项目身份速记
 
-- 产品/runtime：`CloudSend`。
-- Android 显示名：`云计划`。
+- 产品/runtime：`Tunnel`。
+- Android 显示名：`隧道`。
 - 来源：RustDesk 深度二次开发；当前本地 Git 只有 `5cee692` 单个根提交，旧 baseline/history 对象不可用，无法重放既有文档的演进时间线。
-- Rust crate/library：`cloudsend`。
+- Rust crate/library：`tunnel`。
 - Flutter package：`flutter_hbb`。
-- Android applicationId：`com.cloudsend.app`。
+- Android applicationId：`com.tunnel.app`。
 - Android active JNI：`libs/scrap/src/android/pkg2230.rs`。
 - Windows active virtual display：Amyuni；RustDesk IDD 分支是 dormant。
-- CloudSend controller 强制 relay；controlled endpoint 仍保留 direct/NAT compatibility code。
+- Tunnel controller 强制 relay；controlled endpoint 仍保留 direct/NAT compatibility code。
 - 产品 backend、业务 database、hbbs/hbbr server 和完整 ZEGO token broker 不在本仓库。
 
 完整事实只从当前源码和 `docs/AI_ENGINEERING/` 获取。
@@ -73,7 +75,7 @@
 2. 运行只读 `git status --short --branch`，记录 branch、HEAD 和已有 dirty state，并判断 state 是 consistent、drift 还是 conflict。
 3. 识别请求类型：回答、审查、诊断、文档、代码、构建、发布、生产或安全事件。
 4. 写明授权范围、禁止动作、假设和非目标；历史会话授权一律记为不继承。
-5. 选择最窄的领域 Skill；跨两个以上领域时使用 `cloudsend-master` 协调。
+5. 选择最窄的领域 Skill；跨两个以上领域时使用 `tunnel-master` 协调。
 6. 先完成需求与影响分析，再决定是否存在修改权限。
 7. 发现并行任务或用户已有修改时保留并绕开；不得 reset、checkout、clean 或覆盖。
 
@@ -133,19 +135,19 @@
 
 | 任务 | 首选 Skill |
 |---|---|
-| 跨域、架构、接管、迁移、复杂事故 | `cloudsend-master` |
-| Rust、unsafe、FFI、JNI、Windows runtime | `cloudsend-rust-engineer` |
-| Android service、MediaProjection、Accessibility、ADB | `cloudsend-android-engineer` |
-| Flutter UI、state、multi-window、bridge | `cloudsend-flutter-engineer` |
-| rendezvous、relay、protocol、auth、transport | `cloudsend-network-engineer` |
-| account、HTTP、sync、backend contract、database boundary | `cloudsend-api-engineer` |
-| threat、credential、permission、supply chain | `cloudsend-security-engineer` |
-| build/release planning、artifact、signing、rollback | `cloudsend-release-engineer` |
-| 只读 brainstorming、planning、debugging、verification、review | `cloudsend-superpowers-safe` |
+| 跨域、架构、接管、迁移、复杂事故 | `tunnel-master` |
+| Rust、unsafe、FFI、JNI、Windows runtime | `tunnel-rust-engineer` |
+| Android service、MediaProjection、Accessibility、ADB | `tunnel-android-engineer` |
+| Flutter UI、state、multi-window、bridge | `tunnel-flutter-engineer` |
+| rendezvous、relay、protocol、auth、transport | `tunnel-network-engineer` |
+| account、HTTP、sync、backend contract、database boundary | `tunnel-api-engineer` |
+| threat、credential、permission、supply chain | `tunnel-security-engineer` |
+| build/release planning、artifact、signing、rollback | `tunnel-release-engineer` |
+| 只读 brainstorming、planning、debugging、verification、review | `tunnel-superpowers-safe` |
 
 领域 Skill 不增加权限。Security 和 release guardrail 高于实现便利。
 
-`cloudsend-superpowers-safe` 不是外部 Superpowers 安装证明；它只允许五项只读能力，并硬性禁止 commit、push、release。完整边界见 [`SAFE_SUPERPOWERS_PROFILE.md`](docs/AI_ENGINEERING/SAFE_SUPERPOWERS_PROFILE.md)。
+`tunnel-superpowers-safe` 不是外部 Superpowers 安装证明；它只允许五项只读能力，并硬性禁止 commit、push、release。完整边界见 [`SAFE_SUPERPOWERS_PROFILE.md`](docs/AI_ENGINEERING/SAFE_SUPERPOWERS_PROFILE.md)。
 
 ## 8. 高价值不变量
 
@@ -179,8 +181,8 @@
 - 正式 Android/Windows build/device evidence 尚未回填。
 - tracked credential-type literals、transport、update/plugin 和高权限平台风险仍是 release blockers；有效性、远端公开性与历史传播未在本轮验证。
 
-2026-07-12 体系状态快照见 [`CLOUDSEND_AI_ENGINEERING_STRENGTHENING_REPORT.md`](docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_STRENGTHENING_REPORT.md)。
+2026-07-12 体系状态快照见 [`TUNNEL_AI_ENGINEERING_STRENGTHENING_REPORT.md`](docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_STRENGTHENING_REPORT.md)。
 
-2026-07-12 治理封版快照见 [`CLOUDSEND_AI_ENGINEERING_FINAL_SEAL_REPORT.md`](docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_FINAL_SEAL_REPORT.md)，不代表当前 release readiness。
+2026-07-12 治理封版快照见 [`TUNNEL_AI_ENGINEERING_FINAL_SEAL_REPORT.md`](docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_FINAL_SEAL_REPORT.md)，不代表当前 release readiness。
 
 如对权限、状态层或真相来源有疑问：停在修改前，回到 `.codex/AI_RULES.md` 和任务协议。

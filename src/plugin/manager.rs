@@ -58,7 +58,7 @@ static PLUGIN_SOURCE_LOCAL: &str = "local";
 fn get_plugin_source_list() -> Vec<PluginSource> {
     // Only one source for now.
     // vec![PluginSource {
-    //     name: "cloudsend".to_string(),
+    //     name: "tunnel".to_string(),
     //     url: "https://example.com/plugins".to_string(),
     //     description: "".to_string(),
     // }]

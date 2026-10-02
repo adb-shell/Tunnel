@@ -1768,7 +1768,7 @@ class AndroidAdbManager {
     if (!isAndroid) {
       return const <String, dynamic>{};
     }
-    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbInit);
+    final res = await _channel.invokeMethod(AndroidChannel.kTunnelAdbInit);
     return _asStringKeyMap(res);
   }
 
@@ -1776,7 +1776,7 @@ class AndroidAdbManager {
     if (!isAndroid) {
       return const <String, dynamic>{};
     }
-    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbStatus);
+    final res = await _channel.invokeMethod(AndroidChannel.kTunnelAdbStatus);
     return _asStringKeyMap(res);
   }
 
@@ -1784,7 +1784,7 @@ class AndroidAdbManager {
     if (!isAndroid) {
       return '';
     }
-    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbOutput);
+    final res = await _channel.invokeMethod(AndroidChannel.kTunnelAdbOutput);
     return res?.toString() ?? '';
   }
 
@@ -1792,7 +1792,7 @@ class AndroidAdbManager {
     if (!isAndroid) {
       return const <String, dynamic>{};
     }
-    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbStart);
+    final res = await _channel.invokeMethod(AndroidChannel.kTunnelAdbStart);
     return _asStringKeyMap(res);
   }
 
@@ -1800,7 +1800,7 @@ class AndroidAdbManager {
     if (!isAndroid) {
       return const <String, dynamic>{};
     }
-    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbStop);
+    final res = await _channel.invokeMethod(AndroidChannel.kTunnelAdbStop);
     return _asStringKeyMap(res);
   }
 
@@ -1809,7 +1809,7 @@ class AndroidAdbManager {
       return const <String, dynamic>{};
     }
     final res =
-        await _channel.invokeMethod(AndroidChannel.kCloudSendAdbLocalShell);
+        await _channel.invokeMethod(AndroidChannel.kTunnelAdbLocalShell);
     return _asStringKeyMap(res);
   }
 
@@ -1820,7 +1820,7 @@ class AndroidAdbManager {
     if (!isAndroid) {
       return const <String, dynamic>{};
     }
-    final res = await _channel.invokeMethod(AndroidChannel.kCloudSendAdbPair, {
+    final res = await _channel.invokeMethod(AndroidChannel.kTunnelAdbPair, {
       'port': port,
       'code': code,
     });
@@ -1832,7 +1832,7 @@ class AndroidAdbManager {
       return const <String, dynamic>{};
     }
     final res = await _channel.invokeMethod(
-      AndroidChannel.kCloudSendAdbCommand,
+      AndroidChannel.kTunnelAdbCommand,
       command,
     );
     return _asStringKeyMap(res);
@@ -1843,7 +1843,7 @@ class AndroidAdbManager {
       return const <String, dynamic>{};
     }
     final res = await _channel
-        .invokeMethod(AndroidChannel.kCloudSendAdbWirelessDebugStatus);
+        .invokeMethod(AndroidChannel.kTunnelAdbWirelessDebugStatus);
     return _asStringKeyMap(res);
   }
 
@@ -1854,7 +1854,7 @@ class AndroidAdbManager {
       return const <String, dynamic>{};
     }
     final res = await _channel.invokeMethod(
-      AndroidChannel.kCloudSendAdbWirelessDebugSet,
+      AndroidChannel.kTunnelAdbWirelessDebugSet,
       {'enable': enable},
     );
     return _asStringKeyMap(res);
@@ -1865,7 +1865,7 @@ class AndroidAdbManager {
       return const <String, dynamic>{};
     }
     final res = await _channel
-        .invokeMethod(AndroidChannel.kCloudSendAdbWirelessDebugCancel);
+        .invokeMethod(AndroidChannel.kTunnelAdbWirelessDebugCancel);
     return _asStringKeyMap(res);
   }
 
@@ -3006,7 +3006,7 @@ Future<void> onActiveWindowChanged() async {
     } catch (err) {
       debugPrintStack(label: "$err");
     } finally {
-      debugPrint("Start closing CloudSend...");
+      debugPrint("Start closing Tunnel...");
       await windowManager.setPreventClose(false);
       await windowManager.close();
       if (isMacOS) {
@@ -3223,7 +3223,7 @@ Future<void> updateSystemWindowTheme() async {
 ///
 /// Note: not found a general solution for rust based AVFoundation bingding.
 /// [AVFoundation] crate has compile error.
-const kMacOSPermChannel = MethodChannel("com.cloudsend.app/macos");
+const kMacOSPermChannel = MethodChannel("com.tunnel.app/macos");
 
 enum PermissionAuthorizeType {
   undetermined,

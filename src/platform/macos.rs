@@ -37,7 +37,7 @@ static PRIVILEGES_SCRIPTS_DIR: Dir =
     include_dir!("$CARGO_MANIFEST_DIR/src/platform/privileges_scripts");
 static mut LATEST_SEED: i32 = 0;
 
-const UPDATE_TEMP_DIR: &str = "/tmp/.rustdeskupdate";
+const UPDATE_TEMP_DIR: &str = "/tmp/.tunnelupdate";
 
 extern "C" {
     fn CGSCurrentCursorSeed() -> i32;
@@ -97,7 +97,7 @@ pub fn is_can_screen_recording(prompt: bool) -> bool {
 
 // macOS >= 10.15
 // https://stackoverflow.com/questions/56597221/detecting-screen-recording-settings-on-macos-catalina/
-// remove just one app from all the permissions: tccutil reset All com.carriez.rustdesk
+// remove just one app from all the permissions: tccutil reset All com.tunnel.app
 fn unsafe_is_can_screen_recording(prompt: bool) -> bool {
     // we got some report that we show no permission even after set it, so we try to use new api for screen recording check
     // the new api is only available on macOS >= 10.15, but on stackoverflow, some people said it works on >= 10.16 (crash on 10.15),
@@ -292,10 +292,20 @@ fn update_daemon_agent(agent_plist_file: String, update_source_dir: String, sync
     }
 }
 
+fn app_executable_name() -> String {
+    let app_name = crate::get_app_name();
+    if cfg!(feature = "flutter") {
+        app_name
+    } else {
+        app_name.to_lowercase()
+    }
+}
+
 fn correct_app_name(s: &str) -> String {
-    let s = s.replace("rustdesk", &crate::get_app_name().to_lowercase());
-    let s = s.replace("RustDesk", &crate::get_app_name());
-    s
+    s.replace("{APP_FULL_NAME}", &crate::get_full_name())
+        .replace("{APP_EXECUTABLE}", &app_executable_name())
+        .replace("{APP_NAME}", &crate::get_app_name())
+        .replace("{APP_LOWER_NAME}", &crate::get_app_name().to_lowercase())
 }
 
 pub fn uninstall_service(show_new_window: bool, sync: bool) -> bool {
@@ -628,8 +638,8 @@ pub fn start_os_service() {
     /* // mouse/keyboard works in prelogin now with launchctl asuser.
        // below can avoid multi-users logged in problem, but having its own below problem.
        // Not find a good way to start --cm without root privilege (affect file transfer).
-       // one way is to start with `launchctl asuser <uid> open -n -a /Applications/RustDesk.app/ --args --cm`,
-       // this way --cm is started with the user privilege, but we will have problem to start another RustDesk.app
+       // one way is to start with `launchctl asuser <uid> open -n -a /Applications/Tunnel.app/ --args --cm`,
+       // this way --cm is started with the user privilege, but we will have problem to start another Tunnel.app
        // with open in explorer.
         use std::sync::{
             atomic::{AtomicBool, Ordering},
@@ -717,7 +727,7 @@ pub fn update_me() -> ResultType<()> {
     );
 
     let cmd = std::env::current_exe()?;
-    // RustDesk.app/Contents/MacOS/RustDesk
+    // Tunnel.app/Contents/MacOS/Tunnel (Flutter) or tunnel (legacy UI).
     let app_dir = cmd
         .parent()
         .and_then(|p| p.parent())
@@ -743,12 +753,14 @@ pub fn update_me() -> ResultType<()> {
         let update_body = format!(
             r#"
 do shell script "
-pgrep -x 'RustDesk' | grep -v {} | xargs kill -9 && rm -rf /Applications/RustDesk.app && cp -R '{}' /Applications/ && chown -R {}:staff /Applications/RustDesk.app
-" with prompt "RustDesk wants to update itself" with administrator privileges
+pgrep -x '{executable_name}' | grep -v {} | xargs kill -9 && rm -rf /Applications/{app_name}.app && cp -R '{}' /Applications/ && chown -R {}:staff /Applications/{app_name}.app
+" with prompt "{app_name} wants to update itself" with administrator privileges
     "#,
             std::process::id(),
             app_dir,
-            get_active_username()
+            get_active_username(),
+            executable_name = app_executable_name(),
+            app_name = crate::get_app_name()
         );
         match Command::new("osascript")
             .arg("-e")
@@ -781,7 +793,7 @@ pub fn update_to(file: &str) -> ResultType<()> {
 }
 
 fn extract_dmg(dmg_path: &str, target_dir: &str) -> ResultType<()> {
-    let mount_point = "/Volumes/RustDeskUpdate";
+    let mount_point = "/Volumes/TunnelUpdate";
     let target_path = Path::new(target_dir);
 
     if target_path.exists() {
@@ -803,7 +815,7 @@ fn extract_dmg(dmg_path: &str, target_dir: &str) -> ResultType<()> {
     }
     let _guard = DmgGuard(mount_point);
 
-    let app_name = "RustDesk.app";
+    let app_name = format!("{}.app", crate::get_app_name());
     let src_path = format!("{}/{}", mount_point, app_name);
     let dest_path = format!("{}/{}", target_dir, app_name);
 
@@ -826,7 +838,12 @@ fn extract_dmg(dmg_path: &str, target_dir: &str) -> ResultType<()> {
 }
 
 fn update_extracted(target_dir: &str) -> ResultType<()> {
-    let exe_path = format!("{}/RustDesk.app/Contents/MacOS/RustDesk", target_dir);
+    let exe_path = format!(
+        "{}/{}.app/Contents/MacOS/{}",
+        target_dir,
+        crate::get_app_name(),
+        app_executable_name()
+    );
     let _child = unsafe {
         Command::new(&exe_path)
             .arg("--update")

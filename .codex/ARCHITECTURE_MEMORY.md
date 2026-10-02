@@ -1,4 +1,4 @@
-# CloudSend Architecture Memory
+# Tunnel Architecture Memory
 
 最后更新：2026-10-02
 用途：跨会话架构速记；详细设计只在 `docs/AI_ENGINEERING/` 维护。
@@ -11,7 +11,7 @@ Flutter UI / legacy UI
   <-> Rust controller/server core
   <-> protobuf peer protocol
   <-> hbbs/hbbr external infrastructure
-  <-> remote CloudSend endpoint
+  <-> remote Tunnel endpoint
 
 Android Rust core
   <-> pkg2230 JNI
@@ -105,7 +105,7 @@ peer invitation authorization != ZEGO token authorization != microphone user con
 Network:
 
 ```text
-CloudSend controller relay-only != controlled endpoint has no direct/NAT compatibility
+Tunnel controller relay-only != controlled endpoint has no direct/NAT compatibility
 ```
 
 补充易混边界：terminal进程内persistence != 跨重启durable storage；Android waiting normal-only != 所有平台事件都禁止fallback；Dart engine-local voice owner != Rust process级`ZEGO_VOICE_CALL_OWNER`；`FrameRaw` Mutex != Java buffer生命周期所有权。

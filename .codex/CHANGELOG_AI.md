@@ -1,9 +1,19 @@
-# CloudSend AI Changelog
+# Tunnel AI Changelog
 
 Schema Version：`1.0`  
 Coverage Start：2026-07-12  
 Last Updated：2026-10-02（Asia/Shanghai）
 Mode：`append-only task-level index`
+
+## T-2026-10-02-004：Tunnel 产品与工程命名迁移
+
+- Record Type：contemporaneous；Status：source delivered / V0；formal verification pending。
+- 用户明确授权全局品牌、包名和必要的路径迁移；T003按用户要求暂停，P0源码与原有未提交内容保留。
+- Outcome：Tunnel / tunnel / 隧道、com.tunnel.app、com.tunnel；native/ABI/FRB/构建与安装链、Android/helper源码路径、状态字段、broker契约、文档/Skills同步。
+- 特殊修正：portable marker长度推导与大小写同路径删除风险；FRB生成类名与native/Web消费者一致；非主平台直接native消费者同步。
+- Event：CE-20261002-T004-01；Decision：D-016 / ADR-0015；Baseline：TUN-BL-2026-10-02-IDENTITY。
+- 未执行：项目构建/测试/codegen、设备操作、签名/部署、Git写入；证书指纹/产物hash未伪造。
+- 后续：用户正式环境配套重建并反馈证据，之后继续T003/P0。详细范围、验证需求见 `docs/plans/TUNNEL_IDENTITY_MIGRATION_TASK.md`。
 
 > 本文件记录可由 `.codex/TASK_HISTORY.md` 和交付物证明的 AI-assisted engineering task 结果。它不是产品 changelog、Git history、Decision Log 或逐文件修改日志。2026-07-12 之前的提交没有可靠 AI attribution，因此不补猜；精确修改事件在本日志建立前不可重建，统一标记为 retrospective/backfill。
 
@@ -70,6 +80,33 @@ Mode：`append-only task-level index`
 - Residual Risk：不是逐行全仓审计；完整其他OS、外部API/DB/hbbs/hbbr/RTC、native资产、正式运行与发布仍缺证据。
 - Next：从`12_FEATURE_MAP.md`定位用户后续具体需求；按Task/TEST_MATRIX规划实现与验证；无C3授权。
 - Detailed Record：`TASK_HISTORY.md`及`docs/AI_ENGINEERING/audits/2026-10-02/TAKEOVER_TASK.md`。
+
+## T-2026-10-02-002：远程ADB投屏方案和教程
+
+- Record Type / Status：contemporaneous / completed documentation only。
+- Source：test/532637a；初始clean；业务基线CS-BL-2026-10-02-5cee692。
+- Outcome：九项需求映射、源码地图、helper/relay路线、模块/权限/切换/侧按钮合同、P0—P6、30个ADBM用例、实现后教程。
+- Review：Android、Rust/Network、Flutter分别源码核查并二次审查；已修正首帧/input时序、settings并发和生命周期等合同。
+- Business Behavior Change：none。Git/build/device/delete/release：none。
+- Decision：D-015/ADR-0014 proposed；ADR-0007仍accepted。
+- Highest Verification：V0；V1—V5 NOT_RUN；不代表所有ROM或运行已支持。
+- Change Events：CE-20261002-T002-01、CE-20261002-T002-02；14份Markdown。
+- Memory / Preference：以后默认独立worktree开发；原项目本轮未改；State/CW/History/ProjectMemory同步。
+- Residual / Next：native/helper准入、目标机型、P0原型与正式验证未完成；后续按具体用户实施任务推进。
+- Detailed Record：`TASK_HISTORY.md`与`docs/plans/ADB_REMOTE_MIRRORING_TASK.md`。
+
+## T-2026-10-02-003：ADB P0本机原型源码交接
+
+- Record Type / Status：contemporaneous / handoff milestone，T6等待正式验证；P0整体未通过。
+- Source：test/532637a + 本次源码；保留T002文档；未提交。
+- Outcome：本机身份探针、共享认证协议、固定来源shell H264原型、APK有界supervisor、默认关闭的Flutter诊断、离线build recipe及JUnit源码。
+- Evidence：跨域V0源码/来源/合同复核；正式build/test/device、decode/render/relay NOT_RUN。
+- Boundary：无PC顶栏/remote protocol/JNI采集或无障碍运行改动；旧Runner重连和长shell命令仍需P1隔离。
+- Decision：D-015/ADR-0014分阶段accepted；ADR-0007 local-only边界保留。
+- Event / Memory：CE-20261002-T003-01/02；STATE-20261002-003、WORK-20261002-006。
+- Git / Build / Device / Delete / Sign / Release：none。
+- Next：正式环境/native来源/目标设备与具体执行授权，按docs/plans/ADB_P0_VALIDATION_RUNBOOK.md验证并补齐P0。
+- Detailed Record：TASK_HISTORY.md、docs/plans/ADB_REMOTE_MIRRORING_IMPLEMENTATION_TASK.md。
 
 ## Update Rules
 

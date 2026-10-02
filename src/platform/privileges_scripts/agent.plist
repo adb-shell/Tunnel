@@ -3,7 +3,7 @@
 <plist version="1.0">
     <dict>
         <key>Label</key>
-        <string>com.carriez.RustDesk_server</string>
+        <string>{APP_FULL_NAME}_server</string>
         <key>LimitLoadToSessionType</key>
         <array>
           <string>LoginWindow</string>
@@ -22,10 +22,10 @@
         <true />
         <key>ProgramArguments</key>
         <array>
-            <string>/Applications/RustDesk.app/Contents/MacOS/RustDesk</string>
+            <string>/Applications/{APP_NAME}.app/Contents/MacOS/{APP_EXECUTABLE}</string>
             <string>--server</string>
         </array>
         <key>WorkingDirectory</key>
-        <string>/Applications/RustDesk.app/Contents/MacOS/</string>
+        <string>/Applications/{APP_NAME}.app/Contents/MacOS/</string>
     </dict>
 </plist>

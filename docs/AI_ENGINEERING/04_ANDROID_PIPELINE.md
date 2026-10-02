@@ -1,4 +1,4 @@
-# CloudSend Android 完整链路 / Android Pipeline
+# Tunnel Android 完整链路 / Android Pipeline
 
 最后源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，`T-2026-10-02-001`，V0 静态证据。旧 `77062b4` 为历史文档快照，不能据此推断当前 Git ancestry。
 
@@ -30,7 +30,7 @@ Android 不是“Flutter 应用加一个 Service”，而是四层共同组成�
 | Accessibility/Input | `nZW99cdXQ0COhB2o.kt` |
 | Bitmap/frame helper | `EqljohYazB0qrhnj.kt` |
 | Android JNI | `libs/scrap/src/android/pkg2230.rs` |
-| ADB/LADB | `flutter/lib/mobile/pages/adb_page.dart`，`flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/*.kt` |
+| ADB/LADB | `flutter/lib/mobile/pages/adb_page.dart`，`flutter/android/app/src/main/kotlin/com/tunnel/app/adb/*.kt` |
 | ZEGO | `flutter/lib/models/zego_voice_call_model.dart`，`flutter/lib/models/server_model.dart`，`src/client/helper.rs` |
 
 当前 `HomePageState.initPages()` 仅在 `isAndroid && !bind.isOutgoingOnly()` 时装载 `ServerPage` 与 `AdbPage`；底部导航代码被注释，页面由 `PageView` 承载。Remote、file、terminal、camera、settings 等移动页面仍有源码，但不是当前主页的直接导航入口。非 Android / outgoing-only 下 `_pages` 为空而 build 使用 `elementAt(_selectedIndex)`，需要单独验证，不能把 Android 主页结论推广到所有 mobile。
@@ -72,7 +72,7 @@ Android 端 core service、screen share、frame source 和 PC waiting 是四个�
 
 - `ServerModel._connectStatus` 直接来自 Rust `mainGetConnectStatus()`，代表真实 rendezvous 注册状态，不是 core service 存活证明。
 - `ServerModel._coreServiceStarted` 与 `ServerModel._isStart` 分别表示 core 和 screen share。
-- `CloudSendStatusModel` 显示 Android 状态快照；`isStale` 阈值为 8 秒，清 unknown 的 timer 实际安排在 8.5 秒，不伪造 ready/failure。
+- `TunnelStatusModel` 显示 Android 状态快照；`isStale` 阈值为 8 秒，清 unknown 的 timer 实际安排在 8.5 秒，不伪造 ready/failure。
 - 源码中 `_isReady // media permission ready status` 的注释已经过时；当前语义是 core ready。
 
 ### 3.1 必须保持的不变量
@@ -297,7 +297,7 @@ waiting/reconnect 不得自动开启这条链。
 
 ## 9. 状态包
 
-`MainService.DFm8Y8iMScvB2YDwGYN("cloudsend_status")` 返回真实快照：
+`MainService.DFm8Y8iMScvB2YDwGYN("tunnel_status")` 返回真实快照：
 
 | 字段 | 源码含义 |
 |---|---|
@@ -312,7 +312,7 @@ waiting/reconnect 不得自动开启这条链。
 
 构建快照失败时返回空字符串，让 Rust 跳过推送，不能返回一组伪造 false。
 
-`Connection::send_logon_response()` 在授权后尝试立即推一次真实状态，JNI 不可用时跳过；周期路径再按 2 秒节流推送。Flutter `CloudSendStatusModel` 保留 missing key 的旧/unknown 值，8 秒 stale 判定、约 8.5 秒 timer 清 unknown。状态是跨字段逐项快照，不代表原子事务或端到端帧健康证明。
+`Connection::send_logon_response()` 在授权后尝试立即推一次真实状态，JNI 不可用时跳过；周期路径再按 2 秒节流推送。Flutter `TunnelStatusModel` 保留 missing key 的旧/unknown 值，8 秒 stale 判定、约 8.5 秒 timer 清 unknown。状态是跨字段逐项快照，不代表原子事务或端到端帧健康证明。
 
 ## 10. 命令与输入链
 
@@ -402,8 +402,8 @@ AdbPage
   -> AndroidAdbManager Dart wrapper
   -> MethodChannel mChannel
   -> FlutterActivity
-  -> CloudSendAdbManager
-  -> CloudSendAdbRunner / CloudSendAdbDnsDiscover
+  -> TunnelAdbManager
+  -> TunnelAdbRunner / TunnelAdbDnsDiscover
   -> packaged libadb.so
 ```
 
@@ -429,7 +429,7 @@ AdbPage
 - `supported = SDK >= 30` 被 native 返回，但当前 AdbPage 没有消费或强制旧系统退出。
 - port/code 缺少范围和格式验证。
 - shell process/start/stop/status 的并发所有权不清晰。
-- `CloudSendAdbRunner.append()` 有同步的 16KiB 滚动显示缓存；但 `runAdb()` / `pair()` 先 `waitFor` 再 `readProcessOutput().readText()`，临时 process output 并非该缓存的同一个限流边界，高输出仍可能遇到 pipe backpressure。
+- `TunnelAdbRunner.append()` 有同步的 16KiB 滚动显示缓存；但 `runAdb()` / `pair()` 先 `waitFor` 再 `readProcessOutput().readText()`，临时 process output 并非该缓存的同一个限流边界，高输出仍可能遇到 pipe backpressure。
 - `openShell()` 的非 local-shell 分支自动发送 `pm grant ... WRITE_SECURE_SETTINGS`；这是当前应用行为，不构成本次审计运行 ADB 或授权权限修改的许可。
 - local shell 可执行任意命令；未来远程化必须新建鉴权、审计、allowlist、timeout、output limit 和 exit-code contract。
 - packaged `libadb.so` 与参考源码属于本地/外部资产，干净 clone 的 provenance 需要另建清单。
@@ -546,3 +546,11 @@ Rust 只承担邀请、接受/关闭和状态控制；Flutter ZEGO SDK 负责 mi
 | A17 | 状态推送 | share/ignore/SKL/blank/touch-block 快速切换 | immediate + throttled packet 均为真实值；8s stale 判定、约8.5s timer清unknown |
 
 正式 Android 构建应使用项目规定的 Linux 构建机执行 `./build.sh 1` 和 `./build.sh 2`。真机安装、ADB 注入、上传或发布仍需用户明确授权。
+
+## 17. Local ADB capture P0 source（2026-10-02）
+
+T-2026-10-02-003新增默认关闭的本机诊断，不是生产远程provider。`AdbMirrorProbeCard` → 本地`tunnel_adb_p0_*` MethodChannel → `TunnelAdbPrototype` → `LocalAdbIdentityProbe` → APK内固定manifest/helper → shell `app_process` → `AdbWire` → 仅编码计数。源码位于Android `adb/probe/`、`adb/mirror/` 和仓库 `android-helper/`；详见[P0交接](../plans/ADB_P0_VALIDATION_RUNBOOK.md)。
+
+native和UI同时依赖默认false的`BuildConfig.ADB_MIRROR_P0`。shell UID2000、本机selector、artifact SHA-256、stdin bootstrap、双路loopback认证和有界帧协议分别校验；配对历史不当作helper就绪。新诊断没有JNI/VIDEO_RAW写入、PC消息入口、输入注入或无障碍设置操作；`decoded`/`rendered`恒false。
+
+进程级MethodChannel操作计数防止Activity重建丢失显式ADB操作；页面离开/后台/Activity销毁取消本次运行，helper具lease与watchdog。旧Runner自动重启、此前持久shell长命令尚未纳入正式transport lease，能中断本次诊断，因此P1还须完成独立连接管理。V0仅源码复核；未编译/运行设备，不把API30—36门禁范围当已验证ROM清单。

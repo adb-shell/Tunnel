@@ -827,7 +827,7 @@ class ZegoVoiceCallModel extends ChangeNotifier {
 
   void _log(String message) {
     if (kDebugMode) {
-      debugPrint('CloudSendZegoVoice $message');
+      debugPrint('TunnelZegoVoice $message');
     }
   }
 }

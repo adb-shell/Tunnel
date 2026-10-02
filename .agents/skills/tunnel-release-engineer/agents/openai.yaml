@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tunnel Release Engineer"
+  short_description: "Plan reproducible Tunnel builds and guarded releases"
+  default_prompt: "Use $tunnel-release-engineer to prepare this build or release plan."

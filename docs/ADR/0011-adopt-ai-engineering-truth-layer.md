@@ -3,7 +3,7 @@
 - Status：`accepted`
 - Record Type：`backfill`
 - Decision Date / Recorded Date：2026-07-12
-- Decision Owner：CloudSend project owner
+- Decision Owner：Tunnel project owner
 - Related Decision Log：D-011
 - Implementation State：implemented；Evidence：V0
 

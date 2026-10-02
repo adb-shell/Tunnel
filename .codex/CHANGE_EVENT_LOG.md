@@ -1,4 +1,4 @@
-# CloudSend Change Event Log
+# Tunnel Change Event Log
 
 Schema Version：`1.0`  
 Coverage Start：2026-07-12  
@@ -41,7 +41,7 @@ Mode：`append-only logical persisted-change events`
 
 - Timestamp：2026-07-12T06:31:52+08:00
 - Task ID：`T-2026-07-12-004`
-- Actor / Primary Skill：CloudSend Principal Engineer / `cloudsend-master`
+- Actor / Primary Skill：Tunnel Principal Engineer / `tunnel-master`
 - Permission：`C1`，来自项目 owner 当前明确请求。
 - Event Type：create。
 - Files：`.codex/PROJECT_STATE.md`、`.codex/CURRENT_WORK.md`、`.codex/CHANGELOG_AI.md`、`.codex/CHANGE_EVENT_LOG.md`、`.codex/SESSION_START_PROTOCOL.md`。
@@ -55,7 +55,7 @@ Mode：`append-only logical persisted-change events`
 
 - Timestamp：2026-07-12T06:31:52+08:00
 - Task ID：`T-2026-07-12-004`
-- Actor / Primary Skill：CloudSend Principal Engineer / `cloudsend-master`
+- Actor / Primary Skill：Tunnel Principal Engineer / `tunnel-master`
 - Permission：`C1`，来自项目 owner 当前明确请求。
 - Event Type：update。
 - Files：`PROJECT_START_HERE.md`、`docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`、`TASK_TEMPLATE.md`、`.codex/DECISION_LOG.md`、`.codex/CHANGE_EVENT_LOG.md`。
@@ -69,7 +69,7 @@ Mode：`append-only logical persisted-change events`
 
 - Timestamp：2026-07-12T06:40:28+08:00
 - Task ID：`T-2026-07-12-004`
-- Actor / Primary Skill：CloudSend Principal Engineer / `cloudsend-master`
+- Actor / Primary Skill：Tunnel Principal Engineer / `tunnel-master`
 - Permission：`C1`，来自项目 owner 当前明确请求。
 - Event Type：update。
 - Files：`PROJECT_START_HERE.md`、`.codex/AI_RULES.md`、`.codex/SESSION_START_PROTOCOL.md`、`docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`、`.codex/PROJECT_STATE.md`、`.codex/CURRENT_WORK.md`、`.codex/CHANGE_EVENT_LOG.md`。
@@ -83,7 +83,7 @@ Mode：`append-only logical persisted-change events`
 
 - Timestamp：2026-07-12T06:42:13+08:00
 - Task ID：`T-2026-07-12-004`
-- Actor / Primary Skill：CloudSend Principal Engineer / `cloudsend-master`
+- Actor / Primary Skill：Tunnel Principal Engineer / `tunnel-master`
 - Permission：`C1`，来自项目 owner 当前明确请求。
 - Event Type：update / task closure。
 - Files：`.codex/SESSION_START_PROTOCOL.md`、`.codex/TASK_HISTORY.md`、`.codex/CHANGELOG_AI.md`、`.codex/CHANGE_EVENT_LOG.md`、`.codex/PROJECT_STATE.md`、`.codex/CURRENT_WORK.md`。
@@ -97,7 +97,7 @@ Mode：`append-only logical persisted-change events`
 
 - Timestamp：2026-07-12T06:43:50+08:00
 - Task ID：`T-2026-07-12-004`
-- Actor / Primary Skill：CloudSend Principal Engineer / `cloudsend-master`
+- Actor / Primary Skill：Tunnel Principal Engineer / `tunnel-master`
 - Permission：`C1`，来自项目 owner 当前明确请求。
 - Event Type：corrective update。
 - Files：`.codex/AI_RULES.md`、`.codex/PROJECT_STATE.md`、`.codex/CURRENT_WORK.md`、`.codex/CHANGELOG_AI.md`、`.codex/TASK_HISTORY.md`、`.codex/CHANGE_EVENT_LOG.md`。
@@ -112,7 +112,7 @@ Mode：`append-only logical persisted-change events`
 
 - Timestamp：2026-07-12T06:45:42+08:00
 - Task ID：`T-2026-07-12-004`
-- Actor / Primary Skill：CloudSend Principal Engineer / `cloudsend-master`
+- Actor / Primary Skill：Tunnel Principal Engineer / `tunnel-master`
 - Permission：`C1`，来自项目 owner 当前明确请求。
 - Event Type：corrective metadata update。
 - Files：`.codex/AI_RULES.md`、`.codex/PROJECT_STATE.md`、`.codex/CURRENT_WORK.md`、`.codex/CHANGELOG_AI.md`、`.codex/TASK_HISTORY.md`、`.codex/CHANGE_EVENT_LOG.md`。
@@ -127,7 +127,7 @@ Mode：`append-only logical persisted-change events`
 
 - Timestamp：2026-10-02（Asia/Shanghai）
 - Task ID：`T-2026-10-02-001`
-- Actor / Primary Skill：primary agent / `cloudsend-master`
+- Actor / Primary Skill：primary agent / `tunnel-master`
 - Permission：C1，当前用户明确文档接管及多 agent 请求。
 - Event Type：create / update。
 - Files：`docs/AI_ENGINEERING/audits/2026-10-02/TAKEOVER_TASK.md`、`.codex/CURRENT_WORK.md`、`.codex/CHANGE_EVENT_LOG.md`。
@@ -140,7 +140,7 @@ Mode：`append-only logical persisted-change events`
 
 - Timestamp：2026-10-02（Asia/Shanghai）
 - Task ID：`T-2026-10-02-001`
-- Actor / Primary Skill：primary `cloudsend-master` + Android/Flutter、Rust/Network/Windows、API/Security/Release协作审计。
+- Actor / Primary Skill：primary `tunnel-master` + Android/Flutter、Rust/Network/Windows、API/Security/Release协作审计。
 - Permission：C1，当前用户明确请求文档/地图/记忆整理及多agent；未扩大到业务或C3。
 - Event Type：create / update / task closure。
 - Source of Truth：所有持久变更为手写Markdown；源码/配置/协议/manifest/lock/build script/generated输出未改。
@@ -178,9 +178,9 @@ Mode：`append-only logical persisted-change events`
 - `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`
 - `docs/AI_ENGINEERING/11_ROADMAP.md`
 - `docs/AI_ENGINEERING/12_FEATURE_MAP.md`
-- `docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_FINAL_SEAL_REPORT.md`
-- `docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_STRENGTHENING_REPORT.md`
-- `docs/AI_ENGINEERING/CLOUDSEND_AI_PRINCIPAL_ENGINEER_HANDOVER_REPORT.md`
+- `docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_FINAL_SEAL_REPORT.md`
+- `docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_STRENGTHENING_REPORT.md`
+- `docs/AI_ENGINEERING/TUNNEL_AI_PRINCIPAL_ENGINEER_HANDOVER_REPORT.md`
 - `docs/AI_ENGINEERING/DOCUMENT_AUDIT_REPORT.md`
 - `docs/AI_ENGINEERING/LEGACY_DOCUMENT_MIGRATION_REPORT.md`
 - `docs/AI_ENGINEERING/audits/2026-10-02/ANDROID_FLUTTER_AUDIT.md`
@@ -195,7 +195,136 @@ Mode：`append-only logical persisted-change events`
 - `terminal.md`
 
 
+## CE-20261002-T002-01：登记 ADB 投屏规划任务
+
+- Timestamp：2026-10-02（Asia/Shanghai）。
+- Task ID / Actor：T-2026-10-02-002 / tunnel-master。
+- Permission：C1；用户明确要求扫描、方案/教程/开发方向文档；后续再实施业务。
+- Files：`docs/plans/ADB_REMOTE_MIRRORING_TASK.md`、`.codex/CURRENT_WORK.md`、`.codex/CHANGE_EVENT_LOG.md`。
+- State Delta：新文档规划任务进入T2—T3；恢复当前test/532637a/初始clean；原项目不改。
+- Source of Truth：手写文档；业务、协议、配置、生成文件无变化。
+- Decision / ADR：评估新proposed ADR-0014；当前ADR-0007仍生效。
+- Verification：V0入口/任务边界/当前源码与分支观察；无运行证明。
+- Git / Build / Device / Delete / Release：none。仅公开官方资料读取，不调用项目外部服务。
+
+## CE-20261002-T002-02：ADB远程投屏方案、ADR提案与记忆交付
+
+- Timestamp / Task：2026-10-02（Asia/Shanghai） / T-2026-10-02-002。
+- Actor：tunnel-master；三个Android/Flutter/Rust-Network协作者只读审查，主agent统一文档写入。
+- Permission：C1，用户本轮明确要求规划/教程/开发方向，后续才实施。
+- Event Type / Source：create/update/closure；全部手写Markdown，没有业务/config/proto/generated改动。
+- Delta：完整九项映射、源码证据、受控helper/relay路线、正交状态和切换事务、侧按钮兼容、P0—P6、ADBM-01—30及教程；proposed ADR/Decision、资产/test导航与memory同步。
+- Review corrections：首帧与input barrier、回滚新epoch、订阅lease原子性、真实帧源与互斥override、pause迟到回调、源替换禁止自动ignore、bootstrap例外、settings无CAS限制。
+- Decision：ADR-0014/D-015 proposed；当前ADR-0007不废止。
+- Verification：V0官方与仓内证据、三领域二次审查、文档link/fence/编号/scope/diff/敏感值和memory指针检查；V1—V5及设备case NOT_RUN。
+- Git / Build / Device / Delete / Move / Version / Sign / Package / Release：none；仅公开官方资料读取，不访问项目生产系统。
+- As-of：test/532637a；文档dirty，未stage/commit；原项目目录未改。
+- Corrects：只更新当前memory快照，不改写旧baseline/审计报告或声称新功能已实施。
+
+实际文件（14份Markdown，含本事件与关闭记录）：
+
+- `docs/plans/ADB_REMOTE_MIRRORING_PLAN.md`
+- `docs/plans/ADB_REMOTE_MIRRORING_TASK.md`
+- `docs/ADR/0014-controlled-remote-adb-mirroring.md`
+- `docs/ADR/README.md`
+- `docs/AI_ENGINEERING/11_ROADMAP.md`
+- `EXTERNAL_ASSET_REGISTRY.md`
+- `TEST_MATRIX.md`
+- `.codex/PROJECT_MEMORY.md`
+- `.codex/PROJECT_STATE.md`
+- `.codex/CURRENT_WORK.md`
+- `.codex/DECISION_LOG.md`
+- `.codex/TASK_HISTORY.md`
+- `.codex/CHANGELOG_AI.md`
+- `.codex/CHANGE_EVENT_LOG.md`
+
+## CE-20261002-T003-01：开始分阶段实施 P0 本机原型
+
+- Task / Timestamp：T-2026-10-02-003 / 2026-10-02。
+- Authority：当前用户要求按方案开始；C2，P0证据门和C3边界保留。
+- Files：`docs/plans/ADB_REMOTE_MIRRORING_IMPLEMENTATION_TASK.md`、`.codex/CURRENT_WORK.md`、`docs/ADR/0014-controlled-remote-adb-mirroring.md`、`.codex/CHANGE_EVENT_LOG.md`。
+- Delta：登记P0源码任务及分阶段方案接受记录；原T002未提交文档保留。当前不开放remote feature。
+- Verification：V0源码/状态/资产和入口观察；原生产物与正式工具链/设备证据待取得。
+- Git / Build / Test execution / Device / Delete / Release：none。
+
+## CE-20261002-T003-02：P0本机原型源码与验证交接
+
+- Task / Timestamp：T-2026-10-02-003 / 2026-10-02。
+- Actor / Authority：tunnel-master及三个分域agent；当前用户接受方案后要求开始，C2；无C3。
+- Type：create/update；非generated。
+- Delta：default-off本机身份/认证协议/helper采样/有界supervisor/Flutter诊断；固定官方来源与LICENSE/NOTICE、离线build recipe、JUnit源码；无PC远程入口。
+- Review：跨域V0，修正UI位置、assets路径、进程级操作计数、错误包失败关闭；旧Runner自动重连和shell长命令不在P0强隔离范围，已记录。
+- Evidence：只读源码/API/来源、scope/diff、文档引用检查；正式build/test/device/codegen与decode/render/relay均NOT_RUN；P0整体未通过。
+- Decision：D-015/ADR-0014分阶段接受；ADR-0007 local-only边界保留。Source imported不等于binary可用。
+- Handoff：STATE-20261002-003 / WORK-20261002-006 / T6；正式命令与结果模板在docs/plans/ADB_P0_VALIDATION_RUNBOOK.md。
+- Git / Build / Test execution / Device / Delete / Release：none；不改原项目目录；保留T002未提交文档。
+- Files（本次修改及文档memory同步）：
+
+- `.codex/CHANGELOG_AI.md`
+- `.codex/CHANGE_EVENT_LOG.md`
+- `.codex/CURRENT_WORK.md`
+- `.codex/DECISION_LOG.md`
+- `.codex/PROJECT_MEMORY.md`
+- `.codex/PROJECT_STATE.md`
+- `.codex/TASK_HISTORY.md`
+- `.gitignore`
+- `EXTERNAL_ASSET_REGISTRY.md`
+- `TEST_MATRIX.md`
+- `android-helper/.gitignore`
+- `android-helper/README.md`
+- `android-helper/build_helper.py`
+- `android-helper/protocol/src/main/java/com/tunnel/adb/protocol/AdbWire.java`
+- `android-helper/protocol/src/test/java/com/tunnel/adb/protocol/AdbWireTest.java`
+- `android-helper/server/LICENSE.scrcpy`
+- `android-helper/server/NOTICE`
+- `android-helper/server/PROVENANCE.md`
+- `android-helper/server/README.md`
+- `android-helper/server/src/main/java/com/tunnel/adbhelper/DisplayCapture.java`
+- `android-helper/server/src/main/java/com/tunnel/adbhelper/H264AnnexB.java`
+- `android-helper/server/src/main/java/com/tunnel/adbhelper/Server.java`
+- `android-helper/server/src/main/java/com/tunnel/adbhelper/ShellEnvironment.java`
+- `android-helper/server/src/main/java/com/tunnel/adbhelper/VideoEncoder.java`
+- `docs/ADR/0014-controlled-remote-adb-mirroring.md`
+- `docs/ADR/README.md`
+- `docs/AI_ENGINEERING/02_SOURCE_MAP.md`
+- `docs/AI_ENGINEERING/04_ANDROID_PIPELINE.md`
+- `docs/AI_ENGINEERING/08_BUILD_SYSTEM.md`
+- `docs/AI_ENGINEERING/11_ROADMAP.md`
+- `docs/plans/ADB_P0_VALIDATION_RUNBOOK.md`
+- `docs/plans/ADB_REMOTE_MIRRORING_IMPLEMENTATION_TASK.md`
+- `docs/plans/ADB_REMOTE_MIRRORING_PLAN.md`
+- `flutter/android/app/build.gradle`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/mirror/TunnelAdbPrototype.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/mirror/PackagedAdbHelper.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/probe/AdbIdentityOutputParser.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/probe/BoundedProcessRunner.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/probe/LocalAdbIdentityProbe.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/probe/LocalAdbTarget.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/oFtTiPzsqzBHGigp.kt`
+- `flutter/android/app/src/test/kotlin/com/tunnel/app/adb/probe/AdbIdentityOutputParserTest.kt`
+- `flutter/android/app/src/test/kotlin/com/tunnel/app/adb/probe/BoundedProcessRunnerTest.kt`
+- `flutter/android/app/src/test/kotlin/com/tunnel/app/adb/probe/LocalAdbTargetPolicyTest.kt`
+- `flutter/lib/mobile/pages/adb_page.dart`
+- `flutter/lib/mobile/widgets/adb_mirror_probe_card.dart`
+
 ## Event Schema
+
+## CE-20261002-T004-01：Tunnel 身份迁移与跨层消费者对齐
+
+- Timestamp：2026-10-02 Asia/Shanghai。
+- Task ID / Actor：T-2026-10-02-004 / root tunnel-master；受托Android/Rust agents限定范围修改，Flutter/docs agent只读review。
+- Permission：用户本轮明确全局更名、包名与产品信息迁移；必要命名路径移动/生成文件机械命名同步纳入范围；无执行/发布授权。
+- Event Type：update / create / move；generated文件现存文本同步，codegen未执行。
+- Files：逐文件当前路径见 `docs/plans/TUNNEL_IDENTITY_MIGRATION_FILES.md`（243项）；Git diff保留旧路径到新路径的来源。含原T002/T003未提交内容，本事件不独占全部文件的创建归属。
+- Delta：Tunnel/tunnel/隧道/com.tunnel.app/com.tunnel；native库、ABI/FRB、MethodChannel、helper package/magic/HMAC、状态字段、broker示例、portable格式/启动路径、产品资源、文档/Skills/记忆同步。
+- 特殊修复：portable marker长度推导与同路径删除；非主平台直接consumer、FRB native/Web类与显式生成参数；既有Linux发行服务命名债务明确保留，不虚报全平台发布。
+- Historical normalization：旧文档品牌名称与路径按用户要求统一；旧ID/日期/hash/验证结果不变，原文须查Git原对象。Supersedes ADR-0002 current identity；ADR-0015 / D-016。
+- Source of truth：源文件/Cargo/manifest/proto/build配置；生成桥接需正式环境重生核验；Baseline TUN-BL-2026-10-02-IDENTITY。
+- Verification：V0静态扫描与跨域review；构建/单测/analyze/codegen/设备/签名 NOT_RUN。
+- Git / Build / Delete / External / Release：none；没有清理或丢弃内容，23个必要名称/包路径移动在worktree内完成；外部服务/签名/原checkout未修改。
+- State：T004 source delivered；T003保持paused/P0未通过；STATE-20261002-004 / WORK-20261002-008。
+
+### Event 字段模板
 
 ```text
 ## CE-YYYYMMDD-TNNN-NN：标题

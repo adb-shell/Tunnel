@@ -67,7 +67,7 @@ Source：`5cee6921ec10971bb4654bc010f9328d7f70d02b`；Baseline：`CS-BL-2026-10-
 | Group/device | GET `/api/device-group/accessible`、`/api/users`、`/api/peers` | Bearer；分页 group/user/peer 元数据 | pageSize 100；直到 `current * pageSize >= total`；未知 schema/巨大 total 需限制测试 |
 | Sync | POST `/api/sysinfo_ver`、`/api/sysinfo`、`/api/heartbeat` | 当前调用传空 header；设备/sysinfo/连接元数据、strategy timestamp | 3 秒 tick、无连接 15 秒 heartbeat、sysinfo 120 秒失败间隔；shared helper 12 秒 timeout；响应控制 disconnect/config |
 | Recording upload | POST `/api/record`，type=new/part/tail/remove | filename、offset、length 与 bytes；未见 auth header | dormant；若启用需独立 consent/auth/retention/大小/幂等设计 |
-| ZEGO | POST 配置 token URL；脚本提供 `/api/v1/voice-call/create` 与根路径兼容入口 | 静态 Bearer；pcPeerId/androidPeerId/cloudsendSessionId；返回 RTC IDs/tokens/expiry | client 8 秒 timeout、检查 status/结构；未见产品授权校验或 room privilege token payload |
+| ZEGO | POST 配置 token URL；脚本提供 `/api/v1/voice-call/create` 与根路径兼容入口 | 静态 Bearer；pcPeerId/androidPeerId/tunnelSessionId；返回 RTC IDs/tokens/expiry | client 8 秒 timeout、检查 status/结构；未见产品授权校验或 room privilege token payload |
 
 AB/group cache 保存 access-token 关联，load 时匹配当前 token，减少不同登录缓存混用；这不等于加密隔离。所有返回数据都要按用户/设备/联系人敏感数据处理。数据库表、租户关系、备份、删除和保留策略仍属 `EXT-DATA-001`。
 
@@ -125,9 +125,9 @@ Peer handshake、directional nonce、Android DirectBuffer/static mut、deep link
 
 | 项目 | 当前可核对事实 | 验收缺口 |
 |---|---|---|
-| Product | Cargo `cloudsend 5.2.1` / edition 2021 / MSRV 1.75；Flutter `flutter_hbb 5.2.1+59` | 未改版本；发布渠道未知 |
-| Android | applicationId `com.cloudsend.app`；SDK 34/33/21；`libcloudsend.so`；NDK path 27.2.12479018 | 各 ROM/API/ABI 运行与真实签名未验 |
-| Windows | `new-build.cmd`、`cloudsend.dll`、`PC-Bulid/<source-folder>.exe` | 外部 VS/Flutter/LLVM/vcpkg/cache/signature 未验 |
+| Product | Cargo `tunnel 5.2.1` / edition 2021 / MSRV 1.75；Flutter `flutter_hbb 5.2.1+59` | 未改版本；发布渠道未知 |
+| Android | applicationId `com.tunnel.app`；SDK 34/33/21；`libtunnel.so`；NDK path 27.2.12479018 | 各 ROM/API/ABI 运行与真实签名未验 |
+| Windows | `new-build.cmd`、`tunnel.dll`、`PC-Bulid/<source-folder>.exe` | 外部 VS/Flutter/LLVM/vcpkg/cache/signature 未验 |
 | FRB | Rust manifest `=1.80`；Dart/generated 1.80.1；额外 freezed/header 产物 | Android 主要检查缺文件，Windows 等待存在；不能证明生成一致 |
 | Protobuf/version | `libs/hbb_common/build.rs` 由 proto 生成至 OUT_DIR；root build.rs 调 `gen_version()` 写 ignored `src/version.rs` | 源码生成物缺失是预期状态，不能误当已删源文件 |
 | ZEGO | pubspec `^3.24.1`；pubspec.lock 无 entry | 实际 resolved SDK/native binary/version/provenance 未验 |

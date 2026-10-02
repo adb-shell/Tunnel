@@ -1,4 +1,4 @@
-# CloudSend API 系统 / API System
+# Tunnel API 系统 / API System
 
 接管基线：2026-07-12  
 最近源码复核：2026-10-02，`5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
@@ -8,7 +8,9 @@
 
 ## 1. 结论先行
 
-本仓库不是 CloudSend 后台仓库。它包含：
+2026-10-02 T004：ZEGO token request 与仓内服务示例改为 `tunnelSessionId`，版本 API typ 使用 `tunnel-client` / `tunnel-server`；现有远端服务没有随仓库文件自动升级。生产地址和 credentials 未变，部署契约与验证要求见当前身份基线及 `EXTERNAL_ASSET_REGISTRY.md`。
+
+本仓库不是 Tunnel 后台仓库。它包含：
 
 - Flutter 产品账号与设备 API client。
 - Rust OIDC/account client。
@@ -170,18 +172,18 @@ OIDC 与普通账号链不是同一个状态机，但 `remember_me` 会写入同
 
 本轮只确认 credential 类型字面值存在于 tracked 文件，不验证其有效性、生产用途、当前公网可达性或历史传播范围。静态暴露仍需 owner 处置。
 
-`scripts/deploy_zego_token_service.sh` 内嵌的 Go `/api/v1/voice-call/create`（兼容根路径 POST）已有静态 Bearer 比较、4 KiB request cap、ID 字符清洗和非空检查；默认 TTL 3600 秒，配置接受不小于 60 秒的值，未见上限。`GenerateToken04(..., "")` 的 payload 为空；创建 room/user/stream ID 不等于 token 已绑定 room privilege，也未见向产品后端核验 `pcPeerId` / `androidPeerId` / `cloudsendSessionId`、replay 或 rate-limit。脚本是 partial server evidence，不能证明生产部署与它一致。
+`scripts/deploy_zego_token_service.sh` 内嵌的 Go `/api/v1/voice-call/create`（兼容根路径 POST）已有静态 Bearer 比较、4 KiB request cap、ID 字符清洗和非空检查；默认 TTL 3600 秒，配置接受不小于 60 秒的值，未见上限。`GenerateToken04(..., "")` 的 payload 为空；创建 room/user/stream ID 不等于 token 已绑定 room privilege，也未见向产品后端核验 `pcPeerId` / `androidPeerId` / `tunnelSessionId`、replay 或 rate-limit。脚本是 partial server evidence，不能证明生产部署与它一致。
 
 客户端不应持有可签发任意 token 的高权限 secret。目标设计应是：
 
 ```text
-authenticated CloudSend session
+authenticated Tunnel session
   -> HTTPS token broker
   -> short-lived, room/user-bound token
   -> ZEGO SDK
 ```
 
-broker 必须校验当前 CloudSend 用户、peer、room、用途、TTL 与 replay，不接受仅凭静态客户端 key 的无限制签发。
+broker 必须校验当前 Tunnel 用户、peer、room、用途、TTL 与 replay，不接受仅凭静态客户端 key 的无限制签发。
 
 ## 10. Token 与本地存储
 

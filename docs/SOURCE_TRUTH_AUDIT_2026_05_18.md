@@ -20,42 +20,42 @@ Use these documents as the current project knowledge base:
 
 ## Current Source Truth
 
-- Runtime/product name: `CloudSend`.
-- Android visible app name: `云计划`.
-- Android package/applicationId: `com.cloudsend.app`.
+- Runtime/product name: `Tunnel`.
+- Android visible app name: `隧道`.
+- Android package/applicationId: `com.tunnel.app`.
 - Rust crate/package version: `5.2.1`.
 - Flutter package version: `5.2.1+59`.
-- Rust library/crate output name: `cloudsend`.
-- Android native library: `libcloudsend.so`.
-- Windows native library: `cloudsend.dll`.
-- Portable packer package: `cloudsend-portable-packer` version `5.2.1`.
+- Rust library/crate output name: `tunnel`.
+- Android native library: `libtunnel.so`.
+- Windows native library: `tunnel.dll`.
+- Portable packer package: `tunnel-portable-packer` version `5.2.1`.
 - Current Windows build entry: `new-build.cmd`.
 - Current Windows portable output directory: `PC-Bulid`.
 - Legacy Windows build entry: `build.cmd`, retained for old environment compatibility.
 
 ## Verified Source Anchors
 
-- Android label source: `flutter/android/app/src/main/res/values/strings.xml`, key `app_name = 云计划`.
+- Android label source: `flutter/android/app/src/main/res/values/strings.xml`, key `app_name = 隧道`.
 - Android manifest labels: `flutter/android/app/src/main/AndroidManifest.xml`, `android:label="@string/app_name"` for the app and accessibility service.
-- Android foreground notification title: `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`, `getString(R.string.app_name)`.
-- Android Kotlin native load: `flutter/android/app/src/main/kotlin/ffi.kt` and `flutter/android/app/src/main/kotlin/pkg2230.kt`, `System.loadLibrary("cloudsend")`.
-- Android Dart native load: `flutter/lib/models/native_model.dart`, `DynamicLibrary.open('libcloudsend.so')`.
-- Android build copy path: `build.sh`, `target/<triple>/release/libcloudsend.so` to `flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`.
-- Windows runner native load: `flutter/windows/runner/main.cpp`, `LoadLibraryA("cloudsend.dll")`.
-- Windows CMake install path: `flutter/windows/CMakeLists.txt`, installs/renames `cloudsend.dll`.
-- Windows Dart native load: `flutter/lib/models/native_model.dart`, `DynamicLibrary.open('cloudsend.dll')`.
-- Rust package source: `Cargo.toml`, `name = "cloudsend"`, `version = "5.2.1"`, `[lib] name = "cloudsend"`.
-- Portable package source: `libs/portable/Cargo.toml` and `libs/portable/Cargo.lock`, `cloudsend-portable-packer` `5.2.1`.
+- Android foreground notification title: `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`, `getString(R.string.app_name)`.
+- Android Kotlin native load: `flutter/android/app/src/main/kotlin/ffi.kt` and `flutter/android/app/src/main/kotlin/pkg2230.kt`, `System.loadLibrary("tunnel")`.
+- Android Dart native load: `flutter/lib/models/native_model.dart`, `DynamicLibrary.open('libtunnel.so')`.
+- Android build copy path: `build.sh`, `target/<triple>/release/libtunnel.so` to `flutter/android/app/src/main/jniLibs/<abi>/libtunnel.so`.
+- Windows runner native load: `flutter/windows/runner/main.cpp`, `LoadLibraryA("tunnel.dll")`.
+- Windows CMake install path: `flutter/windows/CMakeLists.txt`, installs/renames `tunnel.dll`.
+- Windows Dart native load: `flutter/lib/models/native_model.dart`, `DynamicLibrary.open('tunnel.dll')`.
+- Rust package source: `Cargo.toml`, `name = "tunnel"`, `version = "5.2.1"`, `[lib] name = "tunnel"`.
+- Portable package source: `libs/portable/Cargo.toml` and `libs/portable/Cargo.lock`, `tunnel-portable-packer` `5.2.1`.
 - Flutter package source: `flutter/pubspec.yaml`, `version: 5.2.1+59`.
-- PC build script source: `new-build.cmd`, `VERSION=5.2.1`, `PC-Bulid`, `cloudsend-portable-packer.exe`.
+- PC build script source: `new-build.cmd`, `VERSION=5.2.1`, `PC-Bulid`, `tunnel-portable-packer.exe`.
 
 ## Android Status Monitor Source Truth
 
-- Status query key: `DFm8Y8iMScvB2YDwGYN("cloudsend_status")`.
-- Rust transport: `src/server/connection.rs`, `cloudsend_status_message() -> Option<Message>`.
+- Status query key: `DFm8Y8iMScvB2YDwGYN("tunnel_status")`.
+- Rust transport: `src/server/connection.rs`, `tunnel_status_message() -> Option<Message>`.
 - Invalid/JNI-failed status samples must be skipped, not converted to hardcoded false JSON.
-- Flutter event: `update_cloudsend_status`.
-- Flutter model/widget: `CloudSendStatusModel` / `CloudSendStatusMonitor`.
+- Flutter event: `update_tunnel_status`.
+- Flutter model/widget: `TunnelStatusModel` / `TunnelStatusMonitor`.
 - UI waiting state: nullable status fields render as gray `--`; red is only for a real `false` value from Android.
 
 Current payload semantics:

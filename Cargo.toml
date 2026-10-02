@@ -1,15 +1,15 @@
 [package]
-name = "cloudsend"
+name = "tunnel"
 version = "5.2.1"
-authors = ["cloudsend <dev@cloudsend.app>"]
+authors = ["Tunnel contributors"]
 edition = "2021"
 build= "build.rs"
-description = "CloudSend Remote Desktop Service"
-default-run = "cloudsend"
+description = "Tunnel Remote Desktop Service"
+default-run = "tunnel"
 rust-version = "1.75"
 
 [lib]
-name = "cloudsend"
+name = "tunnel"
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [[bin]]
@@ -192,10 +192,11 @@ members = ["libs/scrap", "libs/hbb_common", "libs/enigo", "libs/clipboard", "lib
 exclude = ["vdi/host", "examples/custom_plugin"]
 
 [package.metadata.winres]
-LegalCopyright = "Copyright © 2025 CloudSend Ltd. All rights reserved."
-ProductName = "CloudSend"
-FileDescription = "CloudSend Remote Desktop Service"
-OriginalFilename = "cloudsend.exe"
+LegalCopyright = "Copyright © 2025 Tunnel contributors. All rights reserved."
+CompanyName = "Tunnel"
+ProductName = "Tunnel"
+FileDescription = "Tunnel Remote Desktop Service"
+OriginalFilename = "tunnel.exe"
 
 [target.'cfg(target_os="windows")'.build-dependencies]
 winres = "0.1"
@@ -211,8 +212,8 @@ hound = "3.5"
 docopt = "1.1"
 
 [package.metadata.bundle]
-name = "CloudSend"
-identifier = "com.cloudsend.app"
+name = "Tunnel"
+identifier = "com.tunnel.app"
 icon = ["res/32x32.png", "res/128x128.png", "res/128x128@2x.png"]
 osx_minimum_system_version = "10.14"
 

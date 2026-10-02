@@ -1,4 +1,4 @@
-# CloudSend 安全模型 / Security Model
+# Tunnel 安全模型 / Security Model
 
 接管基线：2026-07-12  
 最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
@@ -45,7 +45,7 @@
 ### 完整性与可用性
 
 - rendezvous/API/relay/key 配置。
-- CloudSend executable、SO/DLL、APK、driver、plugin、update。
+- Tunnel executable、SO/DLL、APK、driver、plugin、update。
 - Android core service/screen-share state。
 - Windows privacy/display recovery。
 - hbbs/hbbr/API/ZEGO external services。
@@ -67,7 +67,7 @@
 
 ## 4. 身份与授权模型
 
-CloudSend 至少存在六个身份域：
+Tunnel 至少存在六个身份域：
 
 1. Flutter 产品账号。
 2. Rust OIDC/account。
@@ -145,7 +145,7 @@ CloudSend 至少存在六个身份域：
 
 ### Deep link — Critical / E1
 
-Manifest 注册的 `cloudsend` custom scheme 缺少 host/path 限制。Flutter config URI path 可无确认导入并绕过 server validation，改写 rendezvous、relay、API 与信任 key；其他 URI 还可携带 connection password 并触发 remote/file/tunnel/terminal path，且完整 URI 可能进入日志。
+Manifest 注册的 `tunnel` custom scheme 缺少 host/path 限制。Flutter config URI path 可无确认导入并绕过 server validation，改写 rendezvous、relay、API 与信任 key；其他 URI 还可携带 connection password 并触发 remote/file/tunnel/terminal path，且完整 URI 可能进入日志。
 
 要求：
 
@@ -230,7 +230,7 @@ Plugin ZIP 解压使用 archive-provided name 拼接 target path，未见 `enclo
 
 发布 gate：
 
-- CloudSend-only workflow，默认 `contents: read`。
+- Tunnel-only workflow，默认 `contents: read`。
 - third-party Actions 固定 full commit SHA。
 - untrusted PR、build、sign、publish job 隔离。
 - GitHub Environment 人工审批和受保护 signing secret。
@@ -273,7 +273,7 @@ Severity reflects static path and potential impact. 本轮没有动态证明任�
 
 ## 12. Positive Controls
 
-- CloudSend controller does enforce relay-only and rejects explicit direct entry.
+- Tunnel controller does enforce relay-only and rejects explicit direct entry.
 - Endpoint still retains password/click/2FA/trusted-device authentication code.
 - HTTP client did not show an explicit disable-TLS-verification option.
 - Android AccessibilityService is not exported; MediaProjection permission remains system-mediated.
@@ -319,6 +319,6 @@ Formal isolated verification must cover:
 - ZEGO broker 缺独立、可审计工程。
 - upstream RustDesk fork point 未记录，影响 CVE/diff/license traceability。
 - AGPL-3.0 distribution、Corresponding Source、network-use 和 third-party notices 需专业法律意见；本文不是法律建议。
-- CloudSend 自有 security contact、incident SLA、disclosure policy、SBOM/NOTICE 尚未建立。
+- Tunnel 自有 security contact、incident SLA、disclosure policy、SBOM/NOTICE 尚未建立。
 
 这些资产补齐前，安全接管只能覆盖本仓库端点源码，不能宣称全系统安全闭环。

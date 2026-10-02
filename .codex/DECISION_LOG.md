@@ -1,4 +1,4 @@
-# CloudSend Decision Log
+# Tunnel Decision Log
 
 最后更新：2026-07-12
 
@@ -21,15 +21,15 @@
 - 影响：保留大量 RustDesk 命名、兼容路径、平台代码和 AGPL/第三方义务。
 - Related ADR：ADR-0001（`retrospective`，不自动提升为 accepted）。
 
-## D-002：产品品牌与 Android 身份迁移为 CloudSend
+## D-002：产品品牌与 Android 身份迁移为 Tunnel
 
 - 日期：2026-05-05—2026-05-13；2026-07-12 回溯记录。
 - 状态：`accepted`。
-- 决定：runtime/crate 使用 `CloudSend`/`cloudsend`，Android 使用 `云计划` 与 `com.cloudsend.app`。
+- 决定：runtime/crate 使用 `Tunnel`/`tunnel`，Android 使用 `隧道` 与 `com.tunnel.app`。
 - 影响：SO/DLL/deep link/package/build artifact 必须全链一致；上游注释和依赖名称不做盲目替换。
 - Related ADR：ADR-0002。
 
-## D-003：CloudSend 控制端会话强制 Relay
+## D-003：Tunnel 控制端会话强制 Relay
 
 - 日期：2026-06；2026-07-12 回溯记录。
 - 状态：`accepted`。
@@ -83,7 +83,7 @@
 - 日期：当前源码；2026-07-12 记录。
 - 状态：`accepted`。
 - 决定：`src/virtual_display_manager.rs::IDD_IMPL` 选择 Amyuni。
-- 边界：RustDesk IDD 分支和 `cloudsend_virtual_displays` key 仍保留但不是 active implementation。
+- 边界：RustDesk IDD 分支和 `tunnel_virtual_displays` key 仍保留但不是 active implementation。
 - Related ADR：ADR-0009。
 
 ## D-010：GitHub Workflows 仅手动触发
@@ -113,7 +113,7 @@
 - Verification：八个 Skill schema/metadata 静态验证；入口、规则和 registry 交叉引用检查。正式 build/runtime evidence 未执行。
 - Rollback：文档可按用户批准恢复旧版，但不得通过删除历史文档完成；权限红线不能由下游 Skill 放宽。
 - Approved by：项目用户/owner。
-- Related task/docs：`T-2026-07-12-002`、`docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_STRENGTHENING_REPORT.md`。
+- Related task/docs：`T-2026-07-12-002`、`docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_STRENGTHENING_REPORT.md`。
 - Related ADR：ADR-0012。
 
 ## D-013：AI 工程体系最终封版与安全 Superpowers 子集
@@ -121,14 +121,14 @@
 - 日期：2026-07-12。
 - 状态：`accepted`，批准者：项目用户/owner。
 - Context：长期商业维护需要永久 ADR、可引用 baseline、统一 task/test evidence，以及不扩大权限的结构化推理能力。
-- Decision：建立 `docs/ADR/`、`docs/BASELINE/`、`TASK_TEMPLATE.md` 和 `TEST_MATRIX.md`；采用本地 `cloudsend-superpowers-safe` adapter，只允许 brainstorming、planning、debugging、verification、review。
+- Decision：建立 `docs/ADR/`、`docs/BASELINE/`、`TASK_TEMPLATE.md` 和 `TEST_MATRIX.md`；采用本地 `tunnel-superpowers-safe` adapter，只允许 brainstorming、planning、debugging、verification、review。
 - Security boundary：不安装/执行外部 Superpowers；adapter 始终只读，不允许文件编辑、build/test、Git write、external/production access；commit、push、release hard-denied。
 - Consequences：未来开发必须记录 Baseline ID、相关 ADR 与 TEST_MATRIX case IDs；accepted ADR 不授权 C2/C3；未执行验证保持 NOT_RUN/verification-required。
 - Verification：V0 schema、metadata、link、fence、scope、sensitive-value 和 worktree checks；未执行项目 build/test。
 - Rollback：通过 superseding ADR 调整治理；现有 ADR/baseline/history 不删除。扩大能力前需 owner + security/release review。
 - Approved by：项目用户/owner。
 - Related ADR：ADR-0000、ADR-0013。
-- Related task/docs：`T-2026-07-12-003`、`docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_FINAL_SEAL_REPORT.md`。
+- Related task/docs：`T-2026-07-12-003`、`docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_FINAL_SEAL_REPORT.md`。
 
 ## D-014：建立 Repository-Owned Global Session Memory
 
@@ -145,7 +145,33 @@
 - Related ADR：ADR-0011、ADR-0012、ADR-0013；本次扩展既有 AI truth/task governance，不新增产品架构 ADR。
 - Related Task：`T-2026-07-12-004`。
 
+## D-015：受控远程 ADB 投屏方案（分阶段接受）
+
+- 日期：2026-10-02。
+- 状态：accepted for staged implementation；T003用户要求开始，ADR-0007的local-only边界在P0验证前保持。
+- Context：用户要求先规划本机ADB授权后的PC投屏、侧按钮分流和无障碍共存，后续才实施。
+- Decision：固定版本shell helper→APK→既有relay/video；typed最小操作、endpoint scopes/lease、真实capability、唯一采集/input协调器；暂停与系统关闭分开。
+- Alternatives：不采用PC裸ADB/任意shell隧道、screenrecord主循环或仅grant设置权限替代shell身份。
+- Consequences：新增helper/JNI/source协议；hidden API、ROM、codec、防触/节点及系统设置必须原型验收；安全启用机制缺失时要求本机操作，不宣称secure突破。
+- Compatibility/Migration：新能力默认关闭；T003仅本机诊断源码，旧端和普通模式保持；生产remote扩展仍待P0及对应验收。
+- Verification：V0源码/官方实现/领域审查；V1—V5 NOT_RUN。
+- Rollback：撤销lease、释放输入/显示状态、退出helper；不kill全局ADB；MP失效由本机重新授权。
+- Approved by：项目用户在T002方案交付后要求“开始吧，确保完善”；C2分阶段实施，非C3授权。
+- Related：ADR-0014、T-2026-10-02-002/003、`docs/plans/ADB_REMOTE_MIRRORING_PLAN.md`、`docs/plans/ADB_P0_VALIDATION_RUNBOOK.md`。
+
 ## 新决定模板
+
+## D-016：迁移为 Tunnel 独立产品身份
+
+- 日期：2026-10-02；Status：accepted；Approved by：项目用户明确全局更名指令。
+- Decision：产品 Tunnel、技术 tunnel、中文隧道、包 com.tunnel.app、ORG com.tunnel；跨层 native/bridge/build/helper/协议品牌字段及工程知识同步。
+- Supersedes：D-002 / ADR-0002；新的长期决定见 ADR-0015。
+- Compatibility：新旧包独立，配置/授权不自动转移；PC/APK/native/helper配套重建，broker/version服务另行同步。未轮换证书或硬件身份，未部署。
+- Historical record：用户要求全仓统一名字，旧文档文字/路径已规范化，不是旧日期的逐字快照；历史 ID、commit/hash 和原验证结论仍属原记录。
+- Verification：V0静态；build/test/codegen/device/sign NOT_RUN。不是发布完成或P0通过。
+- Related：T-2026-10-02-004；TUN-BL-2026-10-02-IDENTITY；CE-20261002-T004-01。
+
+### 新决定字段
 
 ```text
 ## D-NNN：标题

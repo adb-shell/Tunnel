@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# ===== CloudSend Android 本地构建脚本 =====
+# ===== Tunnel Android 本地构建脚本 =====
 # 最终成品输出:
 # - flutter/build/app/outputs/flutter-apk/app-aarch64-release.apk
 # - flutter/build/app/outputs/flutter-apk/app-universal-release.apk
@@ -11,14 +11,14 @@ REPO_ROOT="$SCRIPT_DIR"
 cd "$REPO_ROOT"
 
 # ===== 全局工具链路径 =====
-: "${CLOUDSEND_TOOLCHAIN_ROOT:=/opt/rustdesk-toolchain}"
-: "${FLUTTER_HOME:=$CLOUDSEND_TOOLCHAIN_ROOT/flutter}"
-: "${ANDROID_SDK_ROOT:=$CLOUDSEND_TOOLCHAIN_ROOT/android-sdk}"
+: "${TUNNEL_TOOLCHAIN_ROOT:=/opt/rustdesk-toolchain}"
+: "${FLUTTER_HOME:=$TUNNEL_TOOLCHAIN_ROOT/flutter}"
+: "${ANDROID_SDK_ROOT:=$TUNNEL_TOOLCHAIN_ROOT/android-sdk}"
 : "${ANDROID_HOME:=$ANDROID_SDK_ROOT}"
 : "${ANDROID_NDK_HOME:=$ANDROID_SDK_ROOT/ndk/27.2.12479018}"
 : "${ANDROID_NDK_ROOT:=$ANDROID_NDK_HOME}"
-: "${VCPKG_ROOT:=$CLOUDSEND_TOOLCHAIN_ROOT/vcpkg}"
-: "${VCPKG_DEFAULT_BINARY_CACHE:=$CLOUDSEND_TOOLCHAIN_ROOT/cache/vcpkg}"
+: "${VCPKG_ROOT:=$TUNNEL_TOOLCHAIN_ROOT/vcpkg}"
+: "${VCPKG_DEFAULT_BINARY_CACHE:=$TUNNEL_TOOLCHAIN_ROOT/cache/vcpkg}"
 : "${JAVA_HOME:=/usr/lib/jvm/java-17-openjdk-amd64}"
 
 detect_android_build_tools_dir() {
@@ -43,7 +43,7 @@ export VCPKG_ROOT VCPKG_DEFAULT_BINARY_CACHE JAVA_HOME
 
 # ===== 签名配置 =====
 SIGN_ENV_DEFAULT="/opt/rustdesk-toolchain/signing/android/signing.env"
-SIGN_ENV="${CLOUDSEND_SIGN_ENV:-$SIGN_ENV_DEFAULT}"
+SIGN_ENV="${TUNNEL_SIGN_ENV:-$SIGN_ENV_DEFAULT}"
 
 # ===== 构建参数 =====
 RELTYPE="release"
@@ -299,19 +299,19 @@ check_signing() {
   # shellcheck disable=SC1090
   source "$SIGN_ENV"
 
-  [[ "${CLOUDSEND_ANDROID_SIGN_ENABLED:-0}" == "1" ]] || die "签名未启用: CLOUDSEND_ANDROID_SIGN_ENABLED != 1"
-  require_file "${CLOUDSEND_ANDROID_KEYSTORE_PATH:-}"
-  [[ -n "${CLOUDSEND_ANDROID_KEY_ALIAS:-}" ]] || die "CLOUDSEND_ANDROID_KEY_ALIAS 未设置"
-  [[ -n "${CLOUDSEND_ANDROID_STORE_PASSWORD:-}" ]] || die "CLOUDSEND_ANDROID_STORE_PASSWORD 未设置"
-  [[ -n "${CLOUDSEND_ANDROID_KEY_PASSWORD:-}" ]] || die "CLOUDSEND_ANDROID_KEY_PASSWORD 未设置"
+  [[ "${TUNNEL_ANDROID_SIGN_ENABLED:-0}" == "1" ]] || die "签名未启用: TUNNEL_ANDROID_SIGN_ENABLED != 1"
+  require_file "${TUNNEL_ANDROID_KEYSTORE_PATH:-}"
+  [[ -n "${TUNNEL_ANDROID_KEY_ALIAS:-}" ]] || die "TUNNEL_ANDROID_KEY_ALIAS 未设置"
+  [[ -n "${TUNNEL_ANDROID_STORE_PASSWORD:-}" ]] || die "TUNNEL_ANDROID_STORE_PASSWORD 未设置"
+  [[ -n "${TUNNEL_ANDROID_KEY_PASSWORD:-}" ]] || die "TUNNEL_ANDROID_KEY_PASSWORD 未设置"
 
   keytool -list \
-    -keystore "${CLOUDSEND_ANDROID_KEYSTORE_PATH}" \
-    -alias "${CLOUDSEND_ANDROID_KEY_ALIAS}" \
-    -storepass "${CLOUDSEND_ANDROID_STORE_PASSWORD}" >/dev/null
+    -keystore "${TUNNEL_ANDROID_KEYSTORE_PATH}" \
+    -alias "${TUNNEL_ANDROID_KEY_ALIAS}" \
+    -storepass "${TUNNEL_ANDROID_STORE_PASSWORD}" >/dev/null
 
-  export CLOUDSEND_ANDROID_KEYSTORE_PATH CLOUDSEND_ANDROID_KEY_ALIAS
-  export CLOUDSEND_ANDROID_STORE_PASSWORD CLOUDSEND_ANDROID_KEY_PASSWORD
+  export TUNNEL_ANDROID_KEYSTORE_PATH TUNNEL_ANDROID_KEY_ALIAS
+  export TUNNEL_ANDROID_STORE_PASSWORD TUNNEL_ANDROID_KEY_PASSWORD
 
   ok "签名配置有效"
 }
@@ -321,10 +321,10 @@ prepare_key_properties() {
   section "写入 key.properties"
 
   cat > "$key_props" <<EOF2
-storeFile=${CLOUDSEND_ANDROID_KEYSTORE_PATH}
-storePassword=${CLOUDSEND_ANDROID_STORE_PASSWORD}
-keyAlias=${CLOUDSEND_ANDROID_KEY_ALIAS}
-keyPassword=${CLOUDSEND_ANDROID_KEY_PASSWORD}
+storeFile=${TUNNEL_ANDROID_KEYSTORE_PATH}
+storePassword=${TUNNEL_ANDROID_STORE_PASSWORD}
+keyAlias=${TUNNEL_ANDROID_KEY_ALIAS}
+keyPassword=${TUNNEL_ANDROID_KEY_PASSWORD}
 EOF2
 
   chmod 600 "$key_props" || true
@@ -454,6 +454,7 @@ maybe_generate_bridge() {
   info "FRB dart output: $dart_output"
 
   run "$HOME/.cargo/bin/flutter_rust_bridge_codegen" \
+    --class-name Tunnel \
     --rust-input "$rust_input" \
     --dart-output "$dart_output" \
     --c-output "$c_output"
@@ -609,12 +610,12 @@ build_rust_lib_for_target() {
     return 1
   fi
 
-  src_so="$REPO_ROOT/target/$target/release/libcloudsend.so"
+  src_so="$REPO_ROOT/target/$target/release/libtunnel.so"
   require_file "$src_so"
 
   dst_dir="$REPO_ROOT/flutter/android/app/src/main/jniLibs/$jni_dir"
   mkdir -p "$dst_dir"
-  cp "$src_so" "$dst_dir/libcloudsend.so"
+  cp "$src_so" "$dst_dir/libtunnel.so"
   cp "$libcpp" "$dst_dir/libc++_shared.so"
 
   ok "JNI 库已放置: $dst_dir"
@@ -723,10 +724,10 @@ sign_apk_manual() {
 
   section "签名 APK"
   run apksigner sign \
-    --ks "$CLOUDSEND_ANDROID_KEYSTORE_PATH" \
-    --ks-key-alias "$CLOUDSEND_ANDROID_KEY_ALIAS" \
-    --ks-pass "pass:$CLOUDSEND_ANDROID_STORE_PASSWORD" \
-    --key-pass "pass:$CLOUDSEND_ANDROID_KEY_PASSWORD" \
+    --ks "$TUNNEL_ANDROID_KEYSTORE_PATH" \
+    --ks-key-alias "$TUNNEL_ANDROID_KEY_ALIAS" \
+    --ks-pass "pass:$TUNNEL_ANDROID_STORE_PASSWORD" \
+    --key-pass "pass:$TUNNEL_ANDROID_KEY_PASSWORD" \
     --out "$output_apk" \
     "$work_aligned"
 

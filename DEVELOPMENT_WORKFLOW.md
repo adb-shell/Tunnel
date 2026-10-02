@@ -1,4 +1,4 @@
-# CloudSend Development Workflow
+# Tunnel Development Workflow
 
 最后更新：2026-07-12  
 适用范围：所有业务代码、配置、协议、依赖、构建脚本和发布流程变更
@@ -28,7 +28,7 @@
 | 角色 | 职责 |
 |---|---|
 | Requester/Product Owner | 定义目标、业务取舍和验收条件 |
-| Principal Engineer / `cloudsend-master` | 划分边界、协调跨域、守住确认门和最终验收 |
+| Principal Engineer / `tunnel-master` | 划分边界、协调跨域、守住确认门和最终验收 |
 | Domain Engineer Skill | 完成领域影响分析、设计、实现建议和验证矩阵 |
 | Security Reviewer | 审查 trust boundary、permission、credential、privacy、supply chain |
 | Release Owner | 控制正式构建、签名、版本、artifact、rollout、rollback |
@@ -189,7 +189,7 @@ Commit message、PR、release note 是 Git/release owner 的后续动作，不�
 - 禁止自动编译或测试。
 - 禁止自动删除源码、文档或历史资产。
 - 禁止自动修改版本、签名、打包、上传、部署或发布。
-- 禁止用通用最佳实践覆盖 CloudSend 已确认的不变量。
+- 禁止用通用最佳实践覆盖 Tunnel 已确认的不变量。
 - 禁止把静态检查、空测试集或“没有报错”当成正式验证。
 - 禁止在文档、日志、patch 或交付中复制 secret/PII。
 

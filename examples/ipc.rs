@@ -3,7 +3,7 @@ use hbb_common::{
     env_logger::{init_from_env, Env, DEFAULT_FILTER_ENV},
     log, tokio,
 };
-use cloudsend::{ipc::Data, *};
+use tunnel::{ipc::Data, *};
 
 const USAGE: &'static str = "
 IPC test program.

@@ -9,8 +9,8 @@
     public static void checkNotNull(java.lang.Object);
 }
 
-# Keep the isolated CloudSend ADB module stable for future MethodChannel/JNI entry points.
--keep class com.cloudsend.app.adb.** { *; }
+# Keep the isolated Tunnel ADB module stable for future MethodChannel/JNI entry points.
+-keep class com.tunnel.app.adb.** { *; }
 
 # Keep ZEGO public SDK classes stable when Android release minification is enabled.
 -keep class **.zego.** { *; }

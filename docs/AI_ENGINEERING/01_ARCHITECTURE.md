@@ -1,4 +1,4 @@
-# CloudSend 完整架构 / Architecture
+# Tunnel 完整架构 / Architecture
 
 最近关键链路复核：2026-10-02，`HEAD 5cee692` / V0。详细覆盖与未验证边界见 [本轮审计](audits/2026-10-02/README.md)。
 
@@ -52,7 +52,7 @@ flowchart LR
 
 - rendezvous registration、ID/PK、relay request：`rendezvous.proto`。
 - session login、permission、display switch、privacy、terminal、ZEGO invitation：`message.proto`。
-- Flutter/Android 状态同步：Rust event stream、MethodChannel、`cloudsend_status`。
+- Flutter/Android 状态同步：Rust event stream、MethodChannel、`tunnel_status`。
 - 产品策略：`hbbs_http::sync` heartbeat/config/disconnect。
 
 ### 3.2 数据面
@@ -70,7 +70,7 @@ flowchart LR
 
 `LoginConfigHandler` 持有 peer、connection type、password/options、codec 和 relay 状态；`Client` 完成 rendezvous 与 stream 建立；`client/io_loop.rs` 是消息主循环；`FlutterSession` 将事件送到 Dart。
 
-CloudSend controller 固定 `force_relay = true`，拒绝显式 direct address，并跳过 direct candidate。这个决定只证明 CloudSend controller 的默认路径；`rendezvous_mediator.rs::handle_punch_hole()` 在 controlled endpoint 仍可响应未设置 `force_relay` 的兼容请求。
+Tunnel controller 固定 `force_relay = true`，拒绝显式 direct address，并跳过 direct candidate。这个决定只证明 Tunnel controller 的默认路径；`rendezvous_mediator.rs::handle_punch_hole()` 在 controlled endpoint 仍可响应未设置 `force_relay` 的兼容请求。
 
 ### 4.2 Controlled endpoint
 
@@ -105,8 +105,8 @@ core service 在线不等于投屏；projection 丢失不等于 relay 断开；�
 - capture：DXGI 优先、GDI fallback，privacy 可切 Magnifier。
 - input：`src/server/input_service.rs` → `libs/enigo/` / `SendInput`，portable service 可代理高权限操作。
 - privacy：exclude/topmost window、Magnifier、virtual display 三类实现。
-- virtual display：当前活跃选择为 Amyuni `usbmmidd_v2`，实际 platform addition 是 `amyuni_virtual_displays`；`cloudsend_virtual_displays` 只属于未选用 RustDesk IDD 分支。
-- helper/injection：`RuntimeBroker_cloudsend.exe`、`WindowInjection.dll`、low-level hooks。
+- virtual display：当前活跃选择为 Amyuni `usbmmidd_v2`，实际 platform addition 是 `amyuni_virtual_displays`；`tunnel_virtual_displays` 只属于未选用 RustDesk IDD 分支。
+- helper/injection：`RuntimeBroker_tunnel.exe`、`WindowInjection.dll`、low-level hooks。
 
 详见 `05_WINDOWS_PIPELINE.md`。
 

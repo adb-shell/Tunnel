@@ -976,13 +976,13 @@ impl<T: InvokeUiSession> Remote<T> {
                     return true;
                 }
                 self.zego_voice_call_owner = Some(zego_owner.clone());
-                let cloudsend_session_id =
+                let tunnel_session_id =
                     format!("{}_{}_{}", pc_peer_id, remote_peer_id, req_timestamp);
                 let zego_voice_call = match tokio::task::spawn_blocking(move || {
                     request_zego_voice_call_info(
                         &pc_peer_id,
                         &remote_peer_id,
-                        &cloudsend_session_id,
+                        &tunnel_session_id,
                     )
                 })
                 .await
@@ -1919,8 +1919,8 @@ impl<T: InvokeUiSession> Remote<T> {
                     Some(misc::Union::FollowCurrentDisplay(d_idx)) => {
                         self.handler.set_current_display(d_idx);
                     }
-                    Some(misc::Union::CloudsendStatus(json)) => {
-                        self.handler.update_cloudsend_status(json);
+                    Some(misc::Union::TunnelStatus(json)) => {
+                        self.handler.update_tunnel_status(json);
                     }
                     _ => {}
                 },

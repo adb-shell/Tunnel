@@ -1,4 +1,4 @@
-# CLAUDE.md — CloudSend / 云计划 v5.2.1
+# CLAUDE.md — Tunnel / 隧道 v5.2.1
 
 最后一次与全仓源码对齐：2026-07-12
 最近一次文档分层整理：2026-07-12
@@ -22,15 +22,15 @@
 
 ## 1. 项目身份（Project Identity）
 
-- 产品/runtime 名：`CloudSend`
-- Android 显示名：`云计划`
+- 产品/runtime 名：`Tunnel`
+- Android 显示名：`隧道`
 - 基础：RustDesk 深度二次开发
-- Rust crate：`cloudsend`
-- Rust library：`cloudsend`
+- Rust crate：`tunnel`
+- Rust library：`tunnel`
 - Flutter package：`flutter_hbb`
-- Android package/applicationId：`com.cloudsend.app`
-- Android deep link scheme：`cloudsend`
-- Runtime `APP_NAME`：`CloudSend`（`libs/hbb_common/src/config.rs` / `hbb_common::config::APP_NAME`）
+- Android package/applicationId：`com.tunnel.app`
+- Android deep link scheme：`tunnel`
+- Runtime `APP_NAME`：`Tunnel`（`libs/hbb_common/src/config.rs` / `hbb_common::config::APP_NAME`）
 - Runtime `ORG`：`com.carriez`（仍有历史来源，非 Android package）
 - 当前版本：Rust `5.2.1`，Flutter `5.2.1+59`
 
@@ -44,11 +44,11 @@
 2. Shared protocol/config：`libs/hbb_common/`
 3. Android JNI / raw frame：`libs/scrap/src/android/`
 4. Flutter UI：`flutter/lib/`
-5. Android Kotlin runtime：`flutter/android/app/src/main/kotlin/com/cloudsend/app/`
+5. Android Kotlin runtime：`flutter/android/app/src/main/kotlin/com/tunnel/app/`
 6. Legacy desktop UI：`src/ui/`
 7. Account / HTTP / sync / upload：`src/hbbs_http/`
 8. Windows privacy mode / virtual display：`src/privacy_mode.rs` + `src/virtual_display_manager.rs`
-9. Android local ADB/LADB：`flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/` + `flutter/lib/mobile/pages/adb_page.dart`
+9. Android local ADB/LADB：`flutter/android/app/src/main/kotlin/com/tunnel/app/adb/` + `flutter/lib/mobile/pages/adb_page.dart`
 10. ZEGO voice call：Flutter RTC side path + Rust control-channel invitation state
 
 不要把项目误读成：
@@ -58,7 +58,7 @@
 - Android 只有 Kotlin，没有 Rust JNI 主链
 - ADB/LADB 只是外部研究目录；当前 Android 本地 ADB 已有落地模块
 - ZEGO 语音走 RustDesk 原 `audio_service`；当前媒体只走 ZEGO SDK
-- 品牌/运行名已经迁移到 CloudSend，但上游文档、翻译、兼容判断和第三方依赖中仍会有历史 RustDesk 字样
+- 品牌/运行名已经迁移到 Tunnel，但上游文档、翻译、兼容判断和第三方依赖中仍会有历史 RustDesk 字样
 
 ---
 
@@ -75,10 +75,10 @@
 - `common.kt` = Android 全局状态
 - `KeyboardKeyEventMapper.kt` = 键盘映射
 - `VolumeController.kt` = 音量控制
-- `adb/CloudSendAdbManager.kt` = Android local ADB/LADB facade
-- `adb/CloudSendAdbRunner.kt` = packaged `libadb.so` runner
-- `adb/CloudSendAdbDnsDiscover.kt` = wireless debugging mDNS discovery
-- `adb/CloudSendAdbState.kt` = ADB state snapshot
+- `adb/TunnelAdbManager.kt` = Android local ADB/LADB facade
+- `adb/TunnelAdbRunner.kt` = packaged `libadb.so` runner
+- `adb/TunnelAdbDnsDiscover.kt` = wireless debugging mDNS discovery
+- `adb/TunnelAdbState.kt` = ADB state snapshot
 - ADB pair/connect currently uses endpoint fallback (`localhost`, `127.0.0.1`, active Wi-Fi IPv4), mDNS retry/fallback, `preferredSerial`, and cancellable wireless-debugging automation. PC remote ADB command protocol is still future work.
 - `pkg2230.kt` = 主 JNI bridge
 - `ffi.kt` = 兼容 JNI bridge
@@ -245,17 +245,17 @@ cargo test
 
 ### Android
 
-- Rust 输出：`libcloudsend.so`
-- `build.sh` 复制到：`flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`
-- Kotlin 加载：`System.loadLibrary("cloudsend")`
-- Dart Android 打开：`DynamicLibrary.open('libcloudsend.so')`
-- Android 可见应用名：`云计划`
+- Rust 输出：`libtunnel.so`
+- `build.sh` 复制到：`flutter/android/app/src/main/jniLibs/<abi>/libtunnel.so`
+- Kotlin 加载：`System.loadLibrary("tunnel")`
+- Dart Android 打开：`DynamicLibrary.open('libtunnel.so')`
+- Android 可见应用名：`隧道`
 
 ### Windows
 
-- Runner 加载：`cloudsend.dll`
-- Dart Windows 打开：`DynamicLibrary.open('cloudsend.dll')`
-- `flutter/windows/CMakeLists.txt` 从 `target/<profile>/cloudsend.dll` 安装为 `cloudsend.dll`
+- Runner 加载：`tunnel.dll`
+- Dart Windows 打开：`DynamicLibrary.open('tunnel.dll')`
+- `flutter/windows/CMakeLists.txt` 从 `target/<profile>/tunnel.dll` 安装为 `tunnel.dll`
 
 ### Deep Link
 
@@ -263,8 +263,8 @@ cargo test
 
 当前要区分：
 
-- Android manifest scheme：`cloudsend`
-- Rust `get_uri_prefix()`：由 `APP_NAME = CloudSend` 推导，必须与 `cloudsend://` 保持一致
+- Android manifest scheme：`tunnel`
+- Rust `get_uri_prefix()`：由 `APP_NAME = Tunnel` 推导，必须与 `tunnel://` 保持一致
 
 因此，任何 deep-link 任务都必须同时核对 manifest 与 Rust helper。
 

@@ -1,4 +1,4 @@
-# CloudSend Codex Session Start Protocol
+# Tunnel Codex Session Start Protocol
 
 Schema Version：`1.0`  
 Status：`accepted by project owner request`  
@@ -70,7 +70,7 @@ Changelog、event、decision 或 ADR 中的历史批准都不构成当前用户�
 
 ### R4 — Skill and authority recovery
 
-按行为语义选择最窄 Skill；两个以上领域使用 `cloudsend-master`。读取 Skill 后重新确定：
+按行为语义选择最窄 Skill；两个以上领域使用 `tunnel-master`。读取 Skill 后重新确定：
 
 - current request type；
 - C0/C1/C2/C3 ceiling；

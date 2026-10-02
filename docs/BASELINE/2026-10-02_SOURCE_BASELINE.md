@@ -1,4 +1,4 @@
-# CloudSend 2026-10-02 Repository Baseline
+# Tunnel 2026-10-02 Repository Baseline
 
 Baseline ID：`CS-BL-2026-10-02-5cee692`
 Task：`T-2026-10-02-001`；Evidence：repository-observed / V0。
@@ -43,11 +43,11 @@ Task：`T-2026-10-02-001`；Evidence：repository-observed / V0。
 
 | 项目 | 当前源码值 / 锚点 |
 |---|---|
-| Product | `CloudSend`，`hbb_common::config::APP_NAME` |
-| Rust | crate/library `cloudsend`；5.2.1；edition 2021；MSRV 1.75；`Cargo.toml` |
+| Product | `Tunnel`，`hbb_common::config::APP_NAME` |
+| Rust | crate/library `tunnel`；5.2.1；edition 2021；MSRV 1.75；`Cargo.toml` |
 | Flutter | `flutter_hbb` / 5.2.1+59；FRB 1.80.1；`flutter/pubspec.yaml` |
-| Android | `com.cloudsend.app`；compile/target/min SDK 34/33/21；`flutter/android/app/build.gradle` |
-| Native identity | `libcloudsend.so` / `cloudsend.dll`；build scripts、native loader、CMake |
+| Android | `com.tunnel.app`；compile/target/min SDK 34/33/21；`flutter/android/app/build.gradle` |
+| Native identity | `libtunnel.so` / `tunnel.dll`；build scripts、native loader、CMake |
 | ZEGO | manifest `^3.24.1`，tracked pub lock 无对应 entry；保持 DRIFT |
 | 正式环境 | Android Linux `build.sh`；Windows `new-build.cmd`；仅脚本契约，未验证安装环境 |
 

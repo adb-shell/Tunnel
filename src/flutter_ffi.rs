@@ -1495,7 +1495,7 @@ pub fn cm_close_voice_call(id: i32) {
 }
 
 pub fn set_voice_call_input_device(_is_cm: bool, _device: String) {
-    // CloudSend voice calls are fully handled by ZEGO. Keep this legacy
+    // Tunnel voice calls are fully handled by ZEGO. Keep this legacy
     // RustDesk voice-call device setter inert even if an old UI path calls it.
 }
 

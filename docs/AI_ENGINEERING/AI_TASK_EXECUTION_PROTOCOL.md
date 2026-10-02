@@ -1,4 +1,4 @@
-# CloudSend AI 任务执行协议 / AI Task Execution Protocol
+# Tunnel AI 任务执行协议 / AI Task Execution Protocol
 
 最后更新：2026-07-12  
 状态：`accepted`  
@@ -57,7 +57,7 @@ flowchart LR
 - 记录 Baseline ID；开发任务实例化 `TASK_TEMPLATE.md`。
 - 判断请求是回答、审查、诊断、文档、实现、构建、发布、生产还是安全事件。
 - 写明允许与禁止的状态改变。
-- 选择领域 Skill；跨域任务指定 `cloudsend-master` 作为协调 owner。
+- 选择领域 Skill；跨域任务指定 `tunnel-master` 作为协调 owner。
 - 检查 `CURRENT_WORK.md` 中的并行范围；同一任务续接也必须重新确认当前用户授权，不能从历史 T-state 直接进入 T5。
 
 ### 退出条件

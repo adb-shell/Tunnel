@@ -152,7 +152,7 @@ class _RemotePageState extends State<RemotePage>
     _ffi.ffiModel.updateEventListener(sessionId, widget.id);
     if (!isWeb) bind.pluginSyncUi(syncTo: kAppTypeDesktopRemote);
     _ffi.qualityMonitorModel.checkShowQualityMonitor(sessionId);
-    _ffi.cloudSendStatusModel.checkShowCloudSendStatusMonitor(sessionId);
+    _ffi.tunnelStatusModel.checkShowTunnelStatusMonitor(sessionId);
     _ffi.dialogManager.loadMobileActionsOverlayVisible();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Session option should be set after models.dart/FFI.start
@@ -936,7 +936,7 @@ class _RemotePageState extends State<RemotePage>
         right: 10,
         child: _buildRawTouchAndPointerRegion(
           RemoteStatusMonitors(
-              _ffi.qualityMonitorModel, _ffi.cloudSendStatusModel),
+              _ffi.qualityMonitorModel, _ffi.tunnelStatusModel),
           null,
           null,
         ),

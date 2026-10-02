@@ -1,4 +1,4 @@
-# CloudSend 文档资产审计报告 / Document Audit Report
+# Tunnel 文档资产审计报告 / Document Audit Report
 
 > 2026-10-02 补注：以下是固定日期历史快照，39份清单及旧Git/远端观察不是当前库存。本轮HEAD有104份Markdown；旧历史对象不可用。当前更正与逐份登记见 [接管索引](audits/2026-10-02/README.md) 和 [文档登记](audits/2026-10-02/DOCUMENT_REGISTER.md)。terminal已有进程内persistence/reattach，不应沿用“纯临时”的概括。
 
@@ -50,25 +50,25 @@
 
 | # | 文件 | 等级 | 审计结论 |
 |---:|---|:---:|---|
-| 1 | <code>.claude/commands/reflection.md</code> | B | 通用 Claude 指令反思命令可用，但不是 CloudSend 工程真相；引用的可选 settings 文件当前不存在 |
+| 1 | <code>.claude/commands/reflection.md</code> | B | 通用 Claude 指令反思命令可用，但不是 Tunnel 工程真相；引用的可选 settings 文件当前不存在 |
 | 2 | <code>AGENTS.md</code> | B | 高价值入口大体准确，但“最后对齐 2026-06-09”已落后于 6 月下旬和 7 月源码；应只保留入口与不可变量摘要 |
 | 3 | <code>CLAUDE.md</code> | D | 与 <code>AGENTS.md</code> 约 97% 的长文本行完全相同，同时缺少若干屏幕共享授权不变量；属于重复且略落后的工具入口 |
-| 4 | <code>PC-Build.md</code> | B | 顶部 CloudSend 覆盖说明有效，正文主要是上游 RustDesk Windows Server 环境教程；只能作为环境背景，当前入口仍是 <code>new-build.cmd</code> |
-| 5 | <code>README.md</code> | C | 顶部 CloudSend 身份覆盖有效，主体仍是上游 RustDesk 下载、社区、Sciter 和构建说明；不能作为当前工程入口 |
+| 4 | <code>PC-Build.md</code> | B | 顶部 Tunnel 覆盖说明有效，正文主要是上游 RustDesk Windows Server 环境教程；只能作为环境背景，当前入口仍是 <code>new-build.cmd</code> |
+| 5 | <code>README.md</code> | C | 顶部 Tunnel 身份覆盖有效，主体仍是上游 RustDesk 下载、社区、Sciter 和构建说明；不能作为当前工程入口 |
 | 6 | <code>docs/ADB_LADB_INTEGRATION_MEMORY.md</code> | B | 当前本地 ADB 实现和未来设计区分较清楚，但混合实现记忆、外部项目评审和未来方案；外部 <code>ADB-CODE/</code>、<code>LADB/</code> 未跟踪且无 revision |
 | 7 | <code>docs/CHANGELOG.md</code> | C | 有历史价值，但最新条目停在 2026-06-13，缺失后续重大变更，并混入大量“Codex 未执行某操作”的会话元数据 |
 | 8 | <code>docs/CODE_OF_CONDUCT-ZH.md</code> | D | 英文行为准则的翻译型重复；保留语言价值，但继承上游 RustDesk 联系方式漂移 |
-| 9 | <code>docs/CODE_OF_CONDUCT.md</code> | C | 通用行为准则正文仍可参考，但监督联系人属于上游 RustDesk，不代表当前 CloudSend 治理主体 |
+| 9 | <code>docs/CODE_OF_CONDUCT.md</code> | C | 通用行为准则正文仍可参考，但监督联系人属于上游 RustDesk，不代表当前 Tunnel 治理主体 |
 | 10 | <code>docs/CONTRIBUTING-ZH.md</code> | D | 英文贡献规范的翻译型重复；保留语言价值，但继承上游仓库、邮箱和社区入口漂移 |
-| 11 | <code>docs/CONTRIBUTING.md</code> | C | 面向 RustDesk 上游 PR、issue、邮箱和 Discord，不是当前 CloudSend 商业项目贡献流程 |
+| 11 | <code>docs/CONTRIBUTING.md</code> | C | 面向 RustDesk 上游 PR、issue、邮箱和 Discord，不是当前 Tunnel 商业项目贡献流程 |
 | 12 | <code>docs/DEVCONTAINER.md</code> | C | 所有命令依赖 <code>.devcontainer/build.sh</code>，但当前仓库没有 <code>.devcontainer/</code> |
 | 13 | <code>docs/DOCUMENT_AUDIT.md</code> | B | 既有审计提供了重要可信边界，但时间戳仍是 2026-06-09、没有 D 类，并将自身继续列为 A |
 | 14 | <code>docs/ENGINEERING_ANDROID_RUNTIME.md</code> | B | Android 状态机主体与 7 月初源码高度一致，但文件头仍声称最后核验于 2026-06-09；后续应拆出稳定不变量与历史修复日志 |
 | 15 | <code>docs/ENGINEERING_BASELINE.md</code> | B | 覆盖面完整、源码锚点丰富，但时间戳过时，且关于 <code>docs/CHANGELOG.md</code> 的“已废弃”表述与现状直接冲突 |
 | 16 | <code>docs/ENGINEERING_INDEX.md</code> | B | 阅读顺序和写作契约仍有价值，但“Current Source Truth (2026-06-09)”及禁止新 memory 文档的规则需要与本次新体系同步 |
-| 17 | <code>docs/README-ZH.md</code> | D | <code>README.md</code> 的中文翻译型重复；CloudSend 覆盖说明有效，主体仍是上游 RustDesk 背景 |
+| 17 | <code>docs/README-ZH.md</code> | D | <code>README.md</code> 的中文翻译型重复；Tunnel 覆盖说明有效，主体仍是上游 RustDesk 背景 |
 | 18 | <code>docs/REPO_TRUE_STRUCTURE_MAP.md</code> | B | 大部分结构锚点有效，但最后核验仍写 2026-06-03，并列出不存在的 <code>src/version.rs</code>；未完整体现后续 Dev 自动点选链 |
-| 19 | <code>docs/SECURITY.md</code> | C | 将漏洞报告发送给上游 RustDesk，不能作为 CloudSend 安全响应政策 |
+| 19 | <code>docs/SECURITY.md</code> | C | 将漏洞报告发送给上游 RustDesk，不能作为 Tunnel 安全响应政策 |
 | 20 | <code>docs/SOURCE_TRUTH_AUDIT_2026_05_18.md</code> | C | 明确是固定日期审计且已被后续工程主套件覆盖；只用于审计血缘 |
 | 21 | <code>docs/TASK_ENTRYPOINTS.md</code> | B | 跨层任务入口总体有效并包含后续 Dev 链路，但文件头仍写 2026-06-09，且部分章节已膨胀为设计说明 |
 | 22 | <code>docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md</code> | B | 当前部署流程有操作价值，但保存字面服务端凭据类型，不应作为普通 Git-tracked 工程知识继续扩散 |
@@ -78,15 +78,15 @@
 | 26 | <code>flutter/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md</code> | A | iOS LaunchImage 资源目录的局部说明有效 |
 | 27 | <code>libs/clipboard/README.md</code> | A | clipboard 协议、Windows/FUSE 模型和 <code>unix-file-copy-paste</code> feature 与当前源码结构相符；仅限该子库 |
 | 28 | <code>libs/clipboard/src/platform/unix/macos/README.md</code> | A | macOS pasteboard 临时文件前缀与当前源码一致；历史 RustDesk 前缀在这里是当前兼容实现而非单纯文档漂移 |
-| 29 | <code>libs/enigo/.github/ISSUE_TEMPLATE/bug_report.md</code> | C | vendored enigo 项目的上游 issue 模板，不属于 CloudSend issue 流程 |
-| 30 | <code>libs/enigo/.github/ISSUE_TEMPLATE/feature_request.md</code> | C | vendored enigo 项目的上游 issue 模板，不属于 CloudSend 产品需求流程 |
-| 31 | <code>libs/enigo/.github/ISSUE_TEMPLATE/question.md</code> | C | vendored enigo 项目的上游问答模板，不属于 CloudSend 支持入口 |
-| 32 | <code>libs/enigo/README.md</code> | B | 可说明输入模拟库来源和基本能力，但内容停留在上游支持矩阵，不能覆盖 CloudSend 输入注入链 |
-| 33 | <code>libs/scrap/README.md</code> | B | 上游 screen capture API 背景仍有价值，但未覆盖 CloudSend Android JNI/raw frame 和平台定制 |
+| 29 | <code>libs/enigo/.github/ISSUE_TEMPLATE/bug_report.md</code> | C | vendored enigo 项目的上游 issue 模板，不属于 Tunnel issue 流程 |
+| 30 | <code>libs/enigo/.github/ISSUE_TEMPLATE/feature_request.md</code> | C | vendored enigo 项目的上游 issue 模板，不属于 Tunnel 产品需求流程 |
+| 31 | <code>libs/enigo/.github/ISSUE_TEMPLATE/question.md</code> | C | vendored enigo 项目的上游问答模板，不属于 Tunnel 支持入口 |
+| 32 | <code>libs/enigo/README.md</code> | B | 可说明输入模拟库来源和基本能力，但内容停留在上游支持矩阵，不能覆盖 Tunnel 输入注入链 |
+| 33 | <code>libs/scrap/README.md</code> | B | 上游 screen capture API 背景仍有价值，但未覆盖 Tunnel Android JNI/raw frame 和平台定制 |
 | 34 | <code>libs/scrap/src/wayland/README.md</code> | B | Wayland 来源和依赖背景有效，但测试平台版本陈旧，需由正式环境重新确认 |
 | 35 | <code>libs/virtual_display/README.md</code> | A | 仅作为指向 <code>dylib/README.md</code> 的有效局部索引 |
 | 36 | <code>libs/virtual_display/dylib/README.md</code> | B | 虚拟显示来源和 Win10 驱动背景有效，但支持矩阵和测试版本不足以代表当前 Windows 维护面 |
-| 37 | <code>res/msi/README.md</code> | B | MSI 子工程的局部上游说明可参考，但不是 CloudSend 当前推荐发布流程，TODO 尚未闭环 |
+| 37 | <code>res/msi/README.md</code> | B | MSI 子工程的局部上游说明可参考，但不是 Tunnel 当前推荐发布流程，TODO 尚未闭环 |
 | 38 | <code>src/lang/README.md</code> | A | 语言模板位置和键值格式说明与当前目录相符；只限翻译子目录 |
 | 39 | <code>terminal.md</code> | C | 已自报 <code>tmp_</code>/<code>persist_</code> service id 漂移；持久化恢复大量属于设计意图，当前真相应回到 Rust/Flutter 源码 |
 
@@ -204,7 +204,7 @@ Token endpoint、rendezvous/relay endpoint 和服务器地址同时出现在多�
   - <code>flutter/</code>：34
   - 其他：4
 - 大小写不敏感的 RustDesk 注释：181 行
-- CloudSend 注释：20 行
+- Tunnel 注释：20 行
 
 典型问题：
 
@@ -245,8 +245,8 @@ RustDesk 注释不能批量删除或改名。它们包含四类不同含义：
 | 2026-04-13 | <code>96a9c7c</code> | DaXianDesk/上游代码一次性导入 |
 | 2026-04-14 | <code>c75932a</code> | 旧项目文档重组为 ENGINEERING 主套件 |
 | 2026-04-16—04-22 | <code>f740129</code> 至 <code>9eac836</code> | 黑屏、防触、状态监测、双通道、无障碍守卫 |
-| 2026-05-05 | <code>df6ede7</code> | CloudSend package、品牌、构建与 Android 路径迁移 |
-| 2026-05-13 | <code>6ff35b3</code>、<code>495efd6</code> | Windows 新环境构建、云计划显示名与 5.2.1 |
+| 2026-05-05 | <code>df6ede7</code> | Tunnel package、品牌、构建与 Android 路径迁移 |
+| 2026-05-13 | <code>6ff35b3</code>、<code>495efd6</code> | Windows 新环境构建、隧道显示名与 5.2.1 |
 | 2026-05-20—05-31 | 多提交 | Android 本地 ADB/LADB、mDNS、无线调试自动化 |
 | 2026-05-31—06-07 | 多提交 | ZEGO 替换原语音媒体、Token 服务、开发者登录旁路 |
 | 2026-06-09—06-24 | 多提交 | relay-only 重连、核心服务/屏幕共享拆分、首帧和授权稳定 |
@@ -277,7 +277,7 @@ RustDesk 注释不能批量删除或改名。它们包含四类不同含义：
 
 ### P2：所有权与治理
 
-1. 建立 CloudSend 自有 security contact。
+1. 建立 Tunnel 自有 security contact。
 2. 建立真实贡献、issue、发布和事故响应入口。
 3. 将上游社区文档统一标注为 inherited/vendor background。
 
@@ -314,7 +314,7 @@ RustDesk 注释不能批量删除或改名。它们包含四类不同含义：
 
 这一处置关闭了第 9 节 P1 的“真相层归属”决策项，但没有自动修正旧文档正文中的全部漂移。
 
-CloudSend 已经形成一套较强的工程文档主套件，并且 35 个提交体现了代码与文档同步意识。但当前主要问题不是“没有文档”，而是：
+Tunnel 已经形成一套较强的工程文档主套件，并且 35 个提交体现了代码与文档同步意识。但当前主要问题不是“没有文档”，而是：
 
 - 真相层过多且重复；
 - 文件自报更新时间失真；

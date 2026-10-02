@@ -1,7 +1,7 @@
-# CloudSend AI Rules
+# Tunnel AI Rules
 
 最后更新：2026-07-12  
-适用范围：所有 AI、agent、skill 和自动化在 CloudSend 仓库中的工作。
+适用范围：所有 AI、agent、skill 和自动化在 Tunnel 仓库中的工作。
 
 ## 0. Mandatory Entry and Precedence
 
@@ -182,14 +182,14 @@
 
 ## 9. Skill Routing
 
-- 跨域/接管：`cloudsend-master`。
-- Rust/unsafe/FFI：`cloudsend-rust-engineer`。
-- Android runtime：`cloudsend-android-engineer`。
-- Flutter/UI/state：`cloudsend-flutter-engineer`。
-- relay/protocol/auth：`cloudsend-network-engineer`。
-- HTTP/account/backend contracts：`cloudsend-api-engineer`。
-- threat/secret/permission：`cloudsend-security-engineer`。
-- build/sign/release planning：`cloudsend-release-engineer`。
+- 跨域/接管：`tunnel-master`。
+- Rust/unsafe/FFI：`tunnel-rust-engineer`。
+- Android runtime：`tunnel-android-engineer`。
+- Flutter/UI/state：`tunnel-flutter-engineer`。
+- relay/protocol/auth：`tunnel-network-engineer`。
+- HTTP/account/backend contracts：`tunnel-api-engineer`。
+- threat/secret/permission：`tunnel-security-engineer`。
+- build/sign/release planning：`tunnel-release-engineer`。
 
 领域交叉时由 master 协调，security/release constraints 优先于实现便利。
 
@@ -203,9 +203,9 @@
 
 ## 10. Safe Superpowers Profile
 
-- CloudSend does not install or trust an external Superpowers package by default.
+- Tunnel does not install or trust an external Superpowers package by default.
 - The only enabled local adapter capabilities are `brainstorming`、`planning`、`debugging`、`verification` and `review`.
-- `cloudsend-superpowers-safe` always remains read-only/C0；it cannot edit files or execute a plan.
+- `tunnel-superpowers-safe` always remains read-only/C0；it cannot edit files or execute a plan.
 - All other Superpowers-style capabilities are denied, including worktrees、plan execution、TDD execution、branch finishing and release workflows.
 - The adapter never performs commit、push or release and cannot use another Skill/sub-agent to do so.
 - V1—V5、implementation and persisted documentation route back through normal C1/C2/C3 gates.

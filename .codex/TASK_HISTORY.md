@@ -1,4 +1,18 @@
-# CloudSend Task History
+# Tunnel Task History
+
+## T-2026-10-02-004：Tunnel 产品身份迁移
+
+- Timestamp：2026-10-02 Asia/Shanghai；Owner：tunnel-master。
+- Authority：当前用户明确要求产品/项目旧名全局迁移为 Tunnel/tunnel，中文隧道，Android com.tunnel.app，并暂缓后续ADB实施；必要文件/目录移动和机械生成文件命名同步属于该指令范围。
+- Baseline：test/532637a7 + T002/T003未提交工作；新增 TUN-BL-2026-10-02-IDENTITY，不把本次工作冒充既有commit。
+- Source changes：跨语言产品身份、原生库/exports、Android namespace/package及源码路径、helper identity、状态事件、broker示例、构建安装产品元数据、工程文档和9个Skills路径。见任务与当前路径清单。
+- Delegate review：Android/JNI/MethodChannel/P0；Rust/portable/非主平台loader与打包；Flutter/docs/外部契约。限定子任务曾授权agent直接修改，主agent复核。
+- Generated：现存Dart桥接机械改名，生成入口锁定Tunnel类名；没有执行codegen。Windows证书/外部驱动身份未改。
+- Moves：仅当前worktree内部必要品牌/包/Skill/报告路径迁移，先验证绝对边界与目标不存在；没有删除用户文件或清理目录。
+- Evidence：V0静态检索/契约对照/链接及配置检查；构建、单元测试、分析器、设备、发布和签名均未运行。
+- Historical normalization：按用户指令改历史文档名称，保留ID/日期/hash含义；不能将规范化文档当历史逐字快照。
+- Handoff：源码改名交付；新旧应用独立，需新授权及配套artifact/服务；T003仍paused/P0未验证。无Git写、网络部署或证书轮换。
+- Decision / Event：D-016、ADR-0015、CE-20261002-T004-01；Task：`docs/plans/TUNNEL_IDENTITY_MIGRATION_TASK.md`。
 
 最后更新：2026-07-12
 
@@ -8,7 +22,7 @@
 
 - 状态：completed（repository-side asset takeover；external infrastructure 与正式构建仍待后续授权）。
 - 请求者：项目 owner。
-- 角色：CloudSend Principal Engineer。
+- 角色：Tunnel Principal Engineer。
 - 授权范围：读取/分析源码和历史；创建文档、规则、memory、skills。
 - 禁止范围：业务代码修改；删除；build/test；commit/push/merge/rebase；version bump；release/upload。
 - 源码基线：`HEAD 77062b4`，分支 `main`。
@@ -37,7 +51,7 @@
 - 状态：completed（V0 repository-side governance strengthening；正式环境与外部资产仍待 owner 接管）。
 - 请求者/批准者：项目 owner。
 - 源码基线与 dirty state：`main` / `HEAD 77062b4`；开始时已有上一轮接管产生的文档、memory 和 Skill changes，均保留并在其上增量修改。
-- 授权范围：创建入口、任务协议、开发流程、外部资产登记；完善 AI rules；审查并完善八个 CloudSend Skills；同步文档和长期记忆。
+- 授权范围：创建入口、任务协议、开发流程、外部资产登记；完善 AI rules；审查并完善八个 Tunnel Skills；同步文档和长期记忆。
 - 禁止/非目标：业务代码；build/test/analyze/codegen；Git 写入；删除/移动；版本、签名、打包、上传、部署、发布；credential 使用或验证。
 - 方案与决定：建立入口 → 权限 → T0—T8 → domain truth/Skill → workflow → verification/memory 的固定链；外部资产使用统一 registry；见 `D-012`。
 - 修改文件：根入口/流程/registry，新 Task Protocol 和强化报告，`.codex` rules/memory/logs，八个 Skills，以及 README/AGENTS/CLAUDE/工程索引中的入口指针。
@@ -46,7 +60,7 @@
 - 《编译验证需求》：本轮没有业务或 build-system 行为变更，不申请编译；正式环境验证继续按 `09_DEBUG_SYSTEM.md` 管理。
 - 回滚：仅通过用户批准的文档 patch 回退；不删除旧文档、不重写 Git history。
 - Git/release actions：无。
-- Related decisions/docs：`D-012`、`docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_STRENGTHENING_REPORT.md`。
+- Related decisions/docs：`D-012`、`docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_STRENGTHENING_REPORT.md`。
 
 ## T-2026-07-12-003：AI 工程体系最终封版
 
@@ -57,13 +71,13 @@
 - 禁止/非目标：业务代码；build/test/analyze/codegen；Git 写入；删除/移动；版本、签名、打包、上传、部署、发布；credential/production 操作；外部 Superpowers 安装。
 - 方案与决定：见 D-013、ADR-0000 和 ADR-0013。
 - 修改类型：仅 Markdown/YAML 文档、规则、memory 和 project Skill metadata；无业务源码。
-- 主要交付：`docs/ADR/`、`docs/BASELINE/`、`TASK_TEMPLATE.md`、`TEST_MATRIX.md`、`SAFE_SUPERPOWERS_PROFILE.md`、`cloudsend-superpowers-safe`。
+- 主要交付：`docs/ADR/`、`docs/BASELINE/`、`TASK_TEMPLATE.md`、`TEST_MATRIX.md`、`SAFE_SUPERPOWERS_PROFILE.md`、`tunnel-superpowers-safe`。
 - 安全/隐私/license：Superpowers 只作官方只读参考，未安装或执行；adapter allowlist 仅 brainstorming/planning/debugging/verification/review，commit/push/release hard-denied；无 secret/PII 值进入新文档。
-- 验证：V0 only；required files、ADR index/status、baseline anchors、Skill schema/metadata、Markdown fences/local links、sensitive patterns、delete/scope 和 diff whitespace checks。`cloudsend-superpowers-safe` 的 PC→Android Remote ADB 前向案例在同时收到实现、测试、commit、push、release 请求时仍保持 C0/T4，只输出 brainstorming/planning artifact，并在所有 mutation、project command、Git write、external/production 与 release 前停止。未执行项目 build/test。
+- 验证：V0 only；required files、ADR index/status、baseline anchors、Skill schema/metadata、Markdown fences/local links、sensitive patterns、delete/scope 和 diff whitespace checks。`tunnel-superpowers-safe` 的 PC→Android Remote ADB 前向案例在同时收到实现、测试、commit、push、release 请求时仍保持 C0/T4，只输出 brainstorming/planning artifact，并在所有 mutation、project command、Git write、external/production 与 release 前停止。未执行项目 build/test。
 - 正式验证：未来任务从 `TEST_MATRIX.md` 选 case 并按 `TASK_TEMPLATE.md` 输出《编译验证需求》；本次无业务/runtime 变化，不申请编译。
 - 回滚：通过后续 patch/superseding ADR 调整；不删除 ADR、baseline 或历史记录。
 - Git/release actions：无。
-- Related decisions/docs：D-013、ADR-0000、ADR-0013、`docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_FINAL_SEAL_REPORT.md`。
+- Related decisions/docs：D-013、ADR-0000、ADR-0013、`docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_FINAL_SEAL_REPORT.md`。
 
 ## T-2026-07-12-004：AI 全局记忆增强
 
@@ -116,6 +130,38 @@
 - rollback。
 - decision log references。
 - Git/release 动作只有明确批准后记录。
+
+## T-2026-10-02-002：远程 ADB 投屏规划
+
+- 状态：completed — C1方案/教程交付；业务实现not-started。
+- 请求者：项目用户；要求先方案、后续修改，并选择以后在独立worktree开发。
+- 基线：test/532637a，初始clean；CS-BL-2026-10-02-5cee692业务源码未变。
+- 授权：只读源码/公开官方资料、方案和必要文档memory；不改业务/配置/协议/依赖/脚本，不执行Git写入/build/test/device/release。
+- 方案：本机ADB→固定版本shell helper→APK二进制入口→原relay/video→PC；typed scopes/lease、真实capability、唯一mode actor、输入/画面barrier、无障碍pause与disable分离。
+- Review：三个领域只读源码审查+二次交叉复核；修正切源时序、设置无CAS、pause回调、source teardown、订阅竞争、actualFrameSource与override语义。
+- 交付：主方案、任务、proposed ADR和导航/registry/memory共14份Markdown，精确路径见CE-20261002-T002-02。
+- Verification：V0本地引用/围栏/编号/scope/diff及证据审查；ADBM-01—30、P0—P6、正式编译需求已规划；V1—V5 NOT_RUN。
+- Decision：D-015/ADR-0014仅proposed，ADR-0007仍accepted；不把静态方案复核当owner批准。
+- Security/assets：固定helper来源/hash/版本、本地IPC鉴权、endpoint权限、最小操作；不承诺secure突破或所有ROM自动启用/防触；新增两个proposed helper资产，已有native缺口未关闭。
+- Git/build/device/delete/release actions：none；原项目未改，仅worktree文档。
+- Next：owner确定目标机型并确认P0具体实施；先证实纵向链路和关键provider，再完整实现。
+- Record：`docs/plans/ADB_REMOTE_MIRRORING_TASK.md`、`docs/plans/ADB_REMOTE_MIRRORING_PLAN.md`。
+
+## T-2026-10-02-003：ADB P0 本机原型源码
+
+- 状态：handoff / T6，等待正式环境验证；P0整体未完成。
+- 请求/授权：项目用户在方案后要求开始，C2分阶段源码与文档；C3未授权。
+- 基线：test/532637a；CS-BL-2026-10-02-5cee692；保留T002的14份已有文档修改。
+- 结果：新增本机target/UID探针、共享认证framing、受限shell H264 helper、APK staging/supervisor、默认关闭的Flutter本地诊断、独立build recipe与JUnit源码。
+- 来源：scrcpy v4.1固定2926c06c5dc3064ae6d8db706f1a98a37cfcf3f0，来源hash/LICENSE/NOTICE保存在android-helper/server；未取得native ADB或构建helper binary。
+- 审查：三个子agent+主agent交叉V0，修正卡片位置、native assets目录、Activity重建计数、认证错误收尾及时间/API合同。旧Runner重连和持久shell长命令仍是P1需隔离边界。
+- 实际范围：约10秒编码样本计数；decoded/rendered=false；PC顶栏、relay视频、输入、无障碍系统启停/暂停、ADB无视/节点均待后续。
+- 验证：仅V0；项目build/test/analyze/codegen/device与实际decoder/render/relay未运行。不能标ADBM通过。
+- 交付/命令：docs/plans/ADB_P0_VALIDATION_RUNBOOK.md、ADB_REMOTE_MIRRORING_IMPLEMENTATION_TASK.md；CE-20261002-T003-02记录完整文件清单。
+- 回滚：默认flag关闭，本地取消本次helper/socket；不kill全局ADB或停止core。不自动删除源码/Git回退。
+- Git/build/device/delete/sign/release：none；全部在既有worktree，原目录未改。
+- 下一步：补正式工具链/native来源与测试设备，并按具体执行范围取得C3后验证；先补齐P0，不能提前启用生产remote。
+- Decision：D-015/ADR-0014 staged accepted；ADR-0007 local-only边界在P0通过前保留。
 
 ## 新任务模板
 

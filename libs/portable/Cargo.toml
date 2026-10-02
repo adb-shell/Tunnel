@@ -1,8 +1,8 @@
 [package]
-name = "cloudsend-portable-packer"
+name = "tunnel-portable-packer"
 version = "5.2.1"
 edition = "2021"
-description = "CloudSend Service"
+description = "Tunnel Service"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -18,10 +18,11 @@ winapi = { version = "0.3", features = ["winbase"] }
 native-windows-gui = {version = "1.0", default-features = false, features = ["animation-timer", "image-decoder"]}
 
 [package.metadata.winres]
-LegalCopyright = "Copyright © 2025 CloudSend Ltd. All rights reserved."
-ProductName = "CloudSend"
-OriginalFilename = "CloudSend.exe"
-FileDescription = "CloudSend Service"
+LegalCopyright = "Copyright © 2025 Tunnel contributors. All rights reserved."
+CompanyName = "Tunnel"
+ProductName = "Tunnel"
+OriginalFilename = "tunnel.exe"
+FileDescription = "Tunnel Service"
 #ProductVersion = ""
 
 [target.'cfg(target_os="windows")'.build-dependencies]

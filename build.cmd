@@ -123,9 +123,9 @@ call :exec_step "3. Preserve Cargo target" "cd /d "%ROOT_FOLDER%" && echo Keepin
 call :exec_step "4. Build program" "cd /d "%ROOT_FOLDER%" && python .\build.py --portable --hwcodec --flutter --vram --skip-portable-pack"
 
 
-if exist "%ROOT_FOLDER%\cloudsend" (
+if exist "%ROOT_FOLDER%\tunnel" (
     
-    rmdir /s /q "%ROOT_FOLDER%\cloudsend" 2>nul
+    rmdir /s /q "%ROOT_FOLDER%\tunnel" 2>nul
 )
 
 set "RELEASE_DIR=%ROOT_FOLDER%\flutter\build\windows\x64\runner\Release"
@@ -135,7 +135,7 @@ if not exist "%RELEASE_DIR%" (
     exit /b 1
 )
 
-call :exec_step "5. Move build files" "robocopy "%RELEASE_DIR%" "%ROOT_FOLDER%\cloudsend" /E /MOVE" "0 1"
+call :exec_step "5. Move build files" "robocopy "%RELEASE_DIR%" "%ROOT_FOLDER%\tunnel" /E /MOVE" "0 1"
 if %errorlevel% gtr 1 (
     echo [ERROR] Failed: %errorlevel%
 	pause
@@ -143,7 +143,7 @@ if %errorlevel% gtr 1 (
 )
 
 
-set "runner_res=%ROOT_FOLDER%\flutter\build\windows\x64\runner\cloudsend.dir\Release\Runner.res"
+set "runner_res=%ROOT_FOLDER%\flutter\build\windows\x64\runner\tunnel.dir\Release\Runner.res"
 if exist "%runner_res%" (
     if not exist "%ROOT_FOLDER%\libs\portable\Runner.res" (
         call :exec_step "7. Copy Runner.res" "copy /Y "%runner_res%" "%ROOT_FOLDER%\libs\portable\""
@@ -157,7 +157,7 @@ if exist "%runner_res%" (
 
 set "DLL_FILE=%ROOT_FOLDER%\..\WindowInjection.dll"
 if exist "%DLL_FILE%" (
-    call :exec_step "8. Copy File" "copy /Y "%DLL_FILE%" "%ROOT_FOLDER%\cloudsend\""
+    call :exec_step "8. Copy File" "copy /Y "%DLL_FILE%" "%ROOT_FOLDER%\tunnel\""
 ) else (
     echo [WARN] File not found "%DLL_FILE%"
 )
@@ -183,7 +183,7 @@ pip3 install -r requirements.txt || (
     exit /b 1
 )
 
-python generate.py -f ../../cloudsend/ -o . -e ../../cloudsend/cloudsend.exe || (
+python generate.py -f ../../tunnel/ -o . -e ../../tunnel/tunnel.exe || (
     echo Failed to generate configuration
     exit /b 1
 )
@@ -194,7 +194,7 @@ popd
 if not exist ZClient mkdir ZClient
 
 
-copy /Y target\release\cloudsend-portable-packer.exe ZClient\%FOLDER_NAME%.exe
+copy /Y target\release\tunnel-portable-packer.exe ZClient\%FOLDER_NAME%.exe
 
 del res\manifest.xml
 ren res\manifest_backup.xml manifest.xml || (

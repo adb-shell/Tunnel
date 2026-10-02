@@ -1,4 +1,4 @@
-# CloudSend 模块设计 / Module Design
+# Tunnel 模块设计 / Module Design
 
 原始基线：2026-07-12，`HEAD 77062b4`（historical）
 
@@ -8,7 +8,7 @@ Rust / Network / Windows 复核：2026-10-02，`HEAD 5cee692`，V0 静态源码�
 
 ## 1. 启动与进程模型
 
-`src/main.rs` 按 target/feature 分流；desktop 非 Flutter 走 `core_main()` + Sciter，Flutter 构建主要加载 `cloudsend` library。`src/core_main.rs` 继续处理 install、tray、server、CM、elevation、quick support 和 portable 参数。`flutter/lib/main.dart` 再按 window argument 启动 main/remote/file/terminal/port-forward/install/mobile。
+`src/main.rs` 按 target/feature 分流；desktop 非 Flutter 走 `core_main()` + Sciter，Flutter 构建主要加载 `tunnel` library。`src/core_main.rs` 继续处理 install、tray、server、CM、elevation、quick support 和 portable 参数。`flutter/lib/main.dart` 再按 window argument 启动 main/remote/file/terminal/port-forward/install/mobile。
 
 设计含义：一次“启动问题”可能跨 Rust process args、native runner、Flutter engine 和 multi-window。不能只看 `main.dart`。
 
@@ -50,7 +50,7 @@ display_service/video_service
 
 Controller 由 `input_model.dart`、`flutter_ffi.rs`、`client::send_mouse` 编码；endpoint 在 `Connection::on_message()` 分发到 `input_service`；desktop 通过 enigo/portable service，Android 通过 JNI → Accessibility。
 
-CloudSend 自定义 Android 命令复用 mouse mask/url 通道，包括 blank、browser、analysis、back、share、touch-block、Dev selector。它们是协议命令，不是纯 UI 操作。
+Tunnel 自定义 Android 命令复用 mouse mask/url 通道，包括 blank、browser、analysis、back、share、touch-block、Dev selector。它们是协议命令，不是纯 UI 操作。
 
 安全边界：UI 密码/按钮可见性不是协议授权；endpoint 必须独立检查 session permission。当前部分 Mouse/Touch/Key 和自定义 mask 未形成完整 server-side gate，列为 P0/P1。
 
@@ -90,7 +90,7 @@ Port forward 由 `src/port_forward.rs::{listen, connect_and_login, run_forward}`
 adb_page.dart
 → MethodChannel('mChannel')
 → oFtTiPzsqzBHGigp handlers
-→ CloudSendAdbManager
+→ TunnelAdbManager
 → Runner / DNS discover / Accessibility automation
 → local libadb.so process
 ```
@@ -151,10 +151,10 @@ Flutter API token、cache 和 model state 经 native local options/JSON cache �
 
 | 入口 | 当前实现与后续修改位置 |
 |---|---|
-| `Cargo.toml` | 根 `cloudsend` + 8 个 workspace members；edition 2021 / rust-version 1.75；`cdylib`、`staticlib`、`rlib`；default feature 是 `use_dasp` |
+| `Cargo.toml` | 根 `tunnel` + 8 个 workspace members；edition 2021 / rust-version 1.75；`cdylib`、`staticlib`、`rlib`；default feature 是 `use_dasp` |
 | `src/lib.rs` | `flutter` / mobile 编译 FRB module；`plugin_framework + flutter + desktop` 才导出 plugin；iOS 不导出 endpoint server；port forward 和 PTY 限 desktop |
 | `src/main.rs` | desktop Sciter、mobile/Flutter 与 CLI 三组 `cfg`；CLI 不是当前已验证的替代产品入口 |
-| `src/flutter.rs::{cloudsend_core_main, cloudsend_core_main_args}` | native runner 启动桥，继续调用 `core_main()`；raw C args 与释放函数属于 ABI/ownership 合约 |
+| `src/flutter.rs::{tunnel_core_main, tunnel_core_main_args}` | native runner 启动桥，继续调用 `core_main()`；raw C args 与释放函数属于 ABI/ownership 合约 |
 | `src/flutter_ffi.rs` | FRB source of truth；`src/bridge_generated*.rs` / `flutter/lib/generated_bridge*.dart` 是生成输出，不能手工修补作为最终方案 |
 | `libs/hbb_common/build.rs::main` | 从两份 `.proto` 生成到 `OUT_DIR/protos`，protobuf 改动必须检查 producer/consumer 和生成边界 |
 | `src/server/service.rs::ServiceTmpl` | subscriber、thread、active state、join/cleanup；修改长驻 service 时先确认这些所有权 |

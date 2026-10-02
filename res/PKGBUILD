@@ -24,6 +24,8 @@ md5sums=() #generate with 'makepkg -g'
 package() {
   if [[ ${FLUTTER} ]]; then
 	  mkdir -p "${pkgdir}/usr/share/rustdesk" && cp -r ${HBB}/flutter/build/linux/x64/release/bundle/* -t "${pkgdir}/usr/share/rustdesk"
+  else
+    install -Dm 755 "$HBB/target/release/tunnel" "${pkgdir}/usr/share/rustdesk/rustdesk"
   fi
   mkdir -p "${pkgdir}/usr/bin"
   pushd ${pkgdir} && ln -s /usr/share/rustdesk/rustdesk usr/bin/rustdesk && popd

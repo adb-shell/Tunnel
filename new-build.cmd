@@ -1,11 +1,11 @@
 @echo off
 chcp 65001 > nul
 setlocal enabledelayedexpansion
-title CloudSend PC Build Script
+title Tunnel PC Build Script
 color 0B
 
 :: ============================================================
-:: CloudSend Windows x64 portable build script
+:: Tunnel Windows x64 portable build script
 :: Adapted for the PC.md server layout:
 ::   C:\DevEnv + C:\DevTool
 :: Script location is always treated as source root.
@@ -35,7 +35,7 @@ set "VCVARS=%DEVTOOL%\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build
 if not exist "%VCVARS%" set "VCVARS=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 
 echo ============================================================
-echo CloudSend PC build script
+echo Tunnel PC build script
 echo ============================================================
 echo [INFO] Source root : "%ROOT_FOLDER%"
 echo [INFO] App name    : "%FOLDER_NAME%"
@@ -60,7 +60,7 @@ echo [OK] Visual Studio Build Tools environment is ready.
 echo.
 
 :: vcvars64.bat can override VCPKG_ROOT to Visual Studio's bundled vcpkg.
-:: CloudSend must stay pinned to the PC.md dependency cache under C:\DevEnv.
+:: Tunnel must stay pinned to the PC.md dependency cache under C:\DevEnv.
 set "VCPKG_ROOT=%DEVENV%\vcpkg"
 set "VCPKG_DEFAULT_TRIPLET=x64-windows-static"
 set "VCPKG_DEFAULT_HOST_TRIPLET=x64-windows-static"
@@ -70,7 +70,7 @@ set "VCPKG_INSTALLED_ROOT=%DEVENV%\vcpkg\installed"
 set "LIBCLANG_PATH=%DEVTOOL%\LLVM\bin"
 set "PATH=%CARGO_HOME%\bin;%DEVENV%\flutter\bin;%VCPKG_ROOT%;%DEVTOOL%\Python;%DEVTOOL%\Python\Scripts;%DEVTOOL%\Git\cmd;%DEVTOOL%\Git\bin;%DEVTOOL%\LLVM\bin;%PATH%"
 if errorlevel 1 goto fail
-echo [OK] CloudSend dependency roots were restored after vcvars64.
+echo [OK] Tunnel dependency roots were restored after vcvars64.
 echo [INFO] VCPKG_ROOT          : "%VCPKG_ROOT%"
 echo [INFO] VCPKG_INSTALLED_ROOT: "%VCPKG_INSTALLED_ROOT%"
 echo.
@@ -247,7 +247,7 @@ if not "!pub_get_code!"=="0" goto fail
 echo [SUCCESS] 2. Get Flutter dependencies
 
 echo.
-echo ========== Step: 3. Build CloudSend Windows release ==========
+echo ========== Step: 3. Build Tunnel Windows release ==========
 echo [WORKDIR] "%ROOT_FOLDER%"
 echo [COMMAND] python .\build.py --portable --hwcodec --flutter --vram --skip-portable-pack
 pushd "%ROOT_FOLDER%"
@@ -256,10 +256,10 @@ python .\build.py --portable --hwcodec --flutter --vram --skip-portable-pack
 set "build_code=!errorlevel!"
 popd
 if not "!build_code!"=="0" goto fail
-echo [SUCCESS] 3. Build CloudSend Windows release
+echo [SUCCESS] 3. Build Tunnel Windows release
 
 set "RELEASE_DIR=%ROOT_FOLDER%\flutter\build\windows\x64\runner\Release"
-set "STAGING_DIR=%ROOT_FOLDER%\cloudsend"
+set "STAGING_DIR=%ROOT_FOLDER%\tunnel"
 set "OUTPUT_DIR=%ROOT_FOLDER%\PC-Bulid"
 set "FINAL_EXE=%OUTPUT_DIR%\%FOLDER_NAME%.exe"
 set "PORTABLE_DIR=%ROOT_FOLDER%\libs\portable"
@@ -269,9 +269,9 @@ if not exist "%RELEASE_DIR%" (
     echo         "%RELEASE_DIR%"
     goto fail
 )
-if not exist "%RELEASE_DIR%\cloudsend.exe" (
-    echo [ERROR] Missing cloudsend.exe:
-    echo         "%RELEASE_DIR%\cloudsend.exe"
+if not exist "%RELEASE_DIR%\tunnel.exe" (
+    echo [ERROR] Missing tunnel.exe:
+    echo         "%RELEASE_DIR%\tunnel.exe"
     goto fail
 )
 if not exist "%RELEASE_DIR%\dylib_virtual_display.dll" (
@@ -345,14 +345,14 @@ if exist "%driver_root%\printer_driver_adapter.dll" (
     goto fail
 )
 
-set "runner_res=%ROOT_FOLDER%\flutter\build\windows\x64\runner\cloudsend.dir\Release\Runner.res"
+set "runner_res=%ROOT_FOLDER%\flutter\build\windows\x64\runner\tunnel.dir\Release\Runner.res"
 set "runner_res_backup=0"
 if exist "%PORTABLE_DIR%\Runner.res" set "runner_res_backup=1"
 if exist "%runner_res%" (
     copy /Y "%runner_res%" "%PORTABLE_DIR%\Runner.res" >nul
     echo [INFO] Runner.res copied.
 ) else (
-    echo [WARN] Runner.res was not found at the standard CloudSend release path.
+    echo [WARN] Runner.res was not found at the standard Tunnel release path.
     echo [WARN] Portable EXE can still build, but version resources may be incomplete.
 )
 
@@ -375,7 +375,7 @@ echo [SUCCESS] 5. Remove dpiAware from portable manifest
 
 :: Re-pin packager paths before the final portable stage.
 :: This keeps the packaging hand-off deterministic even after nested CMD/PowerShell calls.
-set "STAGING_DIR=%ROOT_FOLDER%\cloudsend"
+set "STAGING_DIR=%ROOT_FOLDER%\tunnel"
 set "OUTPUT_DIR=%ROOT_FOLDER%\PC-Bulid"
 set "FINAL_EXE=%OUTPUT_DIR%\%FOLDER_NAME%.exe"
 set "PORTABLE_DIR=%ROOT_FOLDER%\libs\portable"
@@ -390,9 +390,9 @@ if not exist "%STAGING_DIR%" (
     echo         "%STAGING_DIR%"
     goto restore_manifest_fail
 )
-if not exist "%STAGING_DIR%\cloudsend.exe" (
+if not exist "%STAGING_DIR%\tunnel.exe" (
     echo [ERROR] Missing portable startup executable:
-    echo         "%STAGING_DIR%\cloudsend.exe"
+    echo         "%STAGING_DIR%\tunnel.exe"
     goto restore_manifest_fail
 )
 
@@ -411,10 +411,10 @@ echo [SUCCESS] 6. Install portable packer Python requirements
 echo.
 echo ========== Step: 7. Generate portable self-extract EXE ==========
 echo [WORKDIR] "%PORTABLE_DIR%"
-echo [COMMAND] python .\generate.py -f "%STAGING_DIR%" -o . -e "%STAGING_DIR%\cloudsend.exe"
+echo [COMMAND] python .\generate.py -f "%STAGING_DIR%" -o . -e "%STAGING_DIR%\tunnel.exe"
 pushd "%PORTABLE_DIR%"
 if errorlevel 1 goto restore_manifest_fail
-python .\generate.py -f "%STAGING_DIR%" -o . -e "%STAGING_DIR%\cloudsend.exe"
+python .\generate.py -f "%STAGING_DIR%" -o . -e "%STAGING_DIR%\tunnel.exe"
 set "portable_pack_code=!errorlevel!"
 popd
 if not "!portable_pack_code!"=="0" (
@@ -427,12 +427,12 @@ echo [SUCCESS] 7. Generate portable self-extract EXE
 if exist "%MANIFEST_BACKUP%" move /Y "%MANIFEST_BACKUP%" "%MANIFEST_FILE%" >nul
 
 if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
-if not exist "%ROOT_FOLDER%\target\release\cloudsend-portable-packer.exe" (
-    echo [ERROR] Missing cloudsend-portable-packer.exe:
-    echo         "%ROOT_FOLDER%\target\release\cloudsend-portable-packer.exe"
+if not exist "%ROOT_FOLDER%\target\release\tunnel-portable-packer.exe" (
+    echo [ERROR] Missing tunnel-portable-packer.exe:
+    echo         "%ROOT_FOLDER%\target\release\tunnel-portable-packer.exe"
     goto fail
 )
-move /Y "%ROOT_FOLDER%\target\release\cloudsend-portable-packer.exe" "%FINAL_EXE%" >nul
+move /Y "%ROOT_FOLDER%\target\release\tunnel-portable-packer.exe" "%FINAL_EXE%" >nul
 if errorlevel 1 goto fail
 
 if exist "%PORTABLE_DIR%\data.bin" del /q "%PORTABLE_DIR%\data.bin"

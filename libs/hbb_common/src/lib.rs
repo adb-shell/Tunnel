@@ -399,7 +399,7 @@ pub fn init_log(_is_async: bool, _name: &str) -> Option<flexi_logger::LoggerHand
             }
             use flexi_logger::*;
             let log_level =
-                std::env::var("CLOUDSEND_LOG_LEVEL").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.into());
+                std::env::var("TUNNEL_LOG_LEVEL").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.into());
             cleanup_oversized_log_files(&path, MAX_LOG_FILE_SIZE * MAX_LOG_FILES as u64);
             if let Ok(x) = Logger::try_with_str(&log_level) {
                 logger_holder = x
@@ -443,8 +443,8 @@ pub struct VersionCheckResponse {
     pub url: String,
 }
 
-pub const VER_TYPE_RUSTDESK_CLIENT: &str = "cloudsend-client";
-pub const VER_TYPE_RUSTDESK_SERVER: &str = "cloudsend-server";
+pub const VER_TYPE_RUSTDESK_CLIENT: &str = "tunnel-client";
+pub const VER_TYPE_RUSTDESK_SERVER: &str = "tunnel-server";
 
 pub fn version_check_request(typ: String) -> (VersionCheckRequest, String) {
     const URL: &str = "https://127.0.0.1/version/latest";

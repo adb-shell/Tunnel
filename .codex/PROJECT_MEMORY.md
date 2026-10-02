@@ -1,4 +1,4 @@
-# CloudSend Project Memory
+# Tunnel Project Memory
 
 最后更新：2026-10-02
 用途：AI 会话的稳定入口，不替代源码和完整工程文档。
@@ -20,19 +20,21 @@
 3. `docs/ENGINEERING_*` 与 `docs/TASK_ENTRYPOINTS.md`，作为旧主套件和历史细节。
 4. 本目录、`AGENTS.md`、`CLAUDE.md` 只作为规则、摘要和入口，不覆盖源码。
 
-开发任务执行 `DEVELOPMENT_WORKFLOW.md`；仓外服务、database、driver 或 binary 查询 `EXTERNAL_ASSET_REGISTRY.md`。安全 Superpowers 只通过 `cloudsend-superpowers-safe` 的五项只读 allowlist 使用；外部包安装状态不是本次观察内容。冲突时以源码为准；构建/运行行为只有正式环境验证后才能从 `verification-required` 提升为已验证。
+开发任务执行 `DEVELOPMENT_WORKFLOW.md`；仓外服务、database、driver 或 binary 查询 `EXTERNAL_ASSET_REGISTRY.md`。安全 Superpowers 只通过 `tunnel-superpowers-safe` 的五项只读 allowlist 使用；外部包安装状态不是本次观察内容。冲突时以源码为准；构建/运行行为只有正式环境验证后才能从 `verification-required` 提升为已验证。
 
-当前接管索引：`docs/AI_ENGINEERING/audits/2026-10-02/README.md`；功能定位：`docs/AI_ENGINEERING/12_FEATURE_MAP.md`；当前baseline：`CS-BL-2026-10-02-5cee692`。最新task/event状态从 `PROJECT_STATE.md` / `CURRENT_WORK.md`读取，不依赖旧聊天记忆。
+当前接管索引：`docs/AI_ENGINEERING/audits/2026-10-02/README.md`；功能定位：`docs/AI_ENGINEERING/12_FEATURE_MAP.md`；当前baseline：`TUN-BL-2026-10-02-IDENTITY`，前基线库存/hash不可继承为迁移后的值。最新task/event状态从 `PROJECT_STATE.md` / `CURRENT_WORK.md`读取，不依赖旧聊天记忆。
 
 ## 2. Stable Identity
 
-- 产品/runtime：`CloudSend`。
-- Android 显示名：`云计划`。
+- 产品/runtime：`Tunnel`。
+- Android 显示名：`隧道`。
 - 来源：RustDesk 深度二次开发；当前本地Git非shallow，仅`5cee692`单root（2026-10-01），旧`77062b4`及导入历史不可重放；旧演进文档保持historical。
-- Rust crate/library：`cloudsend`。
+- Rust crate/library：`tunnel`。
 - Flutter package：`flutter_hbb`。
-- Android applicationId：`com.cloudsend.app`。
-- Android deep link scheme：`cloudsend`。
+- Android applicationId：`com.tunnel.app`。
+- Android deep link scheme：`tunnel`。
+- Runtime ORG：`com.tunnel`。新包名/命名空间独立；原数据、配对、授权不自动迁移；签名证书未变。
+- 身份决定：ADR-0015 / D-016；全仓历史品牌文字已规范化但不等于历史逐字快照。PC/APK/native/helper/外部broker需配套验证；T003暂停且P0未通过。
 - 当前源码版本：Rust `5.2.1`，Flutter `5.2.1+59`；不得由 AI 自动修改。
 - 根 license：AGPL-3.0；第三方 license/provenance 尚需完整审计。
 
@@ -42,7 +44,7 @@
 - shared config/protocol：`libs/hbb_common/`。
 - capture：`libs/scrap/`。
 - Flutter：`flutter/lib/`。
-- Android runtime：`flutter/android/app/src/main/kotlin/com/cloudsend/app/`。
+- Android runtime：`flutter/android/app/src/main/kotlin/com/tunnel/app/`。
 - Android active JNI：`libs/scrap/src/android/pkg2230.rs`；`ffi.rs` 是未导出的兼容层。
 - Windows privacy/display：`src/privacy_mode.rs`、`src/privacy_mode/`、`src/virtual_display_manager.rs`。
 - account/API/sync/download：`src/hbbs_http/` 与 Flutter models。
@@ -93,7 +95,15 @@
 
 完整规则见 `.codex/AI_RULES.md`。
 
-## 7. Open Asset Gaps
+## 7. Current Development Direction
+
+- 用户已选择后续开发在独立worktree进行；不要默认修改原项目目录。Git提交/合并/同步按具体任务执行，工作区之间不自动同步文件。
+- 2026-10-02，T-2026-10-02-002形成`docs/plans/ADB_REMOTE_MIRRORING_PLAN.md`：远程ADB投屏/输入、侧按钮、无障碍管理、P0—P6和ADBM-01—30。
+- ADR-0014 / D-015已接受分阶段实施；T003新增默认关闭的本机身份/helper/H264采样原型源码和测试源码；未build/test/device，P0整体未通过。ADR-0007 local-only边界保持。不得把“收到编码样本”当PC解码/呈现或远程权限已实现。
+- 原型地图/精确验证需求：`docs/plans/ADB_P0_VALIDATION_RUNBOOK.md`。旧Runner自动重连与持久shell长命令仍能打断原型，正式remote前必须完成transport lease；普通共享/无障碍运行未改。
+- 后续先验证APK本机自举helper→原relay→PC解码，及节点/系统启用/防触profile；不能承诺所有ROM或受保护内容支持。
+
+## 8. Open Asset Gaps
 
 - 当前快照之前的完整Git/upstream/DaXianDesk history，包括旧文档所引用对象。
 - hbbs/hbbr source、version、config 和部署拓扑。

@@ -22,7 +22,7 @@
 
 已修复 Android AccessibilityService 内黑屏 overlay 的错误动态防触摸逻辑，源码锚点：
 
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
 
 当前基线：
 
@@ -39,8 +39,8 @@
 - `src/flutter_ffi.rs`
 - `libs/scrap/src/android/pkg2230.rs`
 - `libs/scrap/src/android/ffi.rs`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
 - `flutter/lib/models/input_model.dart`
 - `flutter/lib/common.dart`
 - `flutter/lib/common/widgets/overlay.dart`
@@ -57,13 +57,13 @@
 
 当前基线：
 
-- 协议字段：`Misc.cloudsend_status = 39`。
-- Android 查询入口：`call_main_service_get_by_name("cloudsend_status")`。
-- PC Flutter 事件：`update_cloudsend_status`，payload key 为 `status`。
-- UI model：`CloudSendStatusModel`，默认显示，配置键为 `show_cloudsend_status_monitor`。
-- Toolbar 会话开关：`show-cloudsend-status-monitor`。
-- UI Widget：`RemoteStatusMonitors` 组合 `QualityMonitor` 与 `CloudSendStatusMonitor`，只有两者同时显示时插入 6px 间距。
-- Sciter UI 只保留 `update_cloudsend_status` 空实现，当前面板只在 Flutter UI 显示。
+- 协议字段：`Misc.tunnel_status = 39`。
+- Android 查询入口：`call_main_service_get_by_name("tunnel_status")`。
+- PC Flutter 事件：`update_tunnel_status`，payload key 为 `status`。
+- UI model：`TunnelStatusModel`，默认显示，配置键为 `show_tunnel_status_monitor`。
+- Toolbar 会话开关：`show-tunnel-status-monitor`。
+- UI Widget：`RemoteStatusMonitors` 组合 `QualityMonitor` 与 `TunnelStatusMonitor`，只有两者同时显示时插入 6px 间距。
+- Sciter UI 只保留 `update_tunnel_status` 空实现，当前面板只在 Flutter UI 显示。
 
 ### 0.4 2026-04-22 共享/截屏流状态生命周期基线
 
@@ -88,44 +88,44 @@
 
 ---
 
-### 0.6 2026-05-18 CloudSend identity / SO rename baseline
+### 0.6 2026-05-18 Tunnel identity / SO rename baseline
 
 Current source truth:
 
-- Product/runtime app name: `CloudSend`.
-- Android package / applicationId: `com.cloudsend.app`.
-- Android visible label / notification title: `云计划`.
-- Android deep link scheme: `cloudsend`.
-- Kotlin package root: `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
-- Rust crate: `cloudsend`.
+- Product/runtime app name: `Tunnel`.
+- Android package / applicationId: `com.tunnel.app`.
+- Android visible label / notification title: `隧道`.
+- Android deep link scheme: `tunnel`.
+- Kotlin package root: `flutter/android/app/src/main/kotlin/com/tunnel/app/`.
+- Rust crate: `tunnel`.
 - Rust crate version: `5.2.1`.
-- Rust library name: `cloudsend`, producing Android `libcloudsend.so`.
+- Rust library name: `tunnel`, producing Android `libtunnel.so`.
 - Flutter version: `5.2.1+59`.
-- Android JNI output path: `flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`.
-- Kotlin SO loading: `System.loadLibrary("cloudsend")`.
-- Dart Android SO loading: `DynamicLibrary.open('libcloudsend.so')`.
-- Windows DLL loading: `cloudsend.dll` via `flutter/windows/runner/main.cpp`, `flutter/windows/CMakeLists.txt`, and `flutter/lib/models/native_model.dart`.
+- Android JNI output path: `flutter/android/app/src/main/jniLibs/<abi>/libtunnel.so`.
+- Kotlin SO loading: `System.loadLibrary("tunnel")`.
+- Dart Android SO loading: `DynamicLibrary.open('libtunnel.so')`.
+- Windows DLL loading: `tunnel.dll` via `flutter/windows/runner/main.cpp`, `flutter/windows/CMakeLists.txt`, and `flutter/lib/models/native_model.dart`.
 - Current PC build script: `new-build.cmd`; output directory is `PC-Bulid`.
-- Rust exported FFI symbols: `cloudsend_core_main` / `cloudsend_core_main_args`.
-- Status protocol field: `Misc.cloudsend_status = 39`.
-- Android status query key: `call_main_service_get_by_name("cloudsend_status")`.
-- PC Flutter event: `update_cloudsend_status`, payload key `status`.
-- UI model/widget: `CloudSendStatusModel` / `CloudSendStatusMonitor`.
-- Session option: `show_cloudsend_status_monitor` and toolbar key `show-cloudsend-status-monitor`.
-- Virtual display platform addition key: `cloudsend_virtual_displays`.
+- Rust exported FFI symbols: `tunnel_core_main` / `tunnel_core_main_args`.
+- Status protocol field: `Misc.tunnel_status = 39`.
+- Android status query key: `call_main_service_get_by_name("tunnel_status")`.
+- PC Flutter event: `update_tunnel_status`, payload key `status`.
+- UI model/widget: `TunnelStatusModel` / `TunnelStatusMonitor`.
+- Session option: `show_tunnel_status_monitor` and toolbar key `show-tunnel-status-monitor`.
+- Virtual display platform addition key: `tunnel_virtual_displays`.
 
 Do not use older names such as `com.daxian.dev`, `DaxianMeeting`, `daxian_status`, `DaxianStatusModel`, `libdaxian.so`, `liblibrustdesk.so`, or `rustdesk_core_main` for new Android work. If older historical sections below mention them, this 2026-05-18 baseline overrides them.
 
-### 0.7 2026-05-06 CloudSend residual cleanup baseline
+### 0.7 2026-05-06 Tunnel residual cleanup baseline
 
 Current cleanup truth:
 
-- Android build scripts use `CLOUDSEND_TOOLCHAIN_ROOT`, `CLOUDSEND_SIGN_ENV`, and `CLOUDSEND_ANDROID_*` signing variables.
+- Android build scripts use `TUNNEL_TOOLCHAIN_ROOT`, `TUNNEL_SIGN_ENV`, and `TUNNEL_ANDROID_*` signing variables.
 - The Linux toolchain path intentionally remains `/opt/rustdesk-toolchain`; this is a server path, not a shipped product string.
-- Existing server files still require user-side migration: signing.env must use `CLOUDSEND_ANDROID_*`, and `/etc/profile.d/rustdesk-toolchain.sh` must export `CLOUDSEND_TOOLCHAIN_ROOT`.
-- Desktop UI hardcoded labels should say `CloudSend`, not `RustDesk`.
-- OAuth/provider sentinel values should use `cloudsend`, not `daxian`.
-- Internal string values now use `dyn.com.cloudsend.owner`, `cloudsend_printer_*`, `cloudsend.`, plugin target `cloudsend`, and plugin local data directory segment `CloudSend`.
+- Existing server files still require user-side migration: signing.env must use `TUNNEL_ANDROID_*`, and `/etc/profile.d/rustdesk-toolchain.sh` must export `TUNNEL_TOOLCHAIN_ROOT`.
+- Desktop UI hardcoded labels should say `Tunnel`, not `RustDesk`.
+- OAuth/provider sentinel values should use `tunnel`, not `daxian`.
+- Internal string values now use `dyn.com.tunnel.owner`, `tunnel_printer_*`, `tunnel.`, plugin target `tunnel`, and plugin local data directory segment `Tunnel`.
 - The obsolete `migrate_package.sh` script has been removed.
 
 
@@ -133,15 +133,15 @@ Current cleanup truth:
 
 Current source truth:
 
-- Android status field `Misc.cloudsend_status = 39` remains the single status transport.
-- Android sends one `cloudsend_status` packet immediately after authorization, then continues a throttled status push. Status push is diagnostic only and must never disturb the connection session.
-- `CloudSendStatusData` fields are nullable booleans:
+- Android status field `Misc.tunnel_status = 39` remains the single status transport.
+- Android sends one `tunnel_status` packet immediately after authorization, then continues a throttled status push. Status push is diagnostic only and must never disturb the connection session.
+- `TunnelStatusData` fields are nullable booleans:
   - `null` means waiting / unknown and must render gray `--`.
   - `true` means on / exists and renders green.
   - `false` means off / missing and renders red.
-- `CloudSendStatusModel.reset()` resets all eight status fields to `null` and cancels the stale timer.
+- `TunnelStatusModel.reset()` resets all eight status fields to `null` and cancels the stale timer.
 - Reset is required on session close and non-Android manual reconnect. Android auto-reconnect must not actively reset the status panel during retry ticks.
-- `CloudSendStatusModel` treats status as stale after 8 seconds without packets and clears only the PC status panel back to `null` / gray waiting (`--`) until the next real Android status packet arrives. This is display-only; it must not clear permissions, stop screen sharing, reset ignore/blank state, or touch the relay session.
+- `TunnelStatusModel` treats status as stale after 8 seconds without packets and clears only the PC status panel back to `null` / gray waiting (`--`) until the next real Android status packet arrives. This is display-only; it must not clear permissions, stop screen sharing, reset ignore/blank state, or touch the relay session.
 - Android cross-thread status fields must stay volatile: `SKL`, `BIS`, `_isReady`, `_isStart`, `_isAudioStart`, `mediaProjection`, and `nZW99cdXQ0COhB2o.ctx`.
 - Status JSON must snapshot Android values before building the `JSONObject`.
 - Status semantics:
@@ -159,12 +159,12 @@ Current source truth:
 
 Current source truth:
 
-- `src/server/connection.rs` must use `cloudsend_status_message()` for both immediate-after-authorization status push and throttled timer status push.
-- If `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, returns `{}`, or returns a non-status payload, the server must skip that status push. It must never send hardcoded false-default JSON.
-- `cloudsend_status_message()` is async, returns `Option<Message>`, runs the Android JNI query behind a short timeout, and callers must send only `Some(msg)`.
-- Android `cloudsend_status` timer push is throttled to avoid querying JNI from the connection hot path every second; an in-flight JNI query must make the next status sample skip instead of stacking workers.
-- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` must return an empty string on exception so Rust can skip the bad sample.
-- `CloudSendStatusModel.updateFromEvent()` may receive partial payloads from transitional Android states; missing fields must preserve the current/null value and must not become false by default.
+- `src/server/connection.rs` must use `tunnel_status_message()` for both immediate-after-authorization status push and throttled timer status push.
+- If `call_main_service_get_by_name("tunnel_status")` fails, returns empty, returns `{}`, or returns a non-status payload, the server must skip that status push. It must never send hardcoded false-default JSON.
+- `tunnel_status_message()` is async, returns `Option<Message>`, runs the Android JNI query behind a short timeout, and callers must send only `Some(msg)`.
+- Android `tunnel_status` timer push is throttled to avoid querying JNI from the connection hot path every second; an in-flight JNI query must make the next status sample skip instead of stacking workers.
+- `DFm8Y8iMScvB2YDwGYN("tunnel_status")` must return an empty string on exception so Rust can skip the bad sample.
+- `TunnelStatusModel.updateFromEvent()` may receive partial payloads from transitional Android states; missing fields must preserve the current/null value and must not become false by default.
 - `MainService.onDestroy()` must clear Rust's `MAIN_SERVICE_CTX` GlobalRef only on explicit app/service destroy. Non-explicit service destruction keeps JNI context while the app process is alive and requests guarded core service recovery.
 - `关穿透` must produce or request a clean frame immediately. A plain Rust `video_service::refresh()` is insufficient on static Android screens and some OEM compositors.
 - `nZW99cdXQ0COhB2o.requestOneShotScreenshotFrame(...)` is the close-penetrate cleanup path on Android R+; Android 9/10 or screenshot failure paths must fall back to `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)`.
@@ -202,15 +202,15 @@ Current source truth:
 - Android `PermissionChecker` no longer renders the duplicate `Screen Capture` row or the `Transfer file` row in the permission card; `Start service` / `Stop service` is the only visible screen-sharing switch.
 - Accepting a PC connection no longer calls Android `"start_capture"` automatically; PC can connect and start ZEGO voice while Android has no screen-sharing permission active.
 - `DFm8Y8iMScvB2YDw.checkMediaPermission()` reports `media = isStart`, meaning the Android permission card reflects active screen sharing, not core service readiness.
-- Android recoverable reconnect uses one 2.5s periodic timer only for errors that Rust already marks retryable (`hasRetry == true`), plus one guarded short-delay first retry after the timer starts. Repeated connection-error events must not create additional reconnect timers or rapid request loops, and retry ticks must not repeatedly clear permissions or `CloudSendStatusModel`.
+- Android recoverable reconnect uses one 2.5s periodic timer only for errors that Rust already marks retryable (`hasRetry == true`), plus one guarded short-delay first retry after the timer starts. Repeated connection-error events must not create additional reconnect timers or rapid request loops, and retry ticks must not repeatedly clear permissions or `TunnelStatusModel`.
 - Android recoverable reconnect has a 60s silent grace window: PC keeps the last frame frozen and retries in the background. It shows the user-visible `Connecting...` prompt only if the connection has not recovered after 60 seconds.
 - Android network recovery requests a throttled rendezvous/register refresh through `ClsFx9V0S.G4yQ9OYY()` without restarting `MainService`, stopping `MediaProjection`, or changing ignore/blank state.
 - Android authorized `"add_connection"` refreshes normal video through `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)` only when screen sharing is fully active. This refresh must stay side-effect free for `MediaProjection`: no Rust video refresh while sharing is inactive, no `VirtualDisplay` release/recreate, no new screen-share permission request, and no ignore/screenshot fallback.
 - Android `startCapture()` uses a short `captureStarting` first-frame window while `VirtualDisplay` is being created. This prevents fast initial `ImageReader` frames from being discarded before `_isStart` becomes true, especially on static Huawei Android 10-13 screens. Every stop/failure/projection-loss path must clear `captureStarting`.
 - Android 10-13 may restore from a saved projection intent, but stale `VirtualDisplay` objects must still be released before the restored projection starts capture. Reusing a stopped projection's old `VirtualDisplay` is an OEM compatibility risk.
-- Android authorization immediately pushes one real `CloudSendStatusModel` status packet from JNI before falling back to the 2-second throttled status cadence, so reconnect state catches up quickly without fabricating readiness/share/ignore/blank values.
+- Android authorization immediately pushes one real `TunnelStatusModel` status packet from JNI before falling back to the 2-second throttled status cadence, so reconnect state catches up quickly without fabricating readiness/share/ignore/blank values.
 - Android recoverable reconnect forces `sessionReconnect(..., forceRelay: true)`. If `input-password` or `re-input-password` appears during Android reconnect, `flutter/lib/models/model.dart` first reuses the remote password cached for this peer in the current PC process; if that cache is empty, it may use build-in `default-connect-password` because it is the same fixed remote password source used by first connection. It must not use the local `mainGetPermanentPassword()` as a remote password. The process-level cache exists so reconnects after session object recreation do not ask for `123` again.
-- CloudSend client sessions are strict relay-only. `src/client.rs::LoginConfigHandler.initialize(...)` sets `force_relay = true`; `Client::_start(...)` skips UDP NAT test, IPv6 punch setup, and explicit IP/domain:port direct connection while force relay is active; `Client::connect(...)` directly calls `request_relay(...)` instead of creating TCP/UDP/IPv6 direct candidates. Initial connect, manual reconnect, and Android auto reconnect must all stay on the configured relay path.
+- Tunnel client sessions are strict relay-only. `src/client.rs::LoginConfigHandler.initialize(...)` sets `force_relay = true`; `Client::_start(...)` skips UDP NAT test, IPv6 punch setup, and explicit IP/domain:port direct connection while force relay is active; `Client::connect(...)` directly calls `request_relay(...)` instead of creating TCP/UDP/IPv6 direct candidates. Initial connect, manual reconnect, and Android auto reconnect must all stay on the configured relay path.
 - Android server-page `connectStatus` follows the official RustDesk-style raw rendezvous online state. `flutter/lib/models/server_model.dart` reads `mainGetConnectStatus()` and assigns `status_num` directly to `_connectStatus`; it must not debounce transient values or fake readiness. A `not_ready_status` value is a real registration-state sample, not a command to stop, restart, or clear the Android core service.
 - Android ZEGO local busy state must be cleared when a disconnected client had `inVoiceCall` / `incomingVoiceCall`. `_hasLocalAndroidVoiceCall(...)` only treats connected clients' voice state or the current connected client's `inVoiceCall` as busy, and clears stale `ZegoVoiceCallModel.active` when the only current signal is a new incoming invite. This prevents PC1 hangup/disconnect residue from rejecting a later PC2 invite to the same Android.
 
@@ -247,26 +247,26 @@ Current handoff truth:
 
 当前事实：
 
-- Rust crate：`cloudsend`
+- Rust crate：`tunnel`
 - Rust crate version：`5.2.1`
-- Rust library：`cloudsend`
+- Rust library：`tunnel`
 - Flutter package：`flutter_hbb`
 - Flutter version：`5.2.1+59`
-- 产品名（runtime app name）：`CloudSend`
-- Android package：`com.cloudsend.app`
-- Android visible label：`云计划`
+- 产品名（runtime app name）：`Tunnel`
+- Android package：`com.tunnel.app`
+- Android visible label：`隧道`
 - 配置组织名（runtime org）：`com.carriez`
 
 ### 1.2 品牌与命名现实（Branding Reality）
 
 项目已经做了深度品牌替换，但**没有彻底收口**：
 
-- Android 动态库实际加载：`libcloudsend.so`
-- Android Kotlin `System.loadLibrary("cloudsend")`
-- Flutter Android 侧 `DynamicLibrary.open('libcloudsend.so')`
-- Windows 侧加载：`cloudsend.dll`
-- Rust `APP_NAME` 为 `CloudSend`
-- Android manifest deep link scheme：`cloudsend`
+- Android 动态库实际加载：`libtunnel.so`
+- Android Kotlin `System.loadLibrary("tunnel")`
+- Flutter Android 侧 `DynamicLibrary.open('libtunnel.so')`
+- Windows 侧加载：`tunnel.dll`
+- Rust `APP_NAME` 为 `Tunnel`
+- Android manifest deep link scheme：`tunnel`
 - Rust `get_uri_prefix()` 由 `APP_NAME` 推导，当前与 manifest scheme 需要保持一致
 
 结论：
@@ -360,28 +360,28 @@ Rust JNI：
 
 Kotlin / Java：
 
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/oFtTiPzsqzBHGigp.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/oFtTiPzsqzBHGigp.kt`
   - 主 `FlutterActivity`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/XerQvgpGBzr8FDFr.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/XerQvgpGBzr8FDFr.kt`
   - 权限 / 透明 Activity
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
   - `MainService`, `MediaProjection`, keep-alive
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
   - `AccessibilityService`, 输入 / 截图 / overlay / fallback
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFrLMwitwQbfu7AC.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFrLMwitwQbfu7AC.kt`
   - `FloatWindowService`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/BootReceiver.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/BootReceiver.kt`
 - Current source truth: after boot/start-on-boot permission checks, this receiver still starts `DFm8Y8iMScvB2YDw` with `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE`, but that action is core-service only when it has no `EXT_MEDIA_PROJECTION_RES_INTENT`.
   - 开机启动接收器
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/ig2xH1U3RDNsb7CS.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/ig2xH1U3RDNsb7CS.kt`
   - 剪贴板桥
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/EqljohYazB0qrhnj.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/EqljohYazB0qrhnj.kt`
   - 图像辅助 / 节点可视化
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/common.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/common.kt`
   - Android 全局状态
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/KeyboardKeyEventMapper.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/KeyboardKeyEventMapper.kt`
   - 键盘映射
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/VolumeController.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/VolumeController.kt`
   - 音量控制
 - `flutter/android/app/src/main/kotlin/pkg2230.kt`
   - 主 JNI bridge
@@ -433,7 +433,7 @@ Kotlin / Java：
 结论：
 
 - 这是 Windows 平台的重要功能面，不是附属实验代码。
-- `cloudsend_virtual_displays` 已成为实际 key / 常量的一部分。
+- `tunnel_virtual_displays` 已成为实际 key / 常量的一部分。
 
 ### 2.8 Plugin 框架
 
@@ -459,7 +459,7 @@ Feature gate：
 当前 Android 本地 ADB/LADB 能力是独立模块：
 
 - Native/Kotlin runtime:
-  - `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/`
+  - `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/`
   - `flutter/android/app/src/main/jniLibs/*/libadb.so`
   - `flutter/android/app/src/main/jniLibs/LIBADB_LICENSE`
 - Flutter UI:
@@ -473,14 +473,14 @@ Feature gate：
 当前边界：
 
 - Android 本地 ADB/LADB 不参与 screen sharing、ignore fallback、penetrate、blank screen、touch-block、video stream、screenshot stream 或 monitor-panel 状态。
-- ADB 页面直接通过 `MethodChannel('mChannel')` 调用 `cloudsend_adb_*` 方法，不应改走 `gFFI.invokeMethod()`，因为 ADB 方法返回 Map/String。
+- ADB 页面直接通过 `MethodChannel('mChannel')` 调用 `tunnel_adb_*` 方法，不应改走 `gFFI.invokeMethod()`，因为 ADB 方法返回 Map/String。
 - PC remote ADB command protocol 仍不是已落地能力；未来必须显式设计 request/response、授权、超时、白名单、输出截断和审计日志。
 
 Current source-verified ADB hardening (2026-06-04):
 
 - Pair/connect now use endpoint fallback: `localhost:<port>`, `127.0.0.1:<port>`, and current Wi-Fi IPv4 when available.
-- `CloudSendAdbDnsDiscover` retries `NsdManager.FAILURE_ALREADY_ACTIVE` resolve failures and keeps non-local hosts as fallback when no local match is available.
-- `CloudSendAdbRunner` polls `adb devices` after `adb connect`, stores `preferredSerial`, and caps shell restart attempts.
+- `TunnelAdbDnsDiscover` retries `NsdManager.FAILURE_ALREADY_ACTIVE` resolve failures and keeps non-local hosts as fallback when no local match is available.
+- `TunnelAdbRunner` polls `adb devices` after `adb connect`, stores `preferredSerial`, and caps shell restart attempts.
 - Manual pair failure clears `paired_before`; a failed pairing attempt must not poison later auto-start behavior.
 - The ADB page action `Auto` / `自动` scans/connects an already paired wireless-debugging endpoint. It does not yet extract a fresh pairing code/port from Settings.
 - Wireless-debugging automation lives in `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`; it is best-effort, user-visible, cancellable, and timeout-protected.
@@ -701,7 +701,7 @@ Current source truth:
 - `src/privacy_mode/win_virtual_display.rs`
 - `src/virtual_display_manager.rs`
 - `flutter/lib/consts.dart`
-  - `cloudsend_virtual_displays`
+  - `tunnel_virtual_displays`
   - `supported_privacy_mode_impl`
 
 结论：
@@ -739,10 +739,10 @@ Current source truth:
 
 已核事实：
 
-- `build.sh` 从 `target/<triple>/release/libcloudsend.so` 复制到：
-  - `flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`
-- Kotlin 端 `System.loadLibrary("cloudsend")`
-- Dart Android 端 `DynamicLibrary.open('libcloudsend.so')`
+- `build.sh` 从 `target/<triple>/release/libtunnel.so` 复制到：
+  - `flutter/android/app/src/main/jniLibs/<abi>/libtunnel.so`
+- Kotlin 端 `System.loadLibrary("tunnel")`
+- Dart Android 端 `DynamicLibrary.open('libtunnel.so')`
 
 ### 5.2 Windows
 
@@ -753,9 +753,9 @@ Current source truth:
 
 已核事实：
 
-- Windows Flutter runner、CMake 安装规则与 Dart FFI 都必须统一到 `cloudsend.dll`
-- 自解压包入口 metadata 使用 `cloudsend.exe`，解压后可规范化为 `CloudSend.exe`
-- 隐私模式 RuntimeBroker 辅助进程名统一为 `RuntimeBroker_cloudsend.exe`
+- Windows Flutter runner、CMake 安装规则与 Dart FFI 都必须统一到 `tunnel.dll`
+- 自解压包入口 metadata 使用 `tunnel.exe`，解压后可规范化为 `Tunnel.exe`
+- 隐私模式 RuntimeBroker 辅助进程名统一为 `RuntimeBroker_tunnel.exe`
 
 ### 5.3 其他构建脚本 / 包装层
 
@@ -798,9 +798,9 @@ Current source truth:
 
 ## 7. 当前风险与注意事项（Current Risks）
 
-- `APP_NAME` 与 Android manifest scheme 必须保持 `CloudSend` / `cloudsend` 一致
+- `APP_NAME` 与 Android manifest scheme 必须保持 `Tunnel` / `tunnel` 一致
 - `ORG` 仍为 `com.carriez`
-- Windows DLL 命名必须保持 `cloudsend.dll`，不得回退到 `librustdesk.dll`
+- Windows DLL 命名必须保持 `tunnel.dll`，不得回退到 `librustdesk.dll`
 - `pkg2230.rs` 中存在 `static mut` 像素与 JNI 全局状态
 - Android runtime 逻辑高度耦合，修改时极易破坏 fallback / waiting / keep-alive
 - `src/ui/` 旧路径与 Flutter 新路径并存，桌面入口任务若只看 Flutter 容易漏逻辑
@@ -812,7 +812,7 @@ Current source truth:
 
 Current source truth:
 
-- CloudSend 1v1 voice call now uses ZEGO RTC for media transport.
+- Tunnel 1v1 voice call now uses ZEGO RTC for media transport.
 - Existing RustDesk voice-call UI/control states remain as the invitation shell:
   - `VoiceCallRequest`
   - `VoiceCallResponse`
@@ -825,17 +825,17 @@ Current source truth:
 - Current PC/controller ZEGO Token endpoint is `http://103.30.77.156:50003`; this endpoint is handled directly by the IP + port token service deployment and does not use a domain or reverse proxy.
 - PC/controller also hardcodes a Bearer key in `src/client/helper.rs::DEFAULT_ZEGO_TOKEN_API_KEY`; treat it as a deployed client credential that must match the token service `.env`, but do not duplicate the real value in Git-tracked docs.
 - PC/controller token HTTP creation runs through `tokio::task::spawn_blocking(...)` in `src/client/io_loop.rs::Data::NewVoiceCall` so token-service latency does not block the remote-control event loop.
-- `src/client/io_loop.rs::Data::NewVoiceCall` uses `cloudsendSessionId = pcPeerId_remotePeerId_reqTimestamp` when requesting the token service. The deployed token API field remains `androidPeerId` for compatibility, but the client now fills it with the current remote peer id so each established PC-controlled endpoint connection gets an isolated 1v1 ZEGO room even if the platform string was not recognized.
+- `src/client/io_loop.rs::Data::NewVoiceCall` uses `tunnelSessionId = pcPeerId_remotePeerId_reqTimestamp` when requesting the token service. The deployed token API field remains `androidPeerId` for compatibility, but the client now fills it with the current remote peer id so each established PC-controlled endpoint connection gets an isolated 1v1 ZEGO room even if the platform string was not recognized.
 - PC/controller sends ZEGO metadata from `src/client/io_loop.rs::Data::NewVoiceCall`.
 - `src/client/helper.rs::request_zego_voice_call_info` rejects incomplete token-service responses before any call invite is sent.
 - `src/client/helper.rs::new_zego_voice_call_request` does not send the real caller token; `callerToken` stays in PC memory, Android only receives `calleeToken`.
 - PC/controller no longer starts old RustDesk audio capture after `VoiceCallResponse.accepted`; the ZEGO voice button must not send old RustDesk `AudioFrame` voice-call packets.
 - PC Flutter shows ZEGO toolbar/chat-menu voice-call entries for connected desktop sessions without depending on `PeerInfo.platform == kPeerPlatformAndroid`, so Android devices whose platform string was not recognized can still receive a ZEGO invite.
-- `src/client/io_loop.rs::Data::NewVoiceCall` no longer rejects by platform string. It attempts ZEGO for the current connected session; the controlled side still must understand CloudSend ZEGO metadata to accept and join the room.
+- `src/client/io_loop.rs::Data::NewVoiceCall` no longer rejects by platform string. It attempts ZEGO for the current connected session; the controlled side still must understand Tunnel ZEGO metadata to accept and join the room.
 - `src/ui_session_interface.rs::request_voice_call` only sends `Data::NewVoiceCall`; it does not start `ipc::start_pa` or other legacy RustDesk audio helpers.
 - `src/flutter.rs`, `src/ui.rs`, and `src/ui/cm.rs` must not pre-start `ipc::start_pa` for old RustDesk voice-call support.
 - `src/client/io_loop.rs` has no `stop_voice_call_sender` legacy audio thread handle; ZEGO close only clears ZEGO state and sends the existing close signal.
-- `src/flutter_ffi.rs::set_voice_call_input_device` and `src:flutter_ffi.rs::get_voice_call_input_device` are inert in CloudSend ZEGO mode.
+- `src/flutter_ffi.rs::set_voice_call_input_device` and `src:flutter_ffi.rs::get_voice_call_input_device` are inert in Tunnel ZEGO mode.
 - `src/ipc.rs` ignores legacy `voice-call-input` get/set changes for ZEGO voice-call work.
 - `src/server/connection.rs::on_close` must not call `audio_service::set_voice_call_input_device(...)` for ZEGO voice-call cleanup.
 - `src/client/io_loop.rs` tracks `zego_voice_call_active`, `voice_call_request_timestamp`, and `pending_zego_voice_call`; duplicate PC-side voice-call creation is rejected while a call is pending or active.
@@ -865,7 +865,7 @@ Current source truth:
 - Android calls `setAudioRouteToSpeaker(true)` from `flutter/lib/models/zego_voice_call_model.dart` so the speaker is enabled by default.
 - Flutter explicitly enables ZEGO audio capture and audio transport with `enableAudioCaptureDevice(true)`, `mutePublishStreamAudio(false)`, `muteAllPlayStreamAudio(false)`, and `mutePlayStreamAudio(streamId, false)`.
 - `src/client/io_loop.rs` has a process-level ZEGO call owner guard so one PC process cannot run two simultaneous ZEGO calls through the singleton Flutter ZEGO engine and mix callbacks across rooms.
-- `flutter/lib/models/chat_model.dart::onVoiceCallStarted` and `onVoiceCallClosed` no longer invoke Android legacy `on_voice_call_started` / `on_voice_call_closed` platform methods for CloudSend ZEGO voice calls.
+- `flutter/lib/models/chat_model.dart::onVoiceCallStarted` and `onVoiceCallClosed` no longer invoke Android legacy `on_voice_call_started` / `on_voice_call_closed` platform methods for Tunnel ZEGO voice calls.
 - `flutter/lib/models/zego_voice_call_model.dart` calls `startPlayingStream(playStreamId)` directly after `loginRoom` + `startPublishingStream` with the known expected stream id, and also retries/refreshes play when `onRoomStreamUpdate(Add)` arrives. A missed/delayed stream-add callback must not leave either side permanently waiting.
 - Busy-state cleanup is not part of the ZEGO media sequence and must not modify token creation, room id, stream ids, `loginRoom`, `startPublishingStream`, `startPlayingStream`, `stopPublishingStream`, `stopPlayingStream`, or `logoutRoom`.
 - `flutter/lib/models/zego_voice_call_model.dart` follows the official ZEGO Flutter demo's callback evidence model: `onPublisherCapturedAudioFirstFrame` records microphone capture, `onPublisherSendAudioFirstFrame` records local audio leaving the device, and `onPlayerRecvAudioFirstFrame` records remote audio arriving.

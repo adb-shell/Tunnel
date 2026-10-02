@@ -102,7 +102,7 @@ class _ViewCameraPageState extends State<ViewCameraPage>
     _physicalFocusNode.requestFocus();
     gFFI.inputModel.listenToMouse(true);
     gFFI.qualityMonitorModel.checkShowQualityMonitor(sessionId);
-    gFFI.cloudSendStatusModel.checkShowCloudSendStatusMonitor(sessionId);
+    gFFI.tunnelStatusModel.checkShowTunnelStatusMonitor(sessionId);
     gFFI.chatModel
         .changeCurrentKey(MessageKey(widget.id, ChatModel.clientModeID));
     _blockableOverlayState.applyFfi(gFFI);
@@ -372,7 +372,7 @@ class _ViewCameraPageState extends State<ViewCameraPage>
               top: 10,
               right: 10,
               child: RemoteStatusMonitors(
-                  gFFI.qualityMonitorModel, gFFI.cloudSendStatusModel),
+                  gFFI.qualityMonitorModel, gFFI.tunnelStatusModel),
             ),
             SizedBox(
               width: 0,

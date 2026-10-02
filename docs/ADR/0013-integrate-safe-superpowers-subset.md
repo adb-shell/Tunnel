@@ -3,18 +3,18 @@
 - Status：`accepted`
 - Record Type：`contemporaneous`
 - Decision Date / Recorded Date：2026-07-12
-- Decision Owner：CloudSend project owner
+- Decision Owner：Tunnel project owner
 - Security / Release Review：required constraints incorporated
 - Related Decision Log：D-013
 - Implementation State：implemented as local policy adapter；Evidence：V0
 
 ## Context
 
-Upstream Superpowers includes useful brainstorming、planning、systematic debugging、verification and review methods, but its broader workflow also contains worktree、plan execution、TDD/commit and branch-finishing behaviors. Direct installation or blanket enablement would conflict with CloudSend authority rules.
+Upstream Superpowers includes useful brainstorming、planning、systematic debugging、verification and review methods, but its broader workflow also contains worktree、plan execution、TDD/commit and branch-finishing behaviors. Direct installation or blanket enablement would conflict with Tunnel authority rules.
 
 ## Decision
 
-Do not install or execute external Superpowers. Create the project-owned `cloudsend-superpowers-safe` Skill as a semantic adapter with an exact allowlist:
+Do not install or execute external Superpowers. Create the project-owned `tunnel-superpowers-safe` Skill as a semantic adapter with an exact allowlist:
 
 1. brainstorming
 2. planning
@@ -28,7 +28,7 @@ All other capabilities are denied. The adapter is read-only by default and never
 
 - Install the full upstream package：rejected because it exposes out-of-scope execution/Git/release workflows and update/telemetry supply-chain surface.
 - Reimplement five unrestricted execution skills：rejected because “verification/debugging” could be misread as command authority.
-- Use a narrow local adapter：accepted；CloudSend rules remain authoritative.
+- Use a narrow local adapter：accepted；Tunnel rules remain authoritative.
 
 ## Consequences
 

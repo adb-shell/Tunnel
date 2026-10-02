@@ -21,8 +21,8 @@ const String kPlatformAdditionsIsWayland = "is_wayland";
 const String kPlatformAdditionsHeadless = "headless";
 const String kPlatformAdditionsIsInstalled = "is_installed";
 const String kPlatformAdditionsIddImpl = "idd_impl";
-const String kPlatformAdditionsCloudSendVirtualDisplays =
-    "cloudsend_virtual_displays";
+const String kPlatformAdditionsTunnelVirtualDisplays =
+    "tunnel_virtual_displays";
 const String kPlatformAdditionsAmyuniVirtualDisplays =
     "amyuni_virtual_displays";
 const String kPlatformAdditionsHasFileClipboard = "has_file_clipboard";
@@ -125,7 +125,7 @@ const String kOptionFollowRemoteCursor = "follow_remote_cursor";
 const String kOptionFollowRemoteWindow = "follow_remote_window";
 const String kOptionZoomCursor = "zoom-cursor";
 const String kOptionShowQualityMonitor = "show_quality_monitor";
-const String kOptionShowCloudSendStatusMonitor = "show_cloudsend_status_monitor";
+const String kOptionShowTunnelStatusMonitor = "show_tunnel_status_monitor";
 const String kOptionDisableAudio = "disable_audio";
 const String kOptionEnableFileCopyPaste = "enable-file-copy-paste";
 // "Settings -> Display -> Other default options"
@@ -212,7 +212,7 @@ const String kKeyReverseMouseWheel = "reverse_mouse_wheel";
 const String kMsgboxTextWaitingForImage = 'Connected, waiting for image...';
 
 // the executable name of the portable version
-const String kEnvPortableExecutable = "CLOUDSEND_APPNAME";
+const String kEnvPortableExecutable = "TUNNEL_APPNAME";
 
 const Color kColorWarn = Color.fromARGB(255, 245, 133, 59);
 const Color kColorCanvas = Colors.black;
@@ -371,20 +371,20 @@ class AndroidChannel {
   static final kGetStartOnBootOpt = "get_start_on_boot_opt";
   static final kSetStartOnBootOpt = "set_start_on_boot_opt";
   static final kSyncAppDirConfigPath = "sync_app_dir";
-  static final kCloudSendAdbInit = "cloudsend_adb_init";
-  static final kCloudSendAdbStatus = "cloudsend_adb_status";
-  static final kCloudSendAdbOutput = "cloudsend_adb_output";
-  static final kCloudSendAdbStart = "cloudsend_adb_start";
-  static final kCloudSendAdbStop = "cloudsend_adb_stop";
-  static final kCloudSendAdbLocalShell = "cloudsend_adb_local_shell";
-  static final kCloudSendAdbPair = "cloudsend_adb_pair";
-  static final kCloudSendAdbCommand = "cloudsend_adb_command";
-  static final kCloudSendAdbWirelessDebugStatus =
-      "cloudsend_adb_wireless_debug_status";
-  static final kCloudSendAdbWirelessDebugSet =
-      "cloudsend_adb_wireless_debug_set";
-  static final kCloudSendAdbWirelessDebugCancel =
-      "cloudsend_adb_wireless_debug_cancel";
+  static final kTunnelAdbInit = "tunnel_adb_init";
+  static final kTunnelAdbStatus = "tunnel_adb_status";
+  static final kTunnelAdbOutput = "tunnel_adb_output";
+  static final kTunnelAdbStart = "tunnel_adb_start";
+  static final kTunnelAdbStop = "tunnel_adb_stop";
+  static final kTunnelAdbLocalShell = "tunnel_adb_local_shell";
+  static final kTunnelAdbPair = "tunnel_adb_pair";
+  static final kTunnelAdbCommand = "tunnel_adb_command";
+  static final kTunnelAdbWirelessDebugStatus =
+      "tunnel_adb_wireless_debug_status";
+  static final kTunnelAdbWirelessDebugSet =
+      "tunnel_adb_wireless_debug_set";
+  static final kTunnelAdbWirelessDebugCancel =
+      "tunnel_adb_wireless_debug_cancel";
 }
 
 /// flutter/packages/flutter/lib/src/services/keyboard_key.dart -> _keyLabels

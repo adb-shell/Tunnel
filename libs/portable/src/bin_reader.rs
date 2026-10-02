@@ -10,7 +10,9 @@ const BIN_DATA: &[u8] = include_bytes!("../data.bin");
 const BIN_DATA: &[u8] = &[];
 // 4bytes
 const LENGTH: usize = 4;
-const IDENTIFIER_LENGTH: usize = 9;
+// Keep the marker in sync with PACKAGE_MARKER in generate.py.
+const IDENTIFIER: &[u8] = b"tunnel";
+const IDENTIFIER_LENGTH: usize = IDENTIFIER.len();
 const MD5_LENGTH: usize = 32;
 const BUF_SIZE: usize = 4096;
 
@@ -72,14 +74,14 @@ impl BinaryReader {
         let mut base: usize = 0;
         let mut parsed = vec![];
         assert!(BIN_DATA.len() > IDENTIFIER_LENGTH, "bin data invalid!");
-        let mut iden = String::from_utf8_lossy(&BIN_DATA[base..base + IDENTIFIER_LENGTH]);
-        if iden != "cloudsend" {
+        let mut iden = &BIN_DATA[base..base + IDENTIFIER_LENGTH];
+        if iden != IDENTIFIER {
             panic!("bin file is not valid!");
         }
         base += IDENTIFIER_LENGTH;
         loop {
-            iden = String::from_utf8_lossy(&BIN_DATA[base..base + IDENTIFIER_LENGTH]);
-            if iden == "cloudsend" {
+            iden = &BIN_DATA[base..base + IDENTIFIER_LENGTH];
+            if iden == IDENTIFIER {
                 base += IDENTIFIER_LENGTH;
                 break;
             }
@@ -127,7 +129,7 @@ impl BinaryReader {
 
         let exe_path = prefix.join(&self.exe);
         if exe_path.exists() {
-            if let Ok(f) = File::open(exe_path) {
+            if let Ok(f) = fs::File::open(exe_path) {
                 if let Ok(meta) = f.metadata() {
                     let mut permissions = meta.permissions();
                     permissions.set_mode(0o755);

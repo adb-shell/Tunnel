@@ -1,4 +1,4 @@
-# CloudSend Architecture Decision Records
+# Tunnel Architecture Decision Records
 
 最后更新：2026-07-12  
 治理状态：`accepted`
@@ -59,7 +59,7 @@ retrospective -> 只有 decision owner 重新批准才可 accepted
 |---|---|---|---|---|---|
 | 0000 | Adopt Architecture Decision Records | accepted | contemporaneous | D-013 | implemented / V0 |
 | 0001 | Retain RustDesk-derived Core | retrospective | backfill | D-001 | implemented / V0；fork point unknown |
-| 0002 | CloudSend Product Identity | accepted | backfill | D-002 | implemented / V0 |
+| 0002 | Tunnel Product Identity（历史名称已规范化） | superseded by 0015 | backfill | D-002 | historical / V0 |
 | 0003 | Controller Sessions Use Relay Only | accepted | backfill | D-003 | implemented / V0；V4 required |
 | 0004 | Separate Android Core and Screen Share | accepted | backfill | D-004 | implemented / V0；V3 required |
 | 0005 | Use `pkg2230` as Active Android JNI Route | accepted | backfill | D-005 | implemented / V0 |
@@ -71,8 +71,11 @@ retrospective -> 只有 decision owner 重新批准才可 accepted
 | 0011 | Adopt AI Engineering Truth Layer | accepted | backfill | D-011 | implemented / V0 |
 | 0012 | Adopt Task Protocol and Permission Gates | accepted | backfill | D-012 | implemented / V0 |
 | 0013 | Integrate a Safe Superpowers Subset | accepted | contemporaneous | D-013 | implemented / V0 |
+| [0014](0014-controlled-remote-adb-mirroring.md) | Controlled Remote ADB Mirroring | accepted, staged | contemporaneous | D-015 | P0 local prototype source / V0；runtime NOT_RUN；ADR-0007 local-only边界仍生效 |
 
 ## 6. Responsibility Boundaries
+
+最新身份决定：[ADR-0015：Tunnel 产品身份迁移](0015-tunnel-product-identity-migration.md)，accepted / D-016；source implemented / V0，runtime NOT_RUN。
 
 | Record | 职责 |
 |---|---|

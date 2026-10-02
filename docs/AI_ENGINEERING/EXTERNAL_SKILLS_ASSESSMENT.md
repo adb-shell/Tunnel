@@ -1,8 +1,8 @@
-# CloudSend 外部 Skills 评估 / External Skills Assessment
+# Tunnel 外部 Skills 评估 / External Skills Assessment
 
 评估日期：2026-07-12  
 当前决定：仅做只读来源评估，不安装、不执行外部脚本。  
-适用阶段：CloudSend 项目资产接管与长期 AI 工程治理。
+适用阶段：Tunnel 项目资产接管与长期 AI 工程治理。
 
 > 本轮通过只读 GitHub source inspection 核对了候选仓库、相关 Skill 路径和主要说明，没有修改远端状态，也没有安装或执行候选内容。该核对是 2026-07-12 的时间快照，不等于完成依赖、脚本、网络行为或许可证的全量供应链审计；正式采用前仍须固定 revision 并重新审核。
 
@@ -10,7 +10,7 @@
 
 ## 1. 结论摘要
 
-CloudSend 不适合批量安装通用 Skills。项目具有以下强约束：
+Tunnel 不适合批量安装通用 Skills。项目具有以下强约束：
 
 - 当前环境不是正式编译环境；
 - 当前阶段禁止自动执行 build、test 和发布；
@@ -20,7 +20,7 @@ CloudSend 不适合批量安装通用 Skills。项目具有以下强约束：
 - 禁止上传产物、凭据和项目资料；
 - Rust 基线是 1.75、edition 2021；
 - Android、Flutter、Rust、Windows 和协议链路包含大量项目专属不变量；
-- <code>AGENTS.md</code>、<code>.codex/AI_RULES.md</code> 和 CloudSend 专属 Skills 必须高于外部 Skill。
+- <code>AGENTS.md</code>、<code>.codex/AI_RULES.md</code> 和 Tunnel 专属 Skills 必须高于外部 Skill。
 
 因此采用策略是：
 
@@ -41,7 +41,7 @@ CloudSend 不适合批量安装通用 Skills。项目具有以下强约束：
 | 权限边界 | 是否默认执行 build、test、git、worktree、上传、安装或删除 |
 | 可审计性 | Skill 指令、脚本、hooks、MCP、网络访问和输出是否可被人工审核 |
 | 最小采用 | 能否只使用一个小子集，而不是引入完整工作流 |
-| 结果复用 | 输出能否进入 CloudSend 的审计报告、Decision Log、Roadmap 或编译验证需求 |
+| 结果复用 | 输出能否进入 Tunnel 的审计报告、Decision Log、Roadmap 或编译验证需求 |
 | 维护成本 | 上游更新是否可能悄然改变命令、工具依赖或权限行为 |
 
 采用等级：
@@ -62,7 +62,7 @@ CloudSend 不适合批量安装通用 Skills。项目具有以下强约束：
 | <code>obra/superpowers</code> | systematic-debugging、verification-before-completion、writing-plans、review | 调试纪律、完成证据、计划和评审 | 完整工作流可能自动建 worktree、运行测试、驱动提交；与当前权限和环境冲突 | 只借鉴四个方法，不采用完整工作流 |
 | <code>leonardomso/rust-skills</code> | unsafe/FFI、async、error、observability 审计 | Rust/JNI/并发/错误处理/可观测性 | 当前说明面向 Rust 1.96、edition 2024；不能直接套用新语法和 API | owner 批准后按子集试点，只读审计优先 |
 | <code>trailofbits/skills</code> | rust-review、insecure-defaults、supply-chain-risk-auditor、differential-review、agentic-actions-auditor、audit-context-building、static-analysis | 安全上下文、Rust 评审、默认配置、供应链和变更审计 | 部分 Skill 可能安装扫描器、联网、运行构建或生成大量修复 | 推荐小集合；逐个审查和批准 |
-| <code>flutter/skills</code> | 官方 Flutter/Dart 设计与实现指导的小子集 | Flutter UI、Dart 结构、测试与迁移参考 | 偏新应用/happy path，不能覆盖 legacy GetX、FRB、MethodChannel 和 CloudSend Android 高权限状态机 | 只作参考，按任务选择 |
+| <code>flutter/skills</code> | 官方 Flutter/Dart 设计与实现指导的小子集 | Flutter UI、Dart 结构、测试与迁移参考 | 偏新应用/happy path，不能覆盖 legacy GetX、FRB、MethodChannel 和 Tunnel Android 高权限状态机 | 只作参考，按任务选择 |
 | <code>anasfik/FlutterGuard</code> | 正式 APK/AAB 产物安全门 | 发布产物、签名、配置和安全属性检查 | 当前没有正式产物且禁止 build；可能处理签名和敏感发布资产 | 暂缓，正式发布环境按需使用 |
 | <code>github/awesome-copilot</code> | GitHub Actions hardening/efficiency、runtime-upgrade、CodeQL | CI 工作流加固、升级规划、代码扫描 | 可能改 workflow、启用云扫描、升级运行时、提交配置；当前 Actions 只保留手动编排 | 按需，不安装整包 |
 
@@ -104,7 +104,7 @@ CloudSend 不适合批量安装通用 Skills。项目具有以下强约束：
 - 静态验证文档、路径、调用链和 diff；
 - 在正式环境结果返回后核对验收条件。
 
-CloudSend 改写：
+Tunnel 改写：
 
 - 当前阶段“verification”不等于必须本机 build/test；
 - 无正式环境时必须明确写出哪些只完成了静态验证；
@@ -136,7 +136,7 @@ CloudSend 改写：
 采用方式：
 
 - 先报告可操作问题，再给摘要；
-- 使用 CloudSend 风险等级；
+- 使用 Tunnel 风险等级；
 - 不因为发现问题就自动修复；
 - 不以通用最佳实践覆盖项目明确不变量。
 
@@ -153,7 +153,7 @@ CloudSend 改写：
 决定：
 
 - 不安装或启用完整工作流；
-- 只将四类方法转写为 CloudSend 专属 Skill 的检查清单；
+- 只将四类方法转写为 Tunnel 专属 Skill 的检查清单；
 - 项目规则优先，外部 Skill 不获得额外权限。
 
 ---
@@ -222,7 +222,7 @@ CloudSend 改写：
 
 ### 5.2 版本冲突
 
-候选技能可能以 Rust 1.96 和 edition 2024 为默认背景，而 CloudSend 明确是：
+候选技能可能以 Rust 1.96 和 edition 2024 为默认背景，而 Tunnel 明确是：
 
 - <code>rust-version = 1.75</code>
 - <code>edition = 2021</code>
@@ -250,7 +250,7 @@ CloudSend 改写：
 
 ## 6. trailofbits/skills
 
-Trail of Bits 候选与 CloudSend 的安全接管最相关，但也必须保持小集合。
+Trail of Bits 候选与 Tunnel 的安全接管最相关，但也必须保持小集合。
 
 ### 6.1 rust-review
 
@@ -266,7 +266,7 @@ Trail of Bits 候选与 CloudSend 的安全接管最相关，但也必须保持�
 
 - 只读评审默认；
 - findings 不自动转化为代码修改；
-- 结论必须区分 CloudSend 自定义代码与 vendored/upstream code；
+- 结论必须区分 Tunnel 自定义代码与 vendored/upstream code；
 - 必须受 Rust 1.75/edition 2021 限制。
 
 结论：推荐。
@@ -340,7 +340,7 @@ Trail of Bits 候选与 CloudSend 的安全接管最相关，但也必须保持�
 - GitHub Actions；
 - deploy scripts；
 - Codex/Claude rules；
-- CloudSend 专属 Skills；
+- Tunnel 专属 Skills；
 - 外部 MCP、hooks 和插件。
 
 重点：
@@ -361,7 +361,7 @@ Trail of Bits 候选与 CloudSend 的安全接管最相关，但也必须保持�
 - 在安全评审前生成资产、信任边界、入口和数据流；
 - 避免只扫单文件而忽略 Flutter/Rust/Kotlin/协议跨层关系。
 
-结论：推荐，可作为 <code>cloudsend-security-engineer</code> 的前置阶段。
+结论：推荐，可作为 <code>tunnel-security-engineer</code> 的前置阶段。
 
 ### 6.7 static-analysis
 
@@ -430,12 +430,12 @@ FlutterGuard 只适合作为正式发布环境中的 APK/AAB 产物安全门，�
 
 ### 7.4 Flutter 官方 Skills
 
-`flutter/skills` 更适合作为 Flutter/Dart 的通用设计、实现、迁移和测试参考。CloudSend 的实际边界包含 legacy GetX/Provider 混用、session/global ownership、FRB 1.x generated bridge、手写 C FFI、Android MethodChannel、多窗口和高权限 Android runtime，因此不能直接套用“新建标准 Flutter app”的默认架构。
+`flutter/skills` 更适合作为 Flutter/Dart 的通用设计、实现、迁移和测试参考。Tunnel 的实际边界包含 legacy GetX/Provider 混用、session/global ownership、FRB 1.x generated bridge、手写 C FFI、Android MethodChannel、多窗口和高权限 Android runtime，因此不能直接套用“新建标准 Flutter app”的默认架构。
 
 采用方式：
 
 - 只选择与当前 Dart/Flutter 基线兼容的单项指导。
-- 先由 `cloudsend-flutter-engineer` 对照 active route、state owner 和 bridge contract。
+- 先由 `tunnel-flutter-engineer` 对照 active route、state owner 和 bridge contract。
 - 不自动升级 Flutter/Dart/package、改 state framework、生成新项目或运行测试。
 - 对测试建议转成正式环境《编译验证需求》。
 
@@ -456,7 +456,7 @@ FlutterGuard 只适合作为正式发布环境中的 APK/AAB 产物安全门，�
 - 并发、超时和手动触发；
 - 避免不可信 fork 输入进入高权限 job。
 
-CloudSend 特殊边界：
+Tunnel 特殊边界：
 
 - 2026-06-25 曾删除大批 workflow，随后只保留手动 Actions 编排；
 - 不得由外部 Skill 自动恢复 scheduled、push 或 release trigger；
@@ -478,7 +478,7 @@ CloudSend 特殊边界：
 
 - 只生成升级计划和风险矩阵；
 - 不自动改版本号、edition、lockfile 或 workflow；
-- 不把上游最新版本直接当 CloudSend 目标；
+- 不把上游最新版本直接当 Tunnel 目标；
 - 必须在正式环境分阶段验证。
 
 结论：按需，当前不执行升级。
@@ -511,27 +511,27 @@ CloudSend 特殊边界：
 
 ---
 
-## 9. 与 CloudSend 专属 Skills 的关系
+## 9. 与 Tunnel 专属 Skills 的关系
 
 外部 Skills 只能作为下列项目 Skills 的辅助检查清单：
 
-| CloudSend Skill | 可引用外部能力 |
+| Tunnel Skill | 可引用外部能力 |
 |---|---|
-| <code>cloudsend-master</code> | writing-plans、verification-before-completion、differential-review |
-| <code>cloudsend-rust-engineer</code> | rust-review、unsafe/FFI、async、error、observability |
-| <code>cloudsend-android-engineer</code> | systematic-debugging、static-analysis、insecure-defaults |
-| <code>cloudsend-flutter-engineer</code> | systematic-debugging、Flutter 官方 Skills 小子集；正式产物阶段的 FlutterGuard |
-| <code>cloudsend-network-engineer</code> | audit-context-building、insecure-defaults、differential-review |
-| <code>cloudsend-api-engineer</code> | insecure-defaults、supply-chain-risk-auditor、observability |
-| <code>cloudsend-security-engineer</code> | Trail of Bits 白名单小集合、agentic-actions-auditor |
-| <code>cloudsend-release-engineer</code> | GitHub Actions hardening/efficiency、runtime-upgrade、CodeQL、FlutterGuard |
+| <code>tunnel-master</code> | writing-plans、verification-before-completion、differential-review |
+| <code>tunnel-rust-engineer</code> | rust-review、unsafe/FFI、async、error、observability |
+| <code>tunnel-android-engineer</code> | systematic-debugging、static-analysis、insecure-defaults |
+| <code>tunnel-flutter-engineer</code> | systematic-debugging、Flutter 官方 Skills 小子集；正式产物阶段的 FlutterGuard |
+| <code>tunnel-network-engineer</code> | audit-context-building、insecure-defaults、differential-review |
+| <code>tunnel-api-engineer</code> | insecure-defaults、supply-chain-risk-auditor、observability |
+| <code>tunnel-security-engineer</code> | Trail of Bits 白名单小集合、agentic-actions-auditor |
+| <code>tunnel-release-engineer</code> | GitHub Actions hardening/efficiency、runtime-upgrade、CodeQL、FlutterGuard |
 
 优先级：
 
 1. 用户当前明确指令；
 2. 仓库 <code>AGENTS.md</code>；
 3. <code>.codex/AI_RULES.md</code>；
-4. CloudSend 专属 Skill；
+4. Tunnel 专属 Skill；
 5. 外部 Skill。
 
 外部 Skill 不能反向修改此优先级。
@@ -576,7 +576,7 @@ CloudSend 特殊边界：
 - insecure-defaults
 - agentic-actions-auditor
 
-原因：直接对应 CloudSend 当前的 FFI、默认凭据、部署脚本、AI 规则和跨层风险，同时可以只读使用。
+原因：直接对应 Tunnel 当前的 FFI、默认凭据、部署脚本、AI 规则和跨层风险，同时可以只读使用。
 
 ### 第二优先级：工程纪律
 
@@ -620,7 +620,7 @@ CloudSend 特殊边界：
 - 不安装任何候选 Skill。
 - 不批量安装任何仓库。
 - 不执行候选仓库中的脚本、hooks、MCP 或 workflow。
-- 不修改现有 CloudSend Skills、<code>AI_RULES</code>、依赖或工具链。
+- 不修改现有 Tunnel Skills、<code>AI_RULES</code>、依赖或工具链。
 - 不执行 build、test、Git 写操作、worktree、上传或发布。
 - 仅将本报告作为未来 owner 审批和固定 revision 审计的依据。
 

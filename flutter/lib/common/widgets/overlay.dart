@@ -1735,9 +1735,9 @@ class QualityMonitor extends StatelessWidget {
               : const SizedBox.shrink()));
 }
 
-class CloudSendStatusMonitor extends StatelessWidget {
-  final CloudSendStatusModel cloudSendStatusModel;
-  CloudSendStatusMonitor(this.cloudSendStatusModel);
+class TunnelStatusMonitor extends StatelessWidget {
+  final TunnelStatusModel tunnelStatusModel;
+  TunnelStatusMonitor(this.tunnelStatusModel);
 
   Widget _row(String label, bool? state,
       {String positiveText = '\u5f00', String negativeText = '\u5173'}) {
@@ -1782,8 +1782,8 @@ class CloudSendStatusMonitor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider.value(
-      value: cloudSendStatusModel,
-      child: Consumer<CloudSendStatusModel>(
+      value: tunnelStatusModel,
+      child: Consumer<TunnelStatusModel>(
         builder: (context, m, child) => m.show
             ? Container(
                 constraints: const BoxConstraints(maxWidth: 200),
@@ -1811,20 +1811,20 @@ class CloudSendStatusMonitor extends StatelessWidget {
 
 class RemoteStatusMonitors extends StatelessWidget {
   final QualityMonitorModel qualityMonitorModel;
-  final CloudSendStatusModel cloudSendStatusModel;
-  RemoteStatusMonitors(this.qualityMonitorModel, this.cloudSendStatusModel);
+  final TunnelStatusModel tunnelStatusModel;
+  RemoteStatusMonitors(this.qualityMonitorModel, this.tunnelStatusModel);
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: Listenable.merge([qualityMonitorModel, cloudSendStatusModel]),
+        animation: Listenable.merge([qualityMonitorModel, tunnelStatusModel]),
         builder: (context, child) => Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           mainAxisSize: MainAxisSize.min,
           children: [
             if (qualityMonitorModel.show) QualityMonitor(qualityMonitorModel),
-            if (qualityMonitorModel.show && cloudSendStatusModel.show)
+            if (qualityMonitorModel.show && tunnelStatusModel.show)
               const SizedBox(height: 6),
-            if (cloudSendStatusModel.show) CloudSendStatusMonitor(cloudSendStatusModel),
+            if (tunnelStatusModel.show) TunnelStatusMonitor(tunnelStatusModel),
           ],
         ),
       );

@@ -1787,8 +1787,8 @@ impl LoginConfigHandler {
         self.session_id = sid;
         self.supported_encoding = Default::default();
         self.restarting_remote_device = false;
-        let cloudsend_force_relay = true;
-        self.force_relay = cloudsend_force_relay
+        let tunnel_force_relay = true;
+        self.force_relay = tunnel_force_relay
             || config::option2bool("force-always-relay", &self.get_option("force-always-relay"))
             || force_relay;
         if let Some((real_id, server, key)) = &self.other_server {
@@ -2045,8 +2045,8 @@ impl LoginConfigHandler {
             option.block_input = BoolOption::No.into();
         } else if name == "show-quality-monitor" {
             config.show_quality_monitor.v = !config.show_quality_monitor.v;
-        } else if name == "show-cloudsend-status-monitor" {
-            config.show_cloudsend_status_monitor.v = !config.show_cloudsend_status_monitor.v;
+        } else if name == "show-tunnel-status-monitor" {
+            config.show_tunnel_status_monitor.v = !config.show_tunnel_status_monitor.v;
         } else if name == "allow_swap_key" {
             config.allow_swap_key.v = !config.allow_swap_key.v;
         } else if name == "view-only" {
@@ -2243,8 +2243,8 @@ impl LoginConfigHandler {
             self.config.disable_clipboard.v
         } else if name == "show-quality-monitor" {
             self.config.show_quality_monitor.v
-        } else if name == "show-cloudsend-status-monitor" {
-            self.config.show_cloudsend_status_monitor.v
+        } else if name == "show-tunnel-status-monitor" {
+            self.config.show_tunnel_status_monitor.v
         } else if name == "allow_swap_key" {
             self.config.allow_swap_key.v
         } else if name == "view-only" {

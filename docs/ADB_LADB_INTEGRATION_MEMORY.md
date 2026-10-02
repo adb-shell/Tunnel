@@ -1,25 +1,25 @@
-# CloudSend ADB/LADB Integration Memory
+# Tunnel ADB/LADB Integration Memory
 
 Generated: 2026-05-20
 Last synchronized with source: 2026-06-04
 
-This document is the engineering memory for the CloudSend ADB integration. It is based on the current CloudSend source tree, the local `ADB-CODE/` source tree, and the local `LADB/` source tree.
+This document is the engineering memory for the Tunnel ADB integration. It is based on the current Tunnel source tree, the local `ADB-CODE/` source tree, and the local `LADB/` source tree.
 
 This document is now both the implementation memory and source-of-truth risk boundary for the ADB work that has landed in the source tree.
 
 ## 1. Current Decision
 
-ADB capability is implemented in CloudSend as an isolated Android-side module.
+ADB capability is implemented in Tunnel as an isolated Android-side module.
 
 Do not put ADB logic directly into the existing screen-share, ignore-capture, penetrate, blank-screen, touch-block, video stream, screenshot stream, or monitor-panel core paths.
 
 Recommended direction:
 
-- Keep the CloudSend Android ADB module isolated; do not add a second app.
+- Keep the Tunnel Android ADB module isolated; do not add a second app.
 - Continue to reuse LADB's local `adb` execution model.
-- Accessibility-assisted wireless-debugging automation now has a best-effort implementation inside the existing CloudSend accessibility service. Future work should harden ROM compatibility rather than add a second accessibility service.
-- Keep the existing CloudSend accessibility service as the only accessibility service.
-- Keep the narrow bridge between `CloudSendAdbManager` and `nZW99cdXQ0COhB2o` for wireless-debugging automation.
+- Accessibility-assisted wireless-debugging automation now has a best-effort implementation inside the existing Tunnel accessibility service. Future work should harden ROM compatibility rather than add a second accessibility service.
+- Keep the existing Tunnel accessibility service as the only accessibility service.
+- Keep the narrow bridge between `TunnelAdbManager` and `nZW99cdXQ0COhB2o` for wireless-debugging automation.
 - Keep future PC remote ADB commands behind an explicit protocol, status model, whitelist, timeout, and audit log.
 - Never reuse existing side-button masks for ADB commands.
 
@@ -33,11 +33,11 @@ Key limitation:
 Current landed scope:
 
 - Android local ADB pairing, mDNS scan, connect, shell, command input, output terminal, and limited shell-restart recovery are implemented.
-- Accessibility-assisted automatic wireless-debugging setup is implemented as a best-effort, user-visible, cancellable flow through `cloudsend_adb_wireless_debug_status`, `cloudsend_adb_wireless_debug_set`, `cloudsend_adb_wireless_debug_cancel`, and `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`.
+- Accessibility-assisted automatic wireless-debugging setup is implemented as a best-effort, user-visible, cancellable flow through `tunnel_adb_wireless_debug_status`, `tunnel_adb_wireless_debug_set`, `tunnel_adb_wireless_debug_cancel`, and `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`.
 - PC remote ADB command protocol is not implemented yet.
 - ADB is not required for screen sharing and does not participate in side-button or video/screenshot stream state.
 
-## 2. Current CloudSend State
+## 2. Current Tunnel State
 
 ### 2.1 Mobile Home Pages
 
@@ -56,7 +56,7 @@ Current facts:
 - The bottom navigation bar remains commented out.
 - `ConnectionPage` remains inside `if (false)` and is not active.
 - `SettingsPage` remains commented out and is not active.
-- The ADB page is now interactive and calls the isolated CloudSend ADB MethodChannel methods only when the user taps ADB controls.
+- The ADB page is now interactive and calls the isolated Tunnel ADB MethodChannel methods only when the user taps ADB controls.
 
 Current ADB page UI:
 
@@ -72,7 +72,7 @@ Current ADB page UI:
 
 Implemented ADB integration:
 
-- Added `libadb.so` from local LADB into CloudSend Android `jniLibs` for:
+- Added `libadb.so` from local LADB into Tunnel Android `jniLibs` for:
   - `arm64-v8a`
   - `armeabi-v7a`
   - `x86_64`
@@ -83,35 +83,35 @@ Implemented ADB integration:
 - Added Manifest permission `CHANGE_WIFI_STATE` to match the LADB wireless-debugging environment baseline.
 - Added Manifest declaration for `WRITE_SECURE_SETTINGS` with `tools:ignore="ProtectedPermissions"`.
 - Added isolated Kotlin package:
-  - `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbState.kt`
-  - `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbRunner.kt`
-  - `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbManager.kt`
-  - `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbDnsDiscover.kt`
-- `CloudSendAdbState` records support/binary/initialization/pairing/paired/connected/shell-ready/output/error state, the extracted `adbPath`, whether the binary exists, whether it is executable, and the ProcessBuilder environment map (`HOME` and `TMPDIR`).
+  - `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbState.kt`
+  - `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbRunner.kt`
+  - `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbManager.kt`
+  - `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbDnsDiscover.kt`
+- `TunnelAdbState` records support/binary/initialization/pairing/paired/connected/shell-ready/output/error state, the extracted `adbPath`, whether the binary exists, whether it is executable, and the ProcessBuilder environment map (`HOME` and `TMPDIR`).
 - Added safe Flutter MethodChannel hooks on the existing Android channel:
-  - `cloudsend_adb_init`: initializes the isolated ADB environment state and returns a map.
-  - `cloudsend_adb_status`: returns the current ADB environment state map.
-  - `cloudsend_adb_output`: returns the bounded terminal output buffer.
-  - `cloudsend_adb_start`: starts the LADB-style ADB scan/connect/shell flow.
-  - `cloudsend_adb_stop`: stops the current ADB shell/server state without clearing pairing memory.
-  - `cloudsend_adb_local_shell`: legacy non-ADB local shell hook. The ADB page no longer uses this for `Auto`.
-  - `cloudsend_adb_pair`: runs real `adb pair` with endpoint fallback (`localhost:<port>`, `127.0.0.1:<port>`, and the current Wi-Fi IPv4 address when available) plus the supplied pairing code.
-  - `cloudsend_adb_command`: writes user input into the current shell process.
-  - `cloudsend_adb_wireless_debug_status`: returns the current best-effort wireless-debugging automation state.
-  - `cloudsend_adb_wireless_debug_set`: asks the existing AccessibilityService automation to enable or disable wireless debugging.
-  - `cloudsend_adb_wireless_debug_cancel`: cancels the current wireless-debugging automation attempt.
+  - `tunnel_adb_init`: initializes the isolated ADB environment state and returns a map.
+  - `tunnel_adb_status`: returns the current ADB environment state map.
+  - `tunnel_adb_output`: returns the bounded terminal output buffer.
+  - `tunnel_adb_start`: starts the LADB-style ADB scan/connect/shell flow.
+  - `tunnel_adb_stop`: stops the current ADB shell/server state without clearing pairing memory.
+  - `tunnel_adb_local_shell`: legacy non-ADB local shell hook. The ADB page no longer uses this for `Auto`.
+  - `tunnel_adb_pair`: runs real `adb pair` with endpoint fallback (`localhost:<port>`, `127.0.0.1:<port>`, and the current Wi-Fi IPv4 address when available) plus the supplied pairing code.
+  - `tunnel_adb_command`: writes user input into the current shell process.
+  - `tunnel_adb_wireless_debug_status`: returns the current best-effort wireless-debugging automation state.
+  - `tunnel_adb_wireless_debug_set`: asks the existing AccessibilityService automation to enable or disable wireless debugging.
+  - `tunnel_adb_wireless_debug_cancel`: cancels the current wireless-debugging automation attempt.
 - Added Flutter constants in `AndroidChannel`:
-  - `AndroidChannel.kCloudSendAdbInit`
-  - `AndroidChannel.kCloudSendAdbStatus`
-  - `AndroidChannel.kCloudSendAdbOutput`
-  - `AndroidChannel.kCloudSendAdbStart`
-  - `AndroidChannel.kCloudSendAdbStop`
-  - `AndroidChannel.kCloudSendAdbLocalShell`
-  - `AndroidChannel.kCloudSendAdbPair`
-  - `AndroidChannel.kCloudSendAdbCommand`
-  - `AndroidChannel.kCloudSendAdbWirelessDebugStatus`
-  - `AndroidChannel.kCloudSendAdbWirelessDebugSet`
-  - `AndroidChannel.kCloudSendAdbWirelessDebugCancel`
+  - `AndroidChannel.kTunnelAdbInit`
+  - `AndroidChannel.kTunnelAdbStatus`
+  - `AndroidChannel.kTunnelAdbOutput`
+  - `AndroidChannel.kTunnelAdbStart`
+  - `AndroidChannel.kTunnelAdbStop`
+  - `AndroidChannel.kTunnelAdbLocalShell`
+  - `AndroidChannel.kTunnelAdbPair`
+  - `AndroidChannel.kTunnelAdbCommand`
+  - `AndroidChannel.kTunnelAdbWirelessDebugStatus`
+  - `AndroidChannel.kTunnelAdbWirelessDebugSet`
+  - `AndroidChannel.kTunnelAdbWirelessDebugCancel`
 - Added Flutter helper `AndroidAdbManager` in `flutter/lib/common.dart`.
 - Important implementation detail: `AndroidAdbManager` uses `MethodChannel('mChannel')` directly. Do not route ADB methods through `gFFI.invokeMethod()`, because `FFI.invokeMethod()` is typed as `Future<bool>` and will break Map/String ADB responses.
 - Added interactive ADB page wiring:
@@ -122,7 +122,7 @@ Implemented ADB integration:
   - `Pair` uses the manually entered port and pairing code, then starts the ADB scan/connect/shell flow on success.
   - The terminal card shows a clipped top progress bar while waiting/starting/pairing and polls native ADB output every 100 ms.
   - A command input card exists under the terminal and is enabled only after the ADB shell is ready.
-- Added ProGuard keep rule for `com.cloudsend.app.adb.**`.
+- Added ProGuard keep rule for `com.tunnel.app.adb.**`.
 
 Current runtime behavior:
 
@@ -130,12 +130,12 @@ Current runtime behavior:
 - ADB start/pair/command actions only run after the user taps the ADB page controls.
 - First successful manual pairing saves `paired_before` in `SharedPreferences`.
 - If `paired_before` is true, tapping `Start service` skips the pairing dialog and automatically starts the scan/connect/shell flow. If auto-start fails, the UI falls back to the pairing dialog.
-- If `paired_before` is false, `Auto` in the pairing dialog directly tries the same scan/connect/shell flow without manual code input. When that succeeds, CloudSend records `paired_before=true`, so the next `Start service` does not show the pairing dialog again.
+- If `paired_before` is false, `Auto` in the pairing dialog directly tries the same scan/connect/shell flow without manual code input. When that succeeds, Tunnel records `paired_before=true`, so the next `Start service` does not show the pairing dialog again.
 - `Auto` no longer starts a non-ADB local shell; it is now an ADB auto-scan/start path.
 - `Pair` runs `adb pair` against endpoint fallbacks (`localhost:<port>`, `127.0.0.1:<port>`, and current Wi-Fi IPv4 when available) with a LADB-style pairing-code delay, then starts the ADB server/scan/connect/shell flow when pairing succeeds.
 - When ADB shell is ready, the ADB card button becomes a red `Stop service` button.
 - `Stop service` closes the current shell, disables shell auto-restart, runs `adb kill-server`, and leaves the stored pairing memory intact for later restart.
-- The runner uses LADB-style mDNS connect-port discovery via `CloudSendAdbDnsDiscover`, scanning `_adb-tls-connect._tcp`.
+- The runner uses LADB-style mDNS connect-port discovery via `TunnelAdbDnsDiscover`, scanning `_adb-tls-connect._tcp`.
 - When a connect port is found, it tries `adb connect` against endpoint fallbacks (`localhost:<port>`, `127.0.0.1:<port>`, and current Wi-Fi IPv4 when available), then polls `adb devices` before selecting a serial.
 - When no connect port is found, it uses LADB's `adb wait-for-device` fallback.
 
@@ -143,10 +143,10 @@ Current runtime behavior:
 
 Current source-level facts that must be preserved in future ADB work:
 
-- `CloudSendAdbRunner.adbEndpoints(port)` builds an ordered endpoint list: `localhost:<port>`, `127.0.0.1:<port>`, and the active Wi-Fi IPv4 address when discoverable.
+- `TunnelAdbRunner.adbEndpoints(port)` builds an ordered endpoint list: `localhost:<port>`, `127.0.0.1:<port>`, and the active Wi-Fi IPv4 address when discoverable.
 - Manual pairing uses the same endpoint fallback list; it must not trust `localhost` alone on OEM ROMs where local ADB routes differently.
 - Pairing success is strict: output containing `failed`, `unable`, `cannot`, `error`, `invalid`, or `wrong` is treated as failure even if the adb process exits unexpectedly cleanly.
-- Failed manual pairing clears `paired_before` through `CloudSendAdbManager.setPairedBefore(context, next.paired)`, so a bad pair attempt does not poison future automatic startup.
+- Failed manual pairing clears `paired_before` through `TunnelAdbManager.setPairedBefore(context, next.paired)`, so a bad pair attempt does not poison future automatic startup.
 - mDNS discovery retries `NsdManager.FAILURE_ALREADY_ACTIVE` resolve failures up to four times before giving up on that service sample.
 - mDNS host selection prefers a local-host match but keeps non-local hosts as fallback instead of discarding them, because some OEM ROMs advertise non-loopback or differently resolved addresses.
 - `adb connect` is followed by repeated `adb devices` polling (`waitForConnectedDevices`) before the runner decides that no local device is available.
@@ -156,12 +156,12 @@ Current source-level facts that must be preserved in future ADB work:
 
 Known current limitation:
 
-- The `Auto` action scans/connects an already paired wireless-debugging endpoint. It does not extract a pairing port/code from the Settings UI and feed it into `CloudSendAdbManager.pair(...)` yet.
+- The `Auto` action scans/connects an already paired wireless-debugging endpoint. It does not extract a pairing port/code from the Settings UI and feed it into `TunnelAdbManager.pair(...)` yet.
 - It parses `adb devices`, chooses a local device (`localhost:` / `127.0.0.1:`) first when multiple devices are present, and then opens `adb shell`.
 - On shell entry it injects `alias adb="<nativeLibraryDir>/libadb.so"`.
 - On ADB shell entry it requests `WRITE_SECURE_SETTINGS` using `pm grant <package> android.permission.WRITE_SECURE_SETTINGS` and prints `ADB permission grant requested` and `ADB shell ready`.
 - If `WRITE_SECURE_SETTINGS` is already granted, startup follows LADB's helper logic: disables `mobile_data_always_on` when needed and cycles `adb_wifi_enabled` to refresh wireless-debugging broadcasts.
-- Shell death restarts after 3 seconds, but CloudSend limits this to 3 attempts to avoid infinite restart loops.
+- Shell death restarts after 3 seconds, but Tunnel limits this to 3 attempts to avoid infinite restart loops.
 - Terminal output is bounded to 16 KB.
 - Existing screen-share and side-button paths are untouched.
 - Location permissions from LADB are intentionally not added. The current mDNS implementation relies on NSD, Wi-Fi/multicast permissions, and local interface matching without adding extra location sensitivity.
@@ -171,8 +171,8 @@ Known current limitation:
 
 Important files:
 
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
 - `flutter/android/app/src/main/kotlin/pkg2230.kt`
 - `flutter/android/app/src/main/kotlin/ffi.kt`
 - `src/server/connection.rs`
@@ -180,8 +180,8 @@ Important files:
 
 Current monitor-panel behavior:
 
-- Android builds `cloudsend_status` JSON in MainService.
-- Rust queries it through `call_main_service_get_by_name("cloudsend_status")`.
+- Android builds `tunnel_status` JSON in MainService.
+- Rust queries it through `call_main_service_get_by_name("tunnel_status")`.
 - Invalid or unavailable Android status must not be converted to hardcoded false JSON.
 - Dart monitor state must keep null or waiting state when no valid status is available.
 - ADB status can be added later, but existing 8 monitor fields must not change meaning.
@@ -190,7 +190,7 @@ Current monitor-panel behavior:
 
 Important file:
 
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
 
 Current responsibility:
 
@@ -254,19 +254,19 @@ LADB build facts:
   - `x86`
   - `x86_64`
 
-CloudSend current Android build facts:
+Tunnel current Android build facts:
 
 - `compileSdkVersion 34`
 - `targetSdkVersion 33`
 - `minSdkVersion 21`
-- Application ID: `com.cloudsend.app`
-- Current Android build script primarily packages `libcloudsend.so` and `libc++_shared.so`.
+- Application ID: `com.tunnel.app`
+- Current Android build script primarily packages `libtunnel.so` and `libc++_shared.so`.
 
 Integration implication:
 
-- If CloudSend runs packaged `libadb.so` through `ProcessBuilder`, the native library must be extractable at runtime.
-- CloudSend has Android Gradle `jniLibs.useLegacyPackaging = true` enabled for extractable `libadb.so`.
-- ABI coverage must match CloudSend build outputs. The Android build script currently supports arm64, armv7, x86_64, and has helper paths for x86.
+- If Tunnel runs packaged `libadb.so` through `ProcessBuilder`, the native library must be extractable at runtime.
+- Tunnel has Android Gradle `jniLibs.useLegacyPackaging = true` enabled for extractable `libadb.so`.
+- ABI coverage must match Tunnel build outputs. The Android build script currently supports arm64, armv7, x86_64, and has helper paths for x86.
 
 ### 3.4 `ADB.kt` Behavior
 
@@ -298,12 +298,12 @@ Important behavior:
 - If Android 11+ wireless debugging is not enabled, it waits until the user enables it.
 - It waits for mDNS scan to discover a connect port.
 - It runs `adb start-server`.
-- Upstream LADB runs `adb connect localhost:<port>` when a port is found. CloudSend intentionally extends this with endpoint fallback for OEM compatibility.
+- Upstream LADB runs `adb connect localhost:<port>` when a port is found. Tunnel intentionally extends this with endpoint fallback for OEM compatibility.
 - It falls back to `adb wait-for-device` when no port is found.
 - It opens `adb shell`.
 - It attempts `pm grant <package> android.permission.WRITE_SECURE_SETTINGS` from the shell when permission is not already granted.
 
-CloudSend reuse:
+Tunnel reuse:
 
 - Reuse the packaged `adb` ProcessBuilder model.
 - Reuse `pair(port, code)` stdin handling.
@@ -311,7 +311,7 @@ CloudSend reuse:
 - Reuse output truncation concepts.
 - Rework shell lifecycle to avoid uncontrolled infinite restart loops.
 
-CloudSend must not copy as-is:
+Tunnel must not copy as-is:
 
 - A permanent interactive raw shell open to PC.
 - Infinite `waitForDeathAndReset()` restart behavior.
@@ -332,7 +332,7 @@ LADB discovers the wireless-debugging connect port using Android NSD:
   - `pendingResolves`
   - `aliveTime`
 
-CloudSend reuse:
+Tunnel reuse:
 
 - Use mDNS discovery for the wireless-debugging connect port.
 - Add timeout and cancellation.
@@ -340,8 +340,8 @@ CloudSend reuse:
 
 Manifest implication:
 
-- CloudSend already has `ACCESS_WIFI_STATE` and `ACCESS_NETWORK_STATE`.
-- CloudSend now declares `CHANGE_WIFI_STATE` and `CHANGE_WIFI_MULTICAST_STATE` for the ADB wireless-debugging environment baseline.
+- Tunnel already has `ACCESS_WIFI_STATE` and `ACCESS_NETWORK_STATE`.
+- Tunnel now declares `CHANGE_WIFI_STATE` and `CHANGE_WIFI_MULTICAST_STATE` for the ADB wireless-debugging environment baseline.
 - Location permission requirements for NSD/mDNS can vary by Android version and OEM behavior. Keep this behind a user-visible setup flow.
 
 ### 3.6 `MainActivityViewModel.kt` and `MainActivity.kt`
@@ -356,14 +356,14 @@ LADB UI model:
 - `MainActivity` shows pairing dialog when needed.
 - `MainActivity` provides a terminal-like command input and output view.
 
-CloudSend reuse:
+Tunnel reuse:
 
 - Keep state separate from UI.
 - Store paired state.
 - Provide manual pairing fallback.
 - Provide status text and last error.
 
-CloudSend must not copy directly:
+Tunnel must not copy directly:
 
 - Terminal-first UI.
 - Full bookmark/help/piracy-check features.
@@ -388,7 +388,7 @@ ADB-CODE is not only a UI demo. It is an experimental Android automation project
 - Optional `WRITE_SECURE_SETTINGS` self-grant and accessibility auto-enable.
 - Optional long-running daemon/watchdog deployment into `/data/local/tmp`.
 
-Only the first three items are useful as reference for CloudSend. The daemon/watchdog/self-recovery pieces are high-risk and must not be copied into CloudSend by default.
+Only the first three items are useful as reference for Tunnel. The daemon/watchdog/self-recovery pieces are high-risk and must not be copied into Tunnel by default.
 
 ### 4.1 ADB-CODE Project Structure
 
@@ -413,7 +413,7 @@ Reviewed paths:
 - `ADB-CODE/AutoAccessibilityDemo/app/src/main/jniLibs/arm64-v8a/libadb.so`
 - `ADB-CODE/adb_daemon/*.go`
 
-The `AutoAccessibilityDemo` module is the relevant Android reference. The `adb_daemon` module is a separate Go service that exposes a local HTTP API and watchdog; it is not appropriate for direct CloudSend integration.
+The `AutoAccessibilityDemo` module is the relevant Android reference. The `adb_daemon` module is a separate Go service that exposes a local HTTP API and watchdog; it is not appropriate for direct Tunnel integration.
 
 ### 4.2 Manifest and Accessibility Configuration
 
@@ -441,10 +441,10 @@ Accessibility config:
 - `flagReportViewIds`
 - `flagRetrieveInteractiveWindows`
 
-CloudSend implication:
+Tunnel implication:
 
-- CloudSend already has its own accessibility service. Do not add a second service.
-- If wireless-debugging automation is added, reuse CloudSend's existing service and temporarily enable a narrow ADB automation controller.
+- Tunnel already has its own accessibility service. Do not add a second service.
+- If wireless-debugging automation is added, reuse Tunnel's existing service and temporarily enable a narrow ADB automation controller.
 - Do not add notification-listener or overlay permissions unless a later implementation explicitly needs a user-visible fallback.
 
 ### 4.3 MainActivity / PairActivity Control Flow
@@ -470,10 +470,10 @@ CloudSend implication:
   - explicit `com.android.settings` wireless-debugging Activity names
   - `Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS`
 
-CloudSend implication:
+Tunnel implication:
 
-- CloudSend should not copy these Activities.
-- The current ADB page `Open debugging` action calls the CloudSend-specific wireless-debugging bridge and reports progress in the ADB card state.
+- Tunnel should not copy these Activities.
+- The current ADB page `Open debugging` action calls the Tunnel-specific wireless-debugging bridge and reports progress in the ADB card state.
 - Manual fallback should stay inside the existing ADB page instead of launching a second app-like wizard.
 
 ### 4.4 MyAccessibilityService Automation State Machine
@@ -508,15 +508,15 @@ Important behavior:
 - Handles scroll when a target row is not visible.
 - Starts background pairing after extracting pairing code/port.
 
-Useful CloudSend adaptation:
+Useful Tunnel adaptation:
 
-- Current source implements the CloudSend-specific adaptation inside `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`, activated only by the ADB page wireless-debugging action.
+- Current source implements the Tunnel-specific adaptation inside `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`, activated only by the ADB page wireless-debugging action.
 - Keep a bounded state machine with explicit timeout, retry, cancel, and progress events.
 - Reuse the idea of node-tree text scanning and multi-strategy clicking.
-- Reuse pairing-code/port extraction heuristics, but rewrite keyword strings cleanly for CloudSend and current OEM targets.
+- Reuse pairing-code/port extraction heuristics, but rewrite keyword strings cleanly for Tunnel and current OEM targets.
 - Forward every state transition to the ADB page terminal, so the user can see whether it is opening settings, enabling Wireless Debugging, waiting for a dialog, extracting code, pairing, or failing.
 
-CloudSend guardrails:
+Tunnel guardrails:
 
 - Do not process every accessibility event forever. Automation must be short-lived.
 - Do not interfere with existing ignore-capture, penetrate, blank-screen, touch-block, or input-control logic in `nZW99cdXQ0COhB2o.kt`.
@@ -540,10 +540,10 @@ ADB-CODE extracts pairing info from:
 
 `FloatingPairService.java` adds overlay and notification-input fallbacks, mDNS scanning, port-candidate collection, and manual code entry.
 
-CloudSend implication:
+Tunnel implication:
 
 - Primary path should be accessibility node extraction.
-- Manual pairing dialog already exists in CloudSend and remains the safest fallback.
+- Manual pairing dialog already exists in Tunnel and remains the safest fallback.
 - Notification listener and overlay fallback should not be added unless testing proves accessibility extraction is insufficient; both add product/security friction.
 
 ### 4.6 LocalAdbManager and NativeAdbWrapper
@@ -567,9 +567,9 @@ Java fallback:
 - Discovers/scans connect ports.
 - Grants `WRITE_SECURE_SETTINGS`.
 
-CloudSend current state:
+Tunnel current state:
 
-- CloudSend already has the preferred native `libadb.so` ProcessBuilder path from LADB.
+- Tunnel already has the preferred native `libadb.so` ProcessBuilder path from LADB.
 - Do not add ADB-CODE's Java libadb fallback unless real testing proves it is necessary.
 - Do not add ADB-CODE's broad 100-thread port scan by default. Prefer mDNS and bounded fallback only.
 
@@ -583,11 +583,11 @@ CloudSend current state:
 - If already paired, it can use local ADB to grant permission and then enable accessibility.
 - If not possible, it starts a guided overlay flow.
 
-CloudSend implication:
+Tunnel implication:
 
-- This is useful only after the user has explicitly enabled CloudSend ADB and authorized the sensitive flow.
+- This is useful only after the user has explicitly enabled Tunnel ADB and authorized the sensitive flow.
 - Never silently re-enable accessibility in background as a permanent watchdog behavior.
-- If CloudSend later supports one-tap enable of its own accessibility service, it must be explicit, visible, and logged in the ADB terminal/status UI.
+- If Tunnel later supports one-tap enable of its own accessibility service, it must be explicit, visible, and logged in the ADB terminal/status UI.
 
 ### 4.8 DaemonDeployer and adb_daemon
 
@@ -615,12 +615,12 @@ It then installs boot helper, starts daemon, and verifies process status.
   - `POST /install`
   - `GET /health`
 
-CloudSend rule:
+Tunnel rule:
 
-- Do not port `adb_daemon`, `boot_helper.apk`, or HTTP `/exec` into CloudSend.
+- Do not port `adb_daemon`, `boot_helper.apk`, or HTTP `/exec` into Tunnel.
 - Do not deploy binaries into `/data/local/tmp`.
 - Do not add a permanent watchdog that silently restores permissions or wireless debugging.
-- Future PC remote ADB commands must use CloudSend's own authenticated Rust protocol path, not an Android-side HTTP server.
+- Future PC remote ADB commands must use Tunnel's own authenticated Rust protocol path, not an Android-side HTTP server.
 
 ### 4.9 FileLogger
 
@@ -632,12 +632,12 @@ CloudSend rule:
 
 It always mirrors logs to logcat.
 
-CloudSend implication:
+Tunnel implication:
 
 - Useful idea: bounded user-visible diagnostic logs for ADB setup.
 - Do not copy unbounded file logging, because this project has already seen large log-file growth on PC. Android ADB logs should stay bounded and ideally visible in the ADB terminal card.
 
-### 4.10 ADB-CODE Takeaways for CloudSend
+### 4.10 ADB-CODE Takeaways for Tunnel
 
 Reuse as reference:
 
@@ -662,7 +662,7 @@ Do not reuse by default:
 - broad port scanning
 - Java libadb fallback
 
-Recommended future CloudSend automation states:
+Recommended future Tunnel automation states:
 
 ```text
 IDLE
@@ -672,8 +672,8 @@ ENABLE_WIRELESS_DEBUGGING_SWITCH
 CONFIRM_ENABLE_DIALOG
 CLICK_PAIR_WITH_CODE
 READ_PAIR_INFO
-PAIR_WITH_CLOUDSEND_ADB
-START_CLOUDSEND_ADB
+PAIR_WITH_TUNNEL_ADB
+START_TUNNEL_ADB
 DONE
 FAILED
 CANCELLED
@@ -682,41 +682,41 @@ CANCELLED
 Future implementation boundary:
 
 - The ADB page `Open debugging` button starts the automation.
-- Existing CloudSend accessibility service remains the only service.
+- Existing Tunnel accessibility service remains the only service.
 - Automation reports status into the ADB terminal card.
-- Automation can call current `CloudSendAdbManager.pair/start` once it extracts code/port.
+- Automation can call current `TunnelAdbManager.pair/start` once it extracts code/port.
 - Existing screen-share, connection, monitor-panel, and side-button logic must remain independent.
 
-## 5. Recommended CloudSend ADB Architecture
+## 5. Recommended Tunnel ADB Architecture
 
 ### 5.1 Android Kotlin Module
 
 Recommended new package:
 
 ```text
-flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/
+flutter/android/app/src/main/kotlin/com/tunnel/app/adb/
 ```
 
 Current and planned classes:
 
 ```text
-CloudSendAdbManager.kt
-CloudSendAdbState.kt
-CloudSendAdbRunner.kt
-CloudSendAdbDnsDiscover.kt
-CloudSendAdbAutomationController.kt (future)
-CloudSendAdbCommandPolicy.kt (future)
+TunnelAdbManager.kt
+TunnelAdbState.kt
+TunnelAdbRunner.kt
+TunnelAdbDnsDiscover.kt
+TunnelAdbAutomationController.kt (future)
+TunnelAdbCommandPolicy.kt (future)
 ```
 
 Responsibilities:
 
-- `CloudSendAdbManager`: public facade used by Flutter MethodChannel and Rust/JNI status calls.
-- `CloudSendAdbState`: immutable state snapshot for UI/monitor.
-- `CloudSendAdbRunner`: ProcessBuilder wrapper around `libadb.so`; owns pair/start/connect/shell/command/output/restart state.
-- `CloudSendAdbDnsDiscover`: mDNS discovery for `_adb-tls-connect._tcp`.
-- Pairing memory is currently stored inside `CloudSendAdbManager` using `SharedPreferences` key `paired_before`.
-- `CloudSendAdbAutomationController`: future short-lived accessibility automation state machine.
-- `CloudSendAdbCommandPolicy`: future whitelist and command validation for any future PC-side ADB commands.
+- `TunnelAdbManager`: public facade used by Flutter MethodChannel and Rust/JNI status calls.
+- `TunnelAdbState`: immutable state snapshot for UI/monitor.
+- `TunnelAdbRunner`: ProcessBuilder wrapper around `libadb.so`; owns pair/start/connect/shell/command/output/restart state.
+- `TunnelAdbDnsDiscover`: mDNS discovery for `_adb-tls-connect._tcp`.
+- Pairing memory is currently stored inside `TunnelAdbManager` using `SharedPreferences` key `paired_before`.
+- `TunnelAdbAutomationController`: future short-lived accessibility automation state machine.
+- `TunnelAdbCommandPolicy`: future whitelist and command validation for any future PC-side ADB commands.
 
 ### 5.2 Flutter ADB Page
 
@@ -789,7 +789,7 @@ Current local ADB readiness:
 
 Important future gap:
 
-- Current `cloudsend_adb_command` writes into the long-lived shell and returns the latest state immediately. It does not provide per-command completion, exit code, stdout/stderr separation, or a response boundary.
+- Current `tunnel_adb_command` writes into the long-lived shell and returns the latest state immediately. It does not provide per-command completion, exit code, stdout/stderr separation, or a response boundary.
 - Future PC remote command/script execution must add a dedicated request/response executor instead of treating the UI terminal stream as a reliable RPC result.
 - For scripts, prefer a bounded one-shot execution path with command ID markers, timeout, output size limit, and exit-code capture. Do not expose unlimited raw shell streaming by default.
 
@@ -808,8 +808,8 @@ Required rules:
 Suggested future proto names:
 
 ```text
-CloudSendAdbRequest
-CloudSendAdbResponse
+TunnelAdbRequest
+TunnelAdbResponse
 ```
 
 Potential fields:
@@ -830,7 +830,7 @@ duration_ms
 
 ## 6. Permissions and Packaging Checklist
 
-CloudSend currently has:
+Tunnel currently has:
 
 - `INTERNET`
 - `ACCESS_NETWORK_STATE`
@@ -854,8 +854,8 @@ Native library packaging:
 
 - `libadb.so` is already added for `arm64-v8a`, `armeabi-v7a`, and `x86_64`.
 - Packaged `libadb.so` is configured to be extractable via `jniLibs.useLegacyPackaging = true`.
-- `x86/libadb.so` is intentionally not included because the current Android build script does not build `libcloudsend.so` for x86.
-- Avoid naming conflicts with `libcloudsend.so`.
+- `x86/libadb.so` is intentionally not included because the current Android build script does not build `libtunnel.so` for x86.
+- Avoid naming conflicts with `libtunnel.so`.
 
 ## 7. Security and Product Risk
 
@@ -901,14 +901,14 @@ Status: implemented on 2026-05-20 / 2026-05-21.
 
 Added:
 
-- `CloudSendAdbState`
-- `CloudSendAdbRunner`
-- `CloudSendAdbManager`
-- `CloudSendAdbDnsDiscover`
+- `TunnelAdbState`
+- `TunnelAdbRunner`
+- `TunnelAdbManager`
+- `TunnelAdbDnsDiscover`
 - `libadb.so` packaging environment
 - Manifest/Gradle packaging prerequisites
 - MethodChannel bridge in `oFtTiPzsqzBHGigp.kt`
-- Runtime state publication to Flutter through `cloudsend_adb_status`
+- Runtime state publication to Flutter through `tunnel_adb_status`
 - Real local pair/connect/shell/command implementation
 
 Required:
@@ -926,12 +926,12 @@ Ported local adb runner essentials:
 
 - ProcessBuilder execution wrapper: implemented for `start-server`, `pair`, `devices`, `shell`, and command forwarding.
 - `adb pair`: implemented with the LADB-style pairing-code delay.
-- `adb connect`: implemented through `CloudSendAdbDnsDiscover`, which scans `_adb-tls-connect._tcp`, waits briefly for newer broadcasts, and tries endpoint fallbacks (`localhost:<port>`, `127.0.0.1:<port>`, and current Wi-Fi IPv4 when available).
+- `adb connect`: implemented through `TunnelAdbDnsDiscover`, which scans `_adb-tls-connect._tcp`, waits briefly for newer broadcasts, and tries endpoint fallbacks (`localhost:<port>`, `127.0.0.1:<port>`, and current Wi-Fi IPv4 when available).
 - `adb wait-for-device`: used as fallback when no mDNS connect port is discovered.
 - `adb devices`: parsed to choose a connected local device.
 - `adb shell` or one-shot command execution: shell opening is implemented once a device is connected; command input is enabled only when `shellReady` is true.
 - Non-ADB local shell: still exists as a native hook, but the ADB page no longer uses it for `Auto`.
-- Stop path: implemented through `cloudsend_adb_stop`, shell process shutdown, restart suppression, and `adb kill-server`.
+- Stop path: implemented through `tunnel_adb_stop`, shell process shutdown, restart suppression, and `adb kill-server`.
 - Bounded output: implemented with an in-memory 16 KB output buffer.
 - Timeout: implemented for pairing and command execution paths.
 - Restart guard: shell restart is capped to avoid uncontrolled infinite reconnect loops.
@@ -985,9 +985,9 @@ Current source anchors:
 
 - `flutter/lib/mobile/pages/adb_page.dart`
 - `flutter/lib/common.dart::AndroidAdbManager`
-- `flutter/lib/consts.dart::AndroidChannel.kCloudSendAdbWirelessDebug*`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbManager.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/lib/consts.dart::AndroidChannel.kTunnelAdbWirelessDebug*`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbManager.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
 
 Implemented behavior:
 
@@ -998,7 +998,7 @@ Implemented behavior:
 
 Still not implemented:
 
-- Automatic extraction of pairing port/code into `CloudSendAdbManager.pair(...)`.
+- Automatic extraction of pairing port/code into `TunnelAdbManager.pair(...)`.
 - PC remote ADB command protocol.
 
 ### Phase 7: Monitor Panel Status
@@ -1023,7 +1023,7 @@ Start with safe whitelist commands.
 
 Do not:
 
-- Copy LADB `MainActivity` into CloudSend.
+- Copy LADB `MainActivity` into Tunnel.
 - Add a second launcher Activity for ADB.
 - Add a second accessibility service.
 - Expose arbitrary `/exec`.
@@ -1036,20 +1036,20 @@ Do not:
 
 ## 10. Source References
 
-CloudSend:
+Tunnel:
 
 - `flutter/lib/mobile/pages/home_page.dart`
 - `flutter/lib/mobile/pages/adb_page.dart`
 - `flutter/lib/mobile/pages/server_page.dart`
 - `flutter/lib/common.dart`
 - `flutter/lib/consts.dart`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/oFtTiPzsqzBHGigp.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbState.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbRunner.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbManager.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbDnsDiscover.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/oFtTiPzsqzBHGigp.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbState.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbRunner.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbManager.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbDnsDiscover.kt`
 - `src/server/connection.rs`
 - `libs/hbb_common/protos/message.proto`
 - `flutter/android/app/build.gradle`
@@ -1103,7 +1103,7 @@ Already implemented:
 
 Still future/deferred:
 
-1. Automatic pairing-code/port extraction and handoff into `CloudSendAdbManager.pair(...)`.
+1. Automatic pairing-code/port extraction and handoff into `TunnelAdbManager.pair(...)`.
 2. Further ROM compatibility hardening for wireless-debugging automation.
 3. Optional ADB reset/re-pair UI that clears stored pairing memory. The stop UI already exists.
 4. Optional visual status chips for supported/paired/connected/shell-ready.

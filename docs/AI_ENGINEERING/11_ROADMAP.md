@@ -1,4 +1,4 @@
-# CloudSend 工程路线图 / Roadmap
+# Tunnel 工程路线图 / Roadmap
 
 初始路线图：2026-07-12；最近源码边界校正：2026-10-02
 状态：`proposed`
@@ -129,7 +129,7 @@
 - 补录上游 RustDesk/DaXianDesk 基线、license provenance 和本地修改边界。
 - 所有重大决定写入 `.codex/DECISION_LOG.md`。
 - 所有实施任务写入 `.codex/TASK_HISTORY.md`，包含验证和 rollback。
-- 重写 CloudSend README、security contact、contribution ownership；旧上游文档保留历史标识。
+- 重写 Tunnel README、security contact、contribution ownership；旧上游文档保留历史标识。
 - 建立 code owner/domain owner、review SLA 和 incident owner。
 - 采用规范 commit/PR subject；保留可审计变更原因。
 
@@ -145,6 +145,8 @@
 - 新 capture/virtual-display backend。
 
 其中 PC 远程 ADB 不是当前本地 LADB 的简单暴露；它需要新协议、最小权限、command allowlist、用户确认、审计和退出机制。
+
+2026-10-02 已形成[远程ADB投屏开发方案与教程](../plans/ADB_REMOTE_MIRRORING_PLAN.md)，[ADR-0014](../ADR/0014-controlled-remote-adb-mirroring.md)已接受分阶段实施。T003加入默认关闭的本机身份/helper/H264采样原型源码，见[P0验证交接](../plans/ADB_P0_VALIDATION_RUNBOOK.md)。P0整体未通过，后续为transport/helper隔离→编码视频接入→模式/无障碍管理→无视/节点/侧按钮→稳定性与交付。ADBM运行验收尚未执行；ADR-0007的local-only边界及未开放生产远程ADB的事实保持。
 
 ## 7. 决策门
 

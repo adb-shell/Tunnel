@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tunnel Flutter Engineer"
+  short_description: "Maintain Tunnel Flutter UI, state, and bridges"
+  default_prompt: "Use $tunnel-flutter-engineer to handle this Flutter task."

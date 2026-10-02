@@ -2,7 +2,7 @@
 
 最后同步源码：2026-06-07
 
-> 本文记录 CloudSend 1v1 第三方语音通话接入方案。它只复用现有语音按钮、来电确认、挂断控制入口；媒体能力改由 ZEGO RTC 承载，不再使用 RustDesk 原生 `audio_service` 语音通话推流链路。
+> 本文记录 Tunnel 1v1 第三方语音通话接入方案。它只复用现有语音按钮、来电确认、挂断控制入口；媒体能力改由 ZEGO RTC 承载，不再使用 RustDesk 原生 `audio_service` 语音通话推流链路。
 
 ---
 
@@ -56,13 +56,13 @@
 - Android 接听后不再调用 `audio_service::set_voice_call_input_device(...)`，也不因语音通话订阅旧 `audio_service`。
 - `src/ui_session_interface.rs::request_voice_call` only sends `Data::NewVoiceCall`; it must not start `ipc::start_pa` or any legacy RustDesk audio helper.
 - Flutter/Sciter connection-manager startup must not pre-start `ipc::start_pa` for old RustDesk voice-call support.
-- `src/flutter_ffi.rs::set_voice_call_input_device` and `src:flutter_ffi.rs::get_voice_call_input_device` are inert for CloudSend ZEGO voice calls.
+- `src/flutter_ffi.rs::set_voice_call_input_device` and `src:flutter_ffi.rs::get_voice_call_input_device` are inert for Tunnel ZEGO voice calls.
 - `src/ipc.rs` ignores legacy `voice-call-input` get/set changes for ZEGO voice-call tasks and must not call `audio_service::set_voice_call_input_device(...)`.
 - `src/server/connection.rs::on_close` must not reset legacy RustDesk voice-call input devices when a ZEGO call or remote session closes.
 - `src/client/io_loop.rs` uses `zego_voice_call_active`, `voice_call_request_timestamp`, and `pending_zego_voice_call` to reject duplicate PC-side voice-call creation while a call is pending or active.
 - PC Flutter exposes ZEGO voice-call toolbar/chat-menu entries for connected desktop sessions without relying on `PeerInfo.platform == kPeerPlatformAndroid`; this allows Android devices whose platform string was not recognized to still receive a ZEGO invite.
-- `src/client/io_loop.rs::Data::NewVoiceCall` no longer rejects peers by platform string. The call is attempted for the current connected session, and the remote side still must understand the CloudSend ZEGO metadata before it can accept.
-- `src/client/io_loop.rs::Data::NewVoiceCall` sends `cloudsendSessionId = pcPeerId_remotePeerId_reqTimestamp` to the token service while keeping the deployed `androidPeerId` request field for API compatibility, so same-PC different-remote calls and different-PC different-remote calls receive different room/stream identifiers.
+- `src/client/io_loop.rs::Data::NewVoiceCall` no longer rejects peers by platform string. The call is attempted for the current connected session, and the remote side still must understand the Tunnel ZEGO metadata before it can accept.
+- `src/client/io_loop.rs::Data::NewVoiceCall` sends `tunnelSessionId = pcPeerId_remotePeerId_reqTimestamp` to the token service while keeping the deployed `androidPeerId` request field for API compatibility, so same-PC different-remote calls and different-PC different-remote calls receive different room/stream identifiers.
 - `src/server/connection.rs` uses `zego_voice_call_active`, `voice_call_request_timestamp`, and `pending_zego_voice_call` to reject duplicate incoming ZEGO requests on the same Android connection.
 - `flutter/lib/models/server_model.dart::_hasLocalAndroidVoiceCall` is local to one Android device/process. It rejects another connected client's pending/active ZEGO call or the current client's active ZEGO call to preserve strict 1v1 audio, but it ignores and clears disconnected clients' stale voice flags and stale local `ZegoVoiceCallModel.active` when the only current signal is a new incoming invite.
 - `flutter/lib/models/server_model.dart::onClientRemove` clears `inVoiceCall` / `incomingVoiceCall` and leaves ZEGO if the removed client owned an incoming or active voice call, preventing PC1 hangup/disconnect residue from blocking a later PC2 invite to the same Android.
@@ -71,7 +71,7 @@
 - `src/server/connection.rs` rejects incoming voice-call requests that do not contain a valid ZEGO callee payload, so Android auto-answer cannot silently accept a legacy/non-ZEGO voice call.
 - `src/server/connection.rs::handle_voice_call` must return `VoiceCallResponse.accepted = false` if Android accepts but the pending ZEGO payload is missing, preventing PC from entering a ZEGO room alone.
 
-现有 CloudSend 连接仍只负责控制信令：
+现有 Tunnel 连接仍只负责控制信令：
 
 ```text
 PC voice button
@@ -123,7 +123,7 @@ Content-Type: application/json
 当前部署方式：
 
 ```text
-PC/controller -> http://103.30.77.156:50003 -> cloudsend-zego-token
+PC/controller -> http://103.30.77.156:50003 -> tunnel-zego-token
 ```
 
 当前 PC/controller 直接访问 `http://103.30.77.156:50003`，由当前服务器上的 Token 服务直接处理，不再反向代理到任何上游域名。服务端必须兼容当前 PC 请求的 `POST /`，同时保留标准路径 `POST /api/v1/voice-call/create` 供运维测试。
@@ -136,7 +136,7 @@ Security note: current PC endpoint uses plain HTTP, so the Bearer key is visible
 {
   "pcPeerId": "pc id",
   "androidPeerId": "remote id (kept for deployed API compatibility)",
-  "cloudsendSessionId": "request timestamp or session nonce"
+  "tunnelSessionId": "request timestamp or session nonce"
 }
 ```
 
@@ -206,7 +206,7 @@ PC toolbar 中原 RustDesk 语音通话的麦克风设备选择菜单已隐藏�
 
 - 删除 `_VoiceCallMenu` 中 `AudioInput(isVoiceCall: true)`。
 - 保留中文 `挂断` 控制。
-- 旧 `set_voice_call_input_device` / `get_voice_call_input_device` FFI 在 CloudSend ZEGO 模式下保持 inert，不再读写 RustDesk `audio_service` voice-call device。
+- 旧 `set_voice_call_input_device` / `get_voice_call_input_device` FFI 在 Tunnel ZEGO 模式下保持 inert，不再读写 RustDesk `audio_service` voice-call device。
 
 ---
 
@@ -221,10 +221,10 @@ PC toolbar 中原 RustDesk 语音通话的麦克风设备选择菜单已隐藏�
 - Current Android incoming ZEGO voice calls use `flutter/lib/models/server_model.dart::showAutoAcceptVoiceCallDialog`: the dialog has only an `Accept` button, no reject action, and displays a 3-second countdown. `ServerModel._startVoiceCallAutoAcceptTimer(...)` owns the actual per-client auto-accept timer, so auto-accept does not depend on the dialog being visible. If microphone permission is denied after accept, Android still rejects the call because ZEGO cannot publish local audio.
 - Android background incoming calls are promoted through `DFm8Y8iMScvB2YDw.kt`: `update_voice_call_state` with `incoming_voice_call = true` stores pending state by `client id`, starts/brings `oFtTiPzsqzBHGigp` forward, and posts a high-priority call notification/full-screen intent. `oFtTiPzsqzBHGigp.onResume()`, `onNewIntent()`, and Flutter `"flush_pending_voice_call_event"` flush pending events back to Flutter, so `ServerModel` starts the same 3-second auto-accept timer after the app returns to the foreground.
 - Android incoming ZEGO voice-call dialog has no close (`X`) or reject button. Cancel/back actions submit the accept flow instead of rejecting, so the PC does not wait on a dismissed invite.
-- Android `zego_voice_call_ready` must use the Android service bridge before Flutter joins ZEGO: `src/flutter.rs::connection_manager::zego_voice_call_ready` calls `call_main_service_set_by_name("zego_voice_call_ready", ...)`, `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt::DFm8Y8iMScvB2YDwSBN` forwards it through `flutterMethodChannel`, and `flutter/lib/mobile/pages/server_page.dart::androidChannelInit` calls `ZegoVoiceCallModel.joinFromJson(...)`. This prevents the Android accept flow from stopping at the Rust connection-manager state without executing ZEGO `loginRoom` / `startPublishingStream`.
+- Android `zego_voice_call_ready` must use the Android service bridge before Flutter joins ZEGO: `src/flutter.rs::connection_manager::zego_voice_call_ready` calls `call_main_service_set_by_name("zego_voice_call_ready", ...)`, `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt::DFm8Y8iMScvB2YDwSBN` forwards it through `flutterMethodChannel`, and `flutter/lib/mobile/pages/server_page.dart::androidChannelInit` calls `ZegoVoiceCallModel.joinFromJson(...)`. This prevents the Android accept flow from stopping at the Rust connection-manager state without executing ZEGO `loginRoom` / `startPublishingStream`.
 - Android `update_voice_call_state` is also mirrored through `flutterMethodChannel` so the incoming dialog, active state, and hangup cleanup do not depend only on the global event stream.
 - `flutter/lib/models/zego_voice_call_model.dart` ignores duplicate `zego_voice_call_ready` payloads for the same room/user/stream while joining or joined, so Android service bridging and the global event stream cannot double-login the same ZEGO call.
-- Android verifies/requests `android.permission.RECORD_AUDIO` only after the accept flow starts, either by tapping `接受` or by the 3-second auto-accept countdown. If permission is denied, CloudSend rejects the call instead of pretending that ZEGO joined successfully.
+- Android verifies/requests `android.permission.RECORD_AUDIO` only after the accept flow starts, either by tapping `接受` or by the 3-second auto-accept countdown. If permission is denied, Tunnel rejects the call instead of pretending that ZEGO joined successfully.
 - `flutter/lib/models/server_model.dart::updateVoiceCallState` adds the incoming client to `_clients` when the voice-call event arrives before the connection-list event, so Android does not drop the incoming call silently.
 - Android Manifest declares `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `BLUETOOTH`, `BLUETOOTH_CONNECT`, and `USE_FULL_SCREEN_INTENT` for ZEGO audio capture/routing and background incoming-call foregrounding compatibility.
 - Android release minification keeps ZEGO classes through `flutter/android/app/proguard-rules`.

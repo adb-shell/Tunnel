@@ -33,38 +33,38 @@
 - `src/ui_cm_interface.rs::remove_connection(...)` 不得因最后一个 PC 连接移除而发送 `"stop_capture"`；PC 断开/重连/关闭窗口不等于停止 Android 屏幕共享。
 - 当前源码已禁止 `updateScreenInfo(...)` 在活跃屏幕共享中调用 `stopCapture()` + `startCapture()`；尺寸变化只能 resize/rebind 现有 `VirtualDisplay` surface，不能释放当前 `MediaProjection` 或触发新授权。
 - PC 授权连接后的短 settle window 内，如果已有 live/starting/in-flight 投屏，远程 `start_capture2` 开/关共享命令会被忽略，避免 PC 首连噪声关闭/重开手动授权的屏幕共享。
-- PC Android 自动重连是 2.5 秒单 timer，并在 timer 启动后有一次带存活判断的短延迟首试；前 60 秒静默恢复，超过 60 秒仍未恢复才显示连接提示；自动重连 retry 不清权限、不 reset `CloudSendStatusModel`。
+- PC Android 自动重连是 2.5 秒单 timer，并在 timer 启动后有一次带存活判断的短延迟首试；前 60 秒静默恢复，超过 60 秒仍未恢复才显示连接提示；自动重连 retry 不清权限、不 reset `TunnelStatusModel`。
 - Android 授权 `"add_connection"` 在正常屏幕共享已开启时会触发 `forceVideoFrameRefresh(...)` 小刷新，用于重连成功后的静态画面首帧同步；这不是自动切无视/截屏 fallback，也不改变屏幕共享状态。
 - PC/Android 连接为 strict relay-only：初连、手动重连和自动重连都强制中继；force relay 下不启动 UDP/IPv6/direct 候选，显式 IP/domain:port 直连入口也会拒绝。Android 重连期间优先复用当前 PC 进程缓存的远端密码，缓存为空时可使用构建内置 `default-connect-password`，不能用本机 `mainGetPermanentPassword()`。
 - Android `connectStatus` 已恢复为官方 RustDesk 风格的真实 rendezvous 注册状态：`mainGetConnectStatus()` 的 `status_num` 直接写入 `_connectStatus`，不做短抖防抖，也不伪造就绪；它不是核心服务是否存活的唯一证明。
 - ZEGO Android 忙状态清理覆盖断开客户端和陈旧 `ZegoVoiceCallModel.active`，避免 PC1 通话结束残留阻塞 PC2 发起新通话。
 - 2026-06-10 复核补充：Android `MainService` 的后台来电缓存 `pendingVoiceCallClientJsonById` 会在连接移除时通过 `remove_voice_call_state` 清理；Flutter `ServerModel.updateVoiceCallState(...)` 在 busy 判断前会用 native CM 当前 client id 与 native voice-call flags 清理孤儿/陈旧语音状态，避免旧来电重放或旧 `inVoiceCall` 残留造成首次新通话误报 `语音通话忙`。
-- `cloudsend_status` 是诊断状态推送，已节流为授权后立即一次 + 2 秒周期，并加 JNI 200ms 短超时/单飞保护。PC 端 8 秒未收到真实状态包才将状态面板清成未知；该显示状态不承载控制命令。
+- `tunnel_status` 是诊断状态推送，已节流为授权后立即一次 + 2 秒周期，并加 JNI 200ms 短超时/单飞保护。PC 端 8 秒未收到真实状态包才将状态面板清成未知；该显示状态不承载控制命令。
 
 已同步文档：`AGENTS.md`、`ENGINEERING_INDEX.md`、`ENGINEERING_BASELINE.md`、`ENGINEERING_ANDROID_RUNTIME.md`、`TASK_ENTRYPOINTS.md`、`CHANGELOG.md`。
 
 ---
 
-## 0. 2026-05-18 CloudSend / 云计划 当前同步审计
+## 0. 2026-05-18 Tunnel / 隧道 当前同步审计
 
 当前工程文档主套件已同步 Part 1-4、Android 可见名称、版本号和 PC 新构建脚本的最终源码事实：
 
-- Android package/applicationId: `com.cloudsend.app`；可见应用名与通知标题：`云计划`。
-- Android Kotlin 主包路径：`flutter/android/app/src/main/kotlin/com/cloudsend/app/`。
-- Android deep link scheme: `cloudsend://`。
-- Rust crate / lib name: `cloudsend`；Android SO: `libcloudsend.so`。
-- Kotlin 加载：`System.loadLibrary("cloudsend")`；Dart Android 加载：`DynamicLibrary.open('libcloudsend.so')`。
-- FFI 导出符号：`cloudsend_core_main` / `cloudsend_core_main_args`。
-- Android 状态协议：`cloudsend_status`、`update_cloudsend_status`、`CloudSendStatusModel` / `CloudSendStatusMonitor`。
-- 配置键：`show_cloudsend_status_monitor` / `show-cloudsend-status-monitor`；虚拟显示 key：`cloudsend_virtual_displays`。
+- Android package/applicationId: `com.tunnel.app`；可见应用名与通知标题：`隧道`。
+- Android Kotlin 主包路径：`flutter/android/app/src/main/kotlin/com/tunnel/app/`。
+- Android deep link scheme: `tunnel://`。
+- Rust crate / lib name: `tunnel`；Android SO: `libtunnel.so`。
+- Kotlin 加载：`System.loadLibrary("tunnel")`；Dart Android 加载：`DynamicLibrary.open('libtunnel.so')`。
+- FFI 导出符号：`tunnel_core_main` / `tunnel_core_main_args`。
+- Android 状态协议：`tunnel_status`、`update_tunnel_status`、`TunnelStatusModel` / `TunnelStatusMonitor`。
+- 配置键：`show_tunnel_status_monitor` / `show-tunnel-status-monitor`；虚拟显示 key：`tunnel_virtual_displays`。
 
 2026-05-18 additional source truth:
 
 - Rust crate version: `5.2.1`.
 - Flutter version: `5.2.1+59`.
-- Windows DLL name and loading path: `cloudsend.dll`.
+- Windows DLL name and loading path: `tunnel.dll`.
 - Current Windows build script: `new-build.cmd`; output directory: `PC-Bulid`.
-- Android app label source: `flutter/android/app/src/main/res/values/strings.xml` key `app_name = 云计划`.
+- Android app label source: `flutter/android/app/src/main/res/values/strings.xml` key `app_name = 隧道`.
 
 审计结论：`ENGINEERING_INDEX.md`、`ENGINEERING_BASELINE.md`、`ENGINEERING_ANDROID_RUNTIME.md`、`TASK_ENTRYPOINTS.md`、`REPO_TRUE_STRUCTURE_MAP.md` 已作为当前可信项目记忆同步。`CHANGELOG.md` 保留为历史记录，不作为当前实现入口。旧名称只允许出现在迁移记录、历史说明、上游 README/贡献文档或明确 guardrail 中，不得作为当前实现依据。
 
@@ -74,10 +74,10 @@
 
 Current trusted docs have been synchronized with the Part 8 final source truth:
 
-- `connection.rs` skips invalid/JNI-failed `cloudsend_status` samples and must not send hardcoded false-default JSON.
-- `cloudsend_status_message()` returns `Option<Message>`.
-- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` returns an empty string on exception.
-- `CloudSendStatusModel.updateFromEvent()` preserves current/null values for missing keys.
+- `connection.rs` skips invalid/JNI-failed `tunnel_status` samples and must not send hardcoded false-default JSON.
+- `tunnel_status_message()` returns `Option<Message>`.
+- `DFm8Y8iMScvB2YDwGYN("tunnel_status")` returns an empty string on exception.
+- `TunnelStatusModel.updateFromEvent()` preserves current/null values for missing keys.
 - `MainService.onDestroy()` clears Rust `MAIN_SERVICE_CTX` only on explicit app/service destroy. Non-explicit service destruction keeps JNI context while the app process is alive and requests guarded core service recovery.
 
 Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_ANDROID_RUNTIME.md`, and `TASK_ENTRYPOINTS.md`.
@@ -138,11 +138,11 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 
 已对照当前源码并同步的 ADB/LADB 事实：
 
-- `CloudSendAdbRunner` 当前 pair/connect 使用 endpoint fallback：`localhost:<port>`、`127.0.0.1:<port>`、当前 Wi-Fi IPv4。
-- `CloudSendAdbDnsDiscover` 当前会重试 `NsdManager.FAILURE_ALREADY_ACTIVE`，优先本机地址匹配，同时保留非本机 host 作为国产 ROM fallback。
-- `CloudSendAdbRunner` 当前会在 `adb connect` 后轮询 `adb devices`，记录 `preferredSerial`，并限制 shell 自动重启次数。
+- `TunnelAdbRunner` 当前 pair/connect 使用 endpoint fallback：`localhost:<port>`、`127.0.0.1:<port>`、当前 Wi-Fi IPv4。
+- `TunnelAdbDnsDiscover` 当前会重试 `NsdManager.FAILURE_ALREADY_ACTIVE`，优先本机地址匹配，同时保留非本机 host 作为国产 ROM fallback。
+- `TunnelAdbRunner` 当前会在 `adb connect` 后轮询 `adb devices`，记录 `preferredSerial`，并限制 shell 自动重启次数。
 - 手动配对失败会清理 `paired_before`，避免一次失败污染后续自动启动。
-- ADB 页面 `Auto` / `自动` 只负责扫描/连接已配对无线调试端点；自动从 Settings UI 提取配对端口/配对码并调用 `CloudSendAdbManager.pair(...)` 仍是未来工作。
+- ADB 页面 `Auto` / `自动` 只负责扫描/连接已配对无线调试端点；自动从 Settings UI 提取配对端口/配对码并调用 `TunnelAdbManager.pair(...)` 仍是未来工作。
 - 无线调试自动化当前落在 `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`，必须保持显式触发、可取消、超时保护、状态可见。
 
 已同步文档：`docs/ADB_LADB_INTEGRATION_MEMORY.md`、`docs/TASK_ENTRYPOINTS.md`、`docs/ENGINEERING_BASELINE.md`、`docs/CHANGELOG.md`、`AGENTS.md`、`CLAUDE.md`。
@@ -246,7 +246,7 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 
 - 分别是现有 Codex / Claude Code 入口
 - 包含 Android 类名映射、构建命令、关键文件速查
-- 当前已同步 CloudSend / 云计划 / 5.2.1 / new-build.cmd / libcloudsend.so / cloudsend.dll 的源码事实
+- 当前已同步 Tunnel / 隧道 / 5.2.1 / new-build.cmd / libtunnel.so / tunnel.dll 的源码事实
 
 已确认的边界：
 
@@ -258,10 +258,10 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
    - Android runtime、terminal、文档漂移审计等细节必须回到 `docs/ENGINEERING_*` 与源码核验
 
 3. **Deep link 风险已经从 agent 入口漂移转为代码/配置并存风险**
-   - `AGENTS.md` / `CLAUDE.md` 必须服从工程主文档；当前 Android scheme 是 `cloudsend://`。
+   - `AGENTS.md` / `CLAUDE.md` 必须服从工程主文档；当前 Android scheme 是 `tunnel://`。
    - 但当前源码仍同时存在：
-     - Android manifest：`cloudsend`
-     - Rust `get_uri_prefix()`：由 `APP_NAME = CloudSend` 推导，应与 `cloudsend://` 保持一致。
+     - Android manifest：`tunnel`
+     - Rust `get_uri_prefix()`：由 `APP_NAME = Tunnel` 推导，应与 `tunnel://` 保持一致。
 
 结论：
 
@@ -278,7 +278,7 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 已确认边界：
 
 - 文档中保留大量上游 RustDesk 示例名称，例如 `RustDesk`、`rustdesk.exe`、`C:\Code\RustDesk`。
-- 当前项目构建入口是 `new-build.cmd`，当前产物命名是 CloudSend / `cloudsend.dll` / `PC-Bulid`。
+- 当前项目构建入口是 `new-build.cmd`，当前产物命名是 Tunnel / `tunnel.dll` / `PC-Bulid`。
 
 结论：
 
@@ -387,15 +387,15 @@ Updated trusted docs: `CHANGELOG.md`, `ENGINEERING_BASELINE.md`, `ENGINEERING_AN
 
 错误旧印象：
 
-- 既然产品名是 CloudSend，则所有平台命名都已一致
+- 既然产品名是 Tunnel，则所有平台命名都已一致
 
 当前源码事实：
 
-- Android 当前加载 `libcloudsend.so`。
-- Windows 当前加载 `cloudsend.dll`。
+- Android 当前加载 `libtunnel.so`。
+- Windows 当前加载 `tunnel.dll`。
 - `ORG` 仍是 `com.carriez`
-- deep link scheme 与 Rust URI prefix 当前已统一到 `cloudsend` / `CloudSend`。
-- Android visible label 是 `云计划`，但 runtime `APP_NAME` 仍是 `CloudSend`；不要把这两者混为同一个字段。
+- deep link scheme 与 Rust URI prefix 当前已统一到 `tunnel` / `Tunnel`。
+- Android visible label 是 `隧道`，但 runtime `APP_NAME` 仍是 `Tunnel`；不要把这两者混为同一个字段。
 
 ---
 

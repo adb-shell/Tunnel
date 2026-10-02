@@ -14,7 +14,7 @@ Current source is a RustDesk-derived multi-platform remote-desktop core imported
 
 ## Consequences
 
-CloudSend inherits protocol/platform maturity plus legacy names、compatibility paths、large files、AGPL/third-party obligations and upstream-diff debt. This record remains retrospective until the owner explicitly re-approves it with lineage evidence.
+Tunnel inherits protocol/platform maturity plus legacy names、compatibility paths、large files、AGPL/third-party obligations and upstream-diff debt. This record remains retrospective until the owner explicitly re-approves it with lineage evidence.
 
 ## Compatibility / Verification / Reversal
 

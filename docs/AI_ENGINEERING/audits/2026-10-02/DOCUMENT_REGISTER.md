@@ -12,16 +12,16 @@ Task：`T-2026-10-02-001`；Source：`5cee692`；V0。
 
 | # | 文档 | 职责/层级 | 本轮处理 | 覆盖与限制 |
 |---|---|---|---|---|
-| 001 | [.agents/skills/cloudsend-android-engineer/SKILL.md](../../../../.agents/skills/cloudsend-android-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
-| 002 | [.agents/skills/cloudsend-api-engineer/SKILL.md](../../../../.agents/skills/cloudsend-api-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
-| 003 | [.agents/skills/cloudsend-flutter-engineer/SKILL.md](../../../../.agents/skills/cloudsend-flutter-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
-| 004 | [.agents/skills/cloudsend-master/SKILL.md](../../../../.agents/skills/cloudsend-master/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
-| 005 | [.agents/skills/cloudsend-network-engineer/SKILL.md](../../../../.agents/skills/cloudsend-network-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
-| 006 | [.agents/skills/cloudsend-release-engineer/SKILL.md](../../../../.agents/skills/cloudsend-release-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
-| 007 | [.agents/skills/cloudsend-rust-engineer/SKILL.md](../../../../.agents/skills/cloudsend-rust-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
-| 008 | [.agents/skills/cloudsend-security-engineer/SKILL.md](../../../../.agents/skills/cloudsend-security-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
-| 009 | [.agents/skills/cloudsend-superpowers-safe/SKILL.md](../../../../.agents/skills/cloudsend-superpowers-safe/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
-| 010 | [.claude/commands/reflection.md](../../../../.claude/commands/reflection.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 001 | [.agents/skills/tunnel-android-engineer/SKILL.md](../../../../.agents/skills/tunnel-android-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
+| 002 | [.agents/skills/tunnel-api-engineer/SKILL.md](../../../../.agents/skills/tunnel-api-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
+| 003 | [.agents/skills/tunnel-flutter-engineer/SKILL.md](../../../../.agents/skills/tunnel-flutter-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
+| 004 | [.agents/skills/tunnel-master/SKILL.md](../../../../.agents/skills/tunnel-master/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
+| 005 | [.agents/skills/tunnel-network-engineer/SKILL.md](../../../../.agents/skills/tunnel-network-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
+| 006 | [.agents/skills/tunnel-release-engineer/SKILL.md](../../../../.agents/skills/tunnel-release-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
+| 007 | [.agents/skills/tunnel-rust-engineer/SKILL.md](../../../../.agents/skills/tunnel-rust-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
+| 008 | [.agents/skills/tunnel-security-engineer/SKILL.md](../../../../.agents/skills/tunnel-security-engineer/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
+| 009 | [.agents/skills/tunnel-superpowers-safe/SKILL.md](../../../../.agents/skills/tunnel-superpowers-safe/SKILL.md) | 领域 Skill | 保留既有能力/权限；不将 Skill 当 runtime 事实 | 适用域按技能核查；未使用项仅登记 |
+| 010 | [.claude/commands/reflection.md](../../../../.claude/commands/reflection.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
 | 011 | [.codex/AI_RULES.md](../../../../.codex/AI_RULES.md) | 记忆/规则 | 保留职责；状态/摘要按本轮更新，历史追加 | 恢复/同步核查 |
 | 012 | [.codex/ARCHITECTURE_MEMORY.md](../../../../.codex/ARCHITECTURE_MEMORY.md) | 记忆/规则 | 保留职责；状态/摘要按本轮更新，历史追加 | 恢复/同步核查 |
 | 013 | [.codex/CHANGELOG_AI.md](../../../../.codex/CHANGELOG_AI.md) | 记忆/规则 | 保留职责；状态/摘要按本轮更新，历史追加 | 恢复/同步核查 |
@@ -38,13 +38,13 @@ Task：`T-2026-10-02-001`；Source：`5cee692`；V0。
 | 024 | [EXTERNAL_ASSET_REGISTRY.md](../../../../EXTERNAL_ASSET_REGISTRY.md) | 项目入口/契约 | 唯一入口与职责保留；本轮更新必要导航/资产 | 入口、矩阵与证据边界核查 |
 | 025 | [PC-Build.md](../../../../PC-Build.md) | 旧构建环境背景 | 保留；canonical 入口为 new-build.cmd | 脚本对照；未执行 |
 | 026 | [PROJECT_START_HERE.md](../../../../PROJECT_START_HERE.md) | 项目入口/契约 | 唯一入口与职责保留；本轮更新必要导航/资产 | 入口、矩阵与证据边界核查 |
-| 027 | [README.md](../../../../README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 027 | [README.md](../../../../README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
 | 028 | [TASK_TEMPLATE.md](../../../../TASK_TEMPLATE.md) | 项目入口/契约 | 唯一入口与职责保留；本轮更新必要导航/资产 | 入口、矩阵与证据边界核查 |
 | 029 | [TEST_MATRIX.md](../../../../TEST_MATRIX.md) | 项目入口/契约 | 唯一入口与职责保留；本轮更新必要导航/资产 | 入口、矩阵与证据边界核查 |
 | 030 | [docs/ADB_LADB_INTEGRATION_MEMORY.md](../../../../docs/ADB_LADB_INTEGRATION_MEMORY.md) | 旧集成/运维专题 | 提取当前链；运维/敏感正文不复制、不执行 | 域 agent 源码对照；外部未验证 |
 | 031 | [docs/ADR/0000-adopt-architecture-decision-records.md](../../../../docs/ADR/0000-adopt-architecture-decision-records.md) | 决定/模板 | 保留原 status；本轮不重批或改写 accepted 决定 | 相关不变量与源码对照；其他仅索引 |
 | 032 | [docs/ADR/0001-retain-rustdesk-derived-core.md](../../../../docs/ADR/0001-retain-rustdesk-derived-core.md) | 决定/模板 | 保留原 status；本轮不重批或改写 accepted 决定 | 相关不变量与源码对照；其他仅索引 |
-| 033 | [docs/ADR/0002-cloudsend-product-identity.md](../../../../docs/ADR/0002-cloudsend-product-identity.md) | 决定/模板 | 保留原 status；本轮不重批或改写 accepted 决定 | 相关不变量与源码对照；其他仅索引 |
+| 033 | [docs/ADR/0002-tunnel-product-identity.md](../../../../docs/ADR/0002-tunnel-product-identity.md) | 决定/模板 | 保留原 status；本轮不重批或改写 accepted 决定 | 相关不变量与源码对照；其他仅索引 |
 | 034 | [docs/ADR/0003-controller-sessions-use-relay-only.md](../../../../docs/ADR/0003-controller-sessions-use-relay-only.md) | 决定/模板 | 保留原 status；本轮不重批或改写 accepted 决定 | 相关不变量与源码对照；其他仅索引 |
 | 035 | [docs/ADR/0004-separate-android-core-and-screen-share.md](../../../../docs/ADR/0004-separate-android-core-and-screen-share.md) | 决定/模板 | 保留原 status；本轮不重批或改写 accepted 决定 | 相关不变量与源码对照；其他仅索引 |
 | 036 | [docs/ADR/0005-use-pkg2230-active-android-jni.md](../../../../docs/ADR/0005-use-pkg2230-active-android-jni.md) | 决定/模板 | 保留原 status；本轮不重批或改写 accepted 决定 | 相关不变量与源码对照；其他仅索引 |
@@ -71,9 +71,9 @@ Task：`T-2026-10-02-001`；Source：`5cee692`；V0。
 | 057 | [docs/AI_ENGINEERING/10_SECURITY_MODEL.md](../../../../docs/AI_ENGINEERING/10_SECURITY_MODEL.md) | 当前领域文档 | 定点校正；roadmap 保持 proposed | 领域源码锚点复核；非运行证明 |
 | 058 | [docs/AI_ENGINEERING/11_ROADMAP.md](../../../../docs/AI_ENGINEERING/11_ROADMAP.md) | 当前领域文档 | 定点校正；roadmap 保持 proposed | 领域源码锚点复核；非运行证明 |
 | 059 | [docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md](../../../../docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md) | 治理或固定日期报告 | 治理沿用；旧报告标 historical 并链接本轮 | 入口/职责核查；不重放历史 |
-| 060 | [docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_FINAL_SEAL_REPORT.md](../../../../docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_FINAL_SEAL_REPORT.md) | 治理或固定日期报告 | 治理沿用；旧报告标 historical 并链接本轮 | 入口/职责核查；不重放历史 |
-| 061 | [docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_STRENGTHENING_REPORT.md](../../../../docs/AI_ENGINEERING/CLOUDSEND_AI_ENGINEERING_STRENGTHENING_REPORT.md) | 治理或固定日期报告 | 治理沿用；旧报告标 historical 并链接本轮 | 入口/职责核查；不重放历史 |
-| 062 | [docs/AI_ENGINEERING/CLOUDSEND_AI_PRINCIPAL_ENGINEER_HANDOVER_REPORT.md](../../../../docs/AI_ENGINEERING/CLOUDSEND_AI_PRINCIPAL_ENGINEER_HANDOVER_REPORT.md) | 治理或固定日期报告 | 治理沿用；旧报告标 historical 并链接本轮 | 入口/职责核查；不重放历史 |
+| 060 | [docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_FINAL_SEAL_REPORT.md](../../../../docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_FINAL_SEAL_REPORT.md) | 治理或固定日期报告 | 治理沿用；旧报告标 historical 并链接本轮 | 入口/职责核查；不重放历史 |
+| 061 | [docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_STRENGTHENING_REPORT.md](../../../../docs/AI_ENGINEERING/TUNNEL_AI_ENGINEERING_STRENGTHENING_REPORT.md) | 治理或固定日期报告 | 治理沿用；旧报告标 historical 并链接本轮 | 入口/职责核查；不重放历史 |
+| 062 | [docs/AI_ENGINEERING/TUNNEL_AI_PRINCIPAL_ENGINEER_HANDOVER_REPORT.md](../../../../docs/AI_ENGINEERING/TUNNEL_AI_PRINCIPAL_ENGINEER_HANDOVER_REPORT.md) | 治理或固定日期报告 | 治理沿用；旧报告标 historical 并链接本轮 | 入口/职责核查；不重放历史 |
 | 063 | [docs/AI_ENGINEERING/DOCUMENT_AUDIT_REPORT.md](../../../../docs/AI_ENGINEERING/DOCUMENT_AUDIT_REPORT.md) | 治理或固定日期报告 | 治理沿用；旧报告标 historical 并链接本轮 | 入口/职责核查；不重放历史 |
 | 064 | [docs/AI_ENGINEERING/EXTERNAL_SKILLS_ASSESSMENT.md](../../../../docs/AI_ENGINEERING/EXTERNAL_SKILLS_ASSESSMENT.md) | 治理或固定日期报告 | 治理沿用；旧报告标 historical 并链接本轮 | 入口/职责核查；不重放历史 |
 | 065 | [docs/AI_ENGINEERING/LEGACY_DOCUMENT_MIGRATION_REPORT.md](../../../../docs/AI_ENGINEERING/LEGACY_DOCUMENT_MIGRATION_REPORT.md) | 治理或固定日期报告 | 治理沿用；旧报告标 historical 并链接本轮 | 入口/职责核查；不重放历史 |
@@ -84,37 +84,37 @@ Task：`T-2026-10-02-001`；Source：`5cee692`；V0。
 | 070 | [docs/BASELINE/04_BUILD_ENVIRONMENT.md](../../../../docs/BASELINE/04_BUILD_ENVIRONMENT.md) | 历史 baseline | 冻结旧记录；当前事实追加新 baseline | 新旧可比项核验；旧 Git 对象不可得 |
 | 071 | [docs/BASELINE/BASELINE_INDEX.md](../../../../docs/BASELINE/BASELINE_INDEX.md) | 历史 baseline | 冻结旧记录；当前事实追加新 baseline | 新旧可比项核验；旧 Git 对象不可得 |
 | 072 | [docs/CHANGELOG.md](../../../../docs/CHANGELOG.md) | 历史工程文档 | 保留原路径，当前事实由 canonical 覆盖 | 高价值断言抽查；非全文重新认证 |
-| 073 | [docs/CODE_OF_CONDUCT-ZH.md](../../../../docs/CODE_OF_CONDUCT-ZH.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 074 | [docs/CODE_OF_CONDUCT.md](../../../../docs/CODE_OF_CONDUCT.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 075 | [docs/CONTRIBUTING-ZH.md](../../../../docs/CONTRIBUTING-ZH.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 076 | [docs/CONTRIBUTING.md](../../../../docs/CONTRIBUTING.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 077 | [docs/DEVCONTAINER.md](../../../../docs/DEVCONTAINER.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 073 | [docs/CODE_OF_CONDUCT-ZH.md](../../../../docs/CODE_OF_CONDUCT-ZH.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 074 | [docs/CODE_OF_CONDUCT.md](../../../../docs/CODE_OF_CONDUCT.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 075 | [docs/CONTRIBUTING-ZH.md](../../../../docs/CONTRIBUTING-ZH.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 076 | [docs/CONTRIBUTING.md](../../../../docs/CONTRIBUTING.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 077 | [docs/DEVCONTAINER.md](../../../../docs/DEVCONTAINER.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
 | 078 | [docs/DOCUMENT_AUDIT.md](../../../../docs/DOCUMENT_AUDIT.md) | 历史工程文档 | 保留原路径，当前事实由 canonical 覆盖 | 高价值断言抽查；非全文重新认证 |
 | 079 | [docs/ENGINEERING_ANDROID_RUNTIME.md](../../../../docs/ENGINEERING_ANDROID_RUNTIME.md) | 历史工程文档 | 保留原路径，当前事实由 canonical 覆盖 | 高价值断言抽查；非全文重新认证 |
 | 080 | [docs/ENGINEERING_BASELINE.md](../../../../docs/ENGINEERING_BASELINE.md) | 历史工程文档 | 保留原路径，当前事实由 canonical 覆盖 | 高价值断言抽查；非全文重新认证 |
 | 081 | [docs/ENGINEERING_INDEX.md](../../../../docs/ENGINEERING_INDEX.md) | 历史工程文档 | 保留原路径，当前事实由 canonical 覆盖 | 高价值断言抽查；非全文重新认证 |
-| 082 | [docs/README-ZH.md](../../../../docs/README-ZH.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 082 | [docs/README-ZH.md](../../../../docs/README-ZH.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
 | 083 | [docs/REPO_TRUE_STRUCTURE_MAP.md](../../../../docs/REPO_TRUE_STRUCTURE_MAP.md) | 历史工程文档 | 保留原路径，当前事实由 canonical 覆盖 | 高价值断言抽查；非全文重新认证 |
-| 084 | [docs/SECURITY.md](../../../../docs/SECURITY.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 084 | [docs/SECURITY.md](../../../../docs/SECURITY.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
 | 085 | [docs/SOURCE_TRUTH_AUDIT_2026_05_18.md](../../../../docs/SOURCE_TRUTH_AUDIT_2026_05_18.md) | 历史工程文档 | 保留原路径，当前事实由 canonical 覆盖 | 高价值断言抽查；非全文重新认证 |
 | 086 | [docs/TASK_ENTRYPOINTS.md](../../../../docs/TASK_ENTRYPOINTS.md) | 历史工程文档 | 保留原路径，当前事实由 canonical 覆盖 | 高价值断言抽查；非全文重新认证 |
 | 087 | [docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md](../../../../docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md) | 旧集成/运维专题 | 提取当前链；运维/敏感正文不复制、不执行 | 域 agent 源码对照；外部未验证 |
 | 088 | [docs/ZEGO_VOICE_CALL_ARCHITECTURE.md](../../../../docs/ZEGO_VOICE_CALL_ARCHITECTURE.md) | 旧集成/运维专题 | 提取当前链；运维/敏感正文不复制、不执行 | 域 agent 源码对照；外部未验证 |
 | 089 | [docs/ZEGO_VOICE_CALL_INTEGRATION.md](../../../../docs/ZEGO_VOICE_CALL_INTEGRATION.md) | 旧集成/运维专题 | 提取当前链；运维/敏感正文不复制、不执行 | 域 agent 源码对照；外部未验证 |
-| 090 | [flutter/README.md](../../../../flutter/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 091 | [flutter/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md](../../../../flutter/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 092 | [libs/clipboard/README.md](../../../../libs/clipboard/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 093 | [libs/clipboard/src/platform/unix/macos/README.md](../../../../libs/clipboard/src/platform/unix/macos/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 094 | [libs/enigo/.github/ISSUE_TEMPLATE/bug_report.md](../../../../libs/enigo/.github/ISSUE_TEMPLATE/bug_report.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 095 | [libs/enigo/.github/ISSUE_TEMPLATE/feature_request.md](../../../../libs/enigo/.github/ISSUE_TEMPLATE/feature_request.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 096 | [libs/enigo/.github/ISSUE_TEMPLATE/question.md](../../../../libs/enigo/.github/ISSUE_TEMPLATE/question.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 097 | [libs/enigo/README.md](../../../../libs/enigo/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 098 | [libs/scrap/README.md](../../../../libs/scrap/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 099 | [libs/scrap/src/wayland/README.md](../../../../libs/scrap/src/wayland/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 100 | [libs/virtual_display/README.md](../../../../libs/virtual_display/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 101 | [libs/virtual_display/dylib/README.md](../../../../libs/virtual_display/dylib/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 102 | [res/msi/README.md](../../../../res/msi/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
-| 103 | [src/lang/README.md](../../../../src/lang/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 CloudSend 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 090 | [flutter/README.md](../../../../flutter/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 091 | [flutter/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md](../../../../flutter/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 092 | [libs/clipboard/README.md](../../../../libs/clipboard/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 093 | [libs/clipboard/src/platform/unix/macos/README.md](../../../../libs/clipboard/src/platform/unix/macos/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 094 | [libs/enigo/.github/ISSUE_TEMPLATE/bug_report.md](../../../../libs/enigo/.github/ISSUE_TEMPLATE/bug_report.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 095 | [libs/enigo/.github/ISSUE_TEMPLATE/feature_request.md](../../../../libs/enigo/.github/ISSUE_TEMPLATE/feature_request.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 096 | [libs/enigo/.github/ISSUE_TEMPLATE/question.md](../../../../libs/enigo/.github/ISSUE_TEMPLATE/question.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 097 | [libs/enigo/README.md](../../../../libs/enigo/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 098 | [libs/scrap/README.md](../../../../libs/scrap/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 099 | [libs/scrap/src/wayland/README.md](../../../../libs/scrap/src/wayland/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 100 | [libs/virtual_display/README.md](../../../../libs/virtual_display/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 101 | [libs/virtual_display/dylib/README.md](../../../../libs/virtual_display/dylib/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 102 | [res/msi/README.md](../../../../res/msi/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
+| 103 | [src/lang/README.md](../../../../src/lang/README.md) | 局部/upstream/模板 | 保留局部用途及来源；不提升为 Tunnel 产品/治理事实 | metadata/path inventory；非逐条语义认证 |
 | 104 | [terminal.md](../../../../terminal.md) | 旧 terminal 专题 | 保留；追加当前进程内 persistence 更正 | 源码语义复核 |
 
 ## 本轮新增文档（不混入 HEAD 104 份）

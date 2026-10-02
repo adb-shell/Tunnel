@@ -1,13 +1,14 @@
-# CloudSend Engineering Baseline Index
+# Tunnel Engineering Baseline Index
 
 ## 当前与历史 Baseline
 
 | Baseline ID | 记录 | 使用边界 |
 |---|---|---|
-| `CS-BL-2026-10-02-5cee692` | [2026-10-02_SOURCE_BASELINE.md](2026-10-02_SOURCE_BASELINE.md) | 当前源码、库存、hash/EOL 与历史缺口；V0，正式运行未验证 |
+| `TUN-BL-2026-10-02-IDENTITY` | [2026-10-02_TUNNEL_IDENTITY_BASELINE.md](2026-10-02_TUNNEL_IDENTITY_BASELINE.md) | 当前身份 + 未提交P0源码；V0，尚未构建/运行 |
+| `CS-BL-2026-10-02-5cee692` | [2026-10-02_SOURCE_BASELINE.md](2026-10-02_SOURCE_BASELINE.md) | 迁移前源码、库存、hash/EOL 与历史缺口；V0，正式运行未验证 |
 | `CS-BL-2026-07-12-77062b4` | 以下四份旧快照 | 历史 baseline；当前本地 Git 无旧对象，不可宣称仍是当前 HEAD |
 
-以下正文保留 2026-07-12 的冻结记录；不将其当作 2026-10-02 的工作树状态。
+以下正文保留 2026-07-12 的记录含义；不将其当作 2026-10-02 的工作树状态。T004 按用户要求统一了历史文档中的品牌字样和路径，未改历史 ID、日期或 hash；本文及四份旧快照不再是逐字原稿，名称规范化边界见当前身份基线。旧 ORG 记录属于历史值，不代表当前 `com.tunnel`。
 
 基线日期：2026-07-12  
 Baseline ID：`CS-BL-2026-07-12-77062b4`  
@@ -21,7 +22,7 @@ Source HEAD：`77062b4d8b63eae9a31afe288e3ac00a4f89e009`
 | 文件 | 记录内容 |
 |---|---|
 | `01_UPSTREAM_BASELINE.md` | RustDesk/DaXianDesk 来源证据、历史缺口和接管要求 |
-| `02_VERSION_MATRIX.md` | CloudSend 产品、平台、协议/bridge 与 artifact 版本矩阵 |
+| `02_VERSION_MATRIX.md` | Tunnel 产品、平台、协议/bridge 与 artifact 版本矩阵 |
 | `03_DEPENDENCY_BASELINE.md` | Cargo、Flutter、Gradle、protobuf、vcpkg 等锁定状态 |
 | `04_BUILD_ENVIRONMENT.md` | Android/Windows 正式构建环境、入口、外部资产和验证门 |
 

@@ -1,4 +1,4 @@
-# CloudSend Terminal Service Implementation
+# Tunnel Terminal Service Implementation
 
 > 2026-10-02 source correction（V0）：`src/server/terminal_service.rs` 已有进程内 persistent service registry、`is_persistent`、断连保留和 service ID reattach；这不证明跨进程/重启耐久化或跨peer授权隔离。旧 `tmp_` / `persist_` examples 仍过时。当前边界见 [Network Protocol](docs/AI_ENGINEERING/06_NETWORK_PROTOCOL.md) 与 [本轮审计](docs/AI_ENGINEERING/audits/2026-10-02/RUST_NETWORK_WINDOWS_AUDIT.md)。
 
@@ -11,7 +11,7 @@
 
 This historical note describes remote terminal/shell access with multiple concurrent terminal sessions per connection and a persistence-oriented design. Treat the persistence details below as design background unless the current source files confirm the behavior.
 
-Current source-truth note (verified 2026-05-18): this subsystem is inherited from the upstream RustDesk terminal implementation, but project documentation should refer to the current product/runtime as CloudSend unless explicitly discussing upstream history.
+Current source-truth note (verified 2026-05-18): this subsystem is inherited from the upstream RustDesk terminal implementation, but project documentation should refer to the current product/runtime as Tunnel unless explicitly discussing upstream history.
 
 ## Architecture
 

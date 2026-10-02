@@ -3,7 +3,7 @@
 - Status：`accepted`
 - Record Type：`contemporaneous`
 - Decision Date / Recorded Date：2026-07-12
-- Decision Owner：CloudSend project owner
+- Decision Owner：Tunnel project owner
 - Related Decision Log：D-013
 - Implementation State：implemented
 - Evidence / Verification：V0 document/schema review

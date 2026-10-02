@@ -10,6 +10,8 @@ import datetime
 length_count = 4
 # encoding
 encoding = 'utf-8'
+# Keep the marker in sync with IDENTIFIER in src/bin_reader.rs.
+PACKAGE_MARKER = b'tunnel'
 
 # output: {path: (compressed_data, file_md5)}
 
@@ -38,7 +40,7 @@ def generate_md5_table(folder: str, level) -> dict:
 def write_package_metadata(md5_table: dict, output_folder: str, exe: str):
     output_path = os.path.join(output_folder, "data.bin")
     with open(output_path, "wb") as f:
-        f.write("cloudsend".encode(encoding=encoding))
+        f.write(PACKAGE_MARKER)
         for path in md5_table.keys():
             (compressed_data, md5_code) = md5_table[path]
             data_length = len(compressed_data)
@@ -53,7 +55,7 @@ def write_package_metadata(md5_table: dict, output_folder: str, exe: str):
             # md5 code
             f.write(md5_code)
         # end
-        f.write("cloudsend".encode(encoding=encoding))
+        f.write(PACKAGE_MARKER)
         # executable
         f.write(exe.encode(encoding='utf-8'))
     print(f"Metadata has been written to {output_path}")
@@ -71,8 +73,8 @@ def build_portable(output_folder: str, target: str):
     else:
         os.system("cargo build --release")
 
-# Linux: python3 generate.py -f ../rustdesk-portable-packer/test -o . -e ./test/main.py
-# Windows: python3 .\generate.py -f ..\cloudsend\flutter\build\windows\runner\Debug\ -o . -e ..\cloudsend\flutter\build\windows\runner\Debug\cloudsend.exe
+# Linux: python3 generate.py -f ../tunnel-portable-packer/test -o . -e ./test/main.py
+# Windows: python3 .\generate.py -f ..\tunnel\flutter\build\windows\runner\Debug\ -o . -e ..\tunnel\flutter\build\windows\runner\Debug\tunnel.exe
 
 
 if __name__ == '__main__':
@@ -82,17 +84,17 @@ if __name__ == '__main__':
     parser.add_option("-o", "--output", dest="output_folder",
                       help="the root of portable packer project, default is './'")
     parser.add_option("-e", "--executable", dest="executable",
-                      help="specify startup file in --folder, default is cloudsend.exe")
+                      help="specify startup file in --folder, default is tunnel.exe")
     parser.add_option("-t", "--target", dest="target",
                       help="the target used by cargo")
     parser.add_option("-l", "--level", dest="level", type="int",
                       help="compression level, default is 11, highest", default=11)
     (options, args) = parser.parse_args()
-    folder = options.folder or './rustdesk'
+    folder = options.folder or './tunnel'
     output_folder = os.path.abspath(options.output_folder or './')
 
     if not options.executable:
-        options.executable = 'cloudsend.exe'
+        options.executable = 'tunnel.exe'
     if not options.executable.startswith(folder):
         options.executable = folder + '/' + options.executable
     exe: str = os.path.abspath(options.executable)

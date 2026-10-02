@@ -1,28 +1,28 @@
-# CloudSend 项目总览 / Project Overview
+# Tunnel 项目总览 / Project Overview
 
 最近源码复核：2026-10-02
 源码基线：`HEAD 5cee692` / `CS-BL-2026-10-02-5cee692`
-接管角色：CloudSend Principal Engineer
+接管角色：Tunnel Principal Engineer
 
 > 本文是新 AI 工程体系的入口。结论分为源码已证实（`verified`）、静态推断（`inferred`）、仓外依赖（`external`）和待正式环境验证（`verification-required`）。源码永远高于本文。
 
 ## 1. 项目身份
 
-CloudSend 是 RustDesk 的深度二次开发产品，Android 可见名称为 `云计划`。当前身份锚点：
+Tunnel 是 RustDesk 的深度二次开发产品，Android 可见名称为 `隧道`。当前身份锚点：
 
 | 项目 | 当前值 | 源码锚点 |
 |---|---|---|
-| Rust package/library | `cloudsend` / `cloudsend` | `Cargo.toml` |
+| Rust package/library | `tunnel` / `tunnel` | `Cargo.toml` |
 | Rust version | `5.2.1` | `Cargo.toml` |
 | Flutter package/version | `flutter_hbb` / `5.2.1+59` | `flutter/pubspec.yaml` |
-| Runtime app name | `CloudSend` | `libs/hbb_common/src/config.rs::APP_NAME` |
-| Android package | `com.cloudsend.app` | `flutter/android/app/build.gradle` |
-| Android label | `云计划` | `flutter/android/app/src/main/res/values/strings.xml` |
-| Android scheme | `cloudsend` | `flutter/android/app/src/main/AndroidManifest.xml` |
-| Android native library | `libcloudsend.so` | `build.sh`, `pkg2230.kt`, `native_model.dart` |
-| Windows native library | `cloudsend.dll` | `flutter/windows/CMakeLists.txt`, `native_model.dart` |
+| Runtime app name | `Tunnel` | `libs/hbb_common/src/config.rs::APP_NAME` |
+| Android package | `com.tunnel.app` | `flutter/android/app/build.gradle` |
+| Android label | `隧道` | `flutter/android/app/src/main/res/values/strings.xml` |
+| Android scheme | `tunnel` | `flutter/android/app/src/main/AndroidManifest.xml` |
+| Android native library | `libtunnel.so` | `build.sh`, `pkg2230.kt`, `native_model.dart` |
+| Windows native library | `tunnel.dll` | `flutter/windows/CMakeLists.txt`, `native_model.dart` |
 
-`ORG = com.carriez`、大量 RustDesk 类型名、第三方仓库 URL、驱动名和兼容字段仍被保留。它们有些是上游兼容锚点，不允许做无差别品牌替换。
+当前产品组织标识为 `ORG = com.tunnel`。RustDesk 类型名、第三方仓库 URL、驱动名和兼容字段中的上游锚点仍被保留，不做无差别替换。2026-10-02 品牌迁移和独立部署边界见 `docs/plans/TUNNEL_IDENTITY_MIGRATION_TASK.md`；旧文档中的项目专有名称已统一，历史原文以对应 Git 对象为准。
 
 ## 2. 来源与可追溯性
 
@@ -94,7 +94,7 @@ CloudSend 是 RustDesk 的深度二次开发产品，Android 可见名称为 `�
 2. Flutter 负责主产品 UI、session/model 状态和多平台窗口。
 3. Android 由 Flutter MethodChannel + Rust FFI/JNI + Kotlin service 三层共同组成；任何运行时改动都可能跨层。
 4. Windows 继续使用 RustDesk 平台底座，并叠加 Amyuni driver、隐私窗体和注入辅助进程。
-5. CloudSend 控制端会话固定请求 relay；受控端仍保留上游 direct/punch/LAN/NAT 代码，不能称为全局移除直连。
+5. Tunnel 控制端会话固定请求 relay；受控端仍保留上游 direct/punch/LAN/NAT 代码，不能称为全局移除直连。
 6. ZEGO 是独立 RTC 媒体旁路；旧 RustDesk `audio_service` 不承担当前语音媒体。
 7. 产品账号 API 与远控会话认证是两套边界，不能混为一个“登录”。
 
@@ -106,7 +106,7 @@ CloudSend 是 RustDesk 的深度二次开发产品，Android 可见名称为 `�
 |---|---|
 | 2026-04-13 | DaXianDesk/RustDesk 快照导入 |
 | 04-14—04-22 | 工程文档初建；Android 黑屏、独立防触、状态监测、双通道与无障碍守卫 |
-| 05-05—05-18 | CloudSend 品牌/package/SO/DLL/构建迁移；文档清理和源码审计 |
+| 05-05—05-18 | Tunnel 品牌/package/SO/DLL/构建迁移；文档清理和源码审计 |
 | 05-20—05-31 | Android 本地 ADB/LADB、mDNS、无线调试自动化 |
 | 05-31—06-07 | ZEGO 替换语音媒体；Token 服务和开发者登录旁路 |
 | 06-09—06-24 | relay 重连、core service/share 解耦、Android 首帧与投屏授权稳定性 |

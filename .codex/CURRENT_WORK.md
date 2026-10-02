@@ -1,15 +1,19 @@
-# CloudSend Current Work
+# Tunnel Current Work
 
 Schema Version：`1.0`  
-Registry Revision：`WORK-20261002-002`
+Registry Revision：`WORK-20261002-008`
 Last Updated：2026-10-02（Asia/Shanghai）
-Active Task Count：0
+Active Task Count：1
 
 > 本文件是支持 0..N 个并行 Codex 会话的协作 registry，不是锁、不是真相层，也不是授权凭证。任何新会话都必须重新执行 T0；历史 C1/C2/C3 不能继承。每个会话只更新自己的 Task ID 段，并在写入前重新读取 revision，防止覆盖其他会话。
 
 ## 1. Active Tasks
 
-None. 本轮任务已关闭；后续需求从Session Recovery + T0进入，按当前请求确定实现范围。
+| Task | Owner | Status | Scope / source |
+|---|---|---|---|
+| T-2026-10-02-003 | tunnel-master | paused / T6 | 用户要求先完成品牌迁移；P0源码保留，品牌引用随T004同步；待后续编译验证 |
+
+详情：`docs/plans/ADB_REMOTE_MIRRORING_IMPLEMENTATION_TASK.md`、`docs/plans/ADB_P0_VALIDATION_RUNBOOK.md`。P0未通过前不接入生产远程ADB入口。下一步先提供正式环境/native来源/目标设备并确定具体执行范围；不把源码交付当P0通过。
 
 ## 2. Concurrent Session Rules
 
@@ -25,13 +29,13 @@ None. 本轮任务已关闭；后续需求从Session Recovery + T0进入，按�
 
 ## 4. Last Closed Task
 
-- Task ID：`T-2026-10-02-001`
-- Result：全仓inventory、关键链源码V0复核、文档/功能地图/记忆整理完成；no business/runtime change；外部系统与正式运行/发布证据仍缺失。
+- Task ID：`T-2026-10-02-004`
+- Result：Tunnel/tunnel/隧道、com.tunnel.app身份迁移源码交付；文档/记忆/Skills与跨层消费者同步；P0尚未运行。
 - Closed At：2026-10-02（Asia/Shanghai）
 - Final T-State：`T8 — complete`
-- State / Event：`STATE-20261002-001` / `CE-20261002-T001-02`
-- Decision：N/A — no decision delta；既有D-014不变。
-- Verification：源码/跨域review、baseline hash、文档link/fence/path、scope/diff/sensitive与memory指针V0；V1—V5 NOT_RUN。
-- Next Gate：用户后续具体功能需求 → T0/Impact Map/implementation scope；无Git/build/release授权。
-- Changelog pointer：`CHANGELOG_AI.md` 中 `T-2026-10-02-001`。
-- Detailed record：`TASK_HISTORY.md`、`docs/AI_ENGINEERING/audits/2026-10-02/TAKEOVER_TASK.md`。
+- State / Event：`STATE-20261002-004` / `CE-20261002-T004-01`
+- Decision：D-016/ADR-0015 accepted；ADR-0014分阶段接受、P0本机边界保持。
+- Verification：命名/路径/契约/配置/文档/Skills/diff静态V0；V1—V5 NOT_RUN。
+- Next Gate：用户正式环境配套重建PC/APK/native/helper并回传证据，再续T003/P0；新配置/授权需独立处理。
+- Changelog pointer：`CHANGELOG_AI.md` 中 `T-2026-10-02-004`。
+- Detailed record：`TASK_HISTORY.md`、`docs/plans/TUNNEL_IDENTITY_MIGRATION_TASK.md`、`docs/BASELINE/2026-10-02_TUNNEL_IDENTITY_BASELINE.md`。

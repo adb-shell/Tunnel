@@ -59,7 +59,7 @@
 - Android authorization now pushes one immediate real status packet from JNI, so PC state catches up right after reconnect instead of waiting for the next periodic status tick.
 - Android status periodic pushes are now throttled to 2 seconds after the immediate authorization packet, with 200ms JNI timeout and single-flight protection so status sampling cannot block the connection loop.
 - Android auto reconnect password continuation now reuses the remote password entered/passed for the peer in the current PC process, and falls back to build-in `default-connect-password` when the session cache is empty. The cache survives session object recreation and covers both `input-password` and `re-input-password`; it still never uses local `mainGetPermanentPassword()` as a remote password.
-- `CloudSendStatusModel` stale detection now clears the PC status panel back to the gray waiting state when no real Android status packet arrives for 8 seconds. This is display-only and does not clear permissions, screen sharing, ignore mode, blank mode, or the relay session.
+- `TunnelStatusModel` stale detection now clears the PC status panel back to the gray waiting state when no real Android status packet arrives for 8 seconds. This is display-only and does not clear permissions, screen sharing, ignore mode, blank mode, or the relay session.
 
 ### Android Runtime / PC Reconnect / ZEGO
 - `DFm8Y8iMScvB2YDw.refreshCoreKeepAlive(...)` now refreshes the existing foreground notification, CPU wake lock, Wi-Fi lock, and floating window keep-alive on screen/network/memory events without restarting `MainService`, changing `_isReady`, or touching `MediaProjection`.
@@ -69,7 +69,7 @@
 - Android `connectStatus` now follows the official RustDesk-style raw rendezvous state again: `mainGetConnectStatus()` `status_num` is assigned directly to `_connectStatus`, with no UI debounce and no fake readiness.
 - Android auto reconnect now forces relay, performs one guarded early retry shortly after the timer starts, and reuses the current PC process cache or build-in `default-connect-password` if a password prompt appears during reconnect, avoiding manual `123` entry.
 - Superseded by `v5.2.1-android-screen-share-prompt-25`: Android authorized remote connections still trigger a small normal-video refresh burst through `DFm8Y8iMScvB2YDw.forceVideoFrameRefresh(...)`, but that refresh no longer rebinds the active `VirtualDisplay` surface or reopens screen-share authorization.
-- `LoginConfigHandler.initialize(...)` now defaults CloudSend client sessions to strict relay-only mode. Force relay skips UDP NAT test, IPv6 punch setup, explicit IP/domain:port direct connection, and direct TCP/UDP/IPv6 candidate creation before `request_relay(...)`.
+- `LoginConfigHandler.initialize(...)` now defaults Tunnel client sessions to strict relay-only mode. Force relay skips UDP NAT test, IPv6 punch setup, explicit IP/domain:port direct connection, and direct TCP/UDP/IPv6 candidate creation before `request_relay(...)`.
 - Android ZEGO state cleanup now clears voice-call flags on disconnected clients and ignores stale local `ZegoVoiceCallModel.active` when a new incoming invite is the only current signal, allowing PC2 to call Android after PC1 hangs up or disconnects.
 - No build, clean, or git commit was executed by Codex.
 
@@ -91,18 +91,18 @@
 - Android `MainService` is kept as a foreground `START_STICKY` core service with a 60-second internal keep-alive ticker for foreground notification, CPU wake lock, Wi-Fi lock, and floating window keep-alive only.
 - Network changes, screen on/off, low-memory callbacks, and screen-share state changes must not restart `MainService`, rewrite `_isReady`, or stop Android `MediaProjection`.
 - `src/ui_cm_interface.rs::remove_connection(...)` no longer sends `"stop_capture"` when the last PC connection is removed. PC disconnect, reconnect, and window close now only remove the connection record and do not stop Android screen sharing.
-- Android automatic reconnect on PC uses one 2.5-second timer and a 60-second silent grace window before showing `Connecting...`; retry ticks do not clear permissions or reset `CloudSendStatusModel`.
-- Android `cloudsend_status` push is throttled and guarded by a short JNI timeout / single-flight query so status sampling cannot block the connection loop.
+- Android automatic reconnect on PC uses one 2.5-second timer and a 60-second silent grace window before showing `Connecting...`; retry ticks do not clear permissions or reset `TunnelStatusModel`.
+- Android `tunnel_status` push is throttled and guarded by a short JNI timeout / single-flight query so status sampling cannot block the connection loop.
 - No build, clean, or git commit was executed by Codex.
 
 ## [v5.2.1-adb-hardening-docsync-18] ADB/LADB compatibility memory sync - 2026-06-04
 
 ### Android Local ADB
 - Updated ADB engineering memory to match the current source: manual pair/connect now use endpoint fallback (`localhost`, `127.0.0.1`, and current Wi-Fi IPv4 when available), not a single `localhost:<port>` path.
-- Documented `CloudSendAdbDnsDiscover` behavior: retry `NsdManager.FAILURE_ALREADY_ACTIVE`, prefer local-host matches, and keep non-local hosts as fallback for OEM ROMs.
-- Documented `CloudSendAdbRunner` behavior: poll `adb devices` after connect, store `preferredSerial`, cap shell restart attempts, and reject pairing output containing failure keywords even if process status is misleading.
+- Documented `TunnelAdbDnsDiscover` behavior: retry `NsdManager.FAILURE_ALREADY_ACTIVE`, prefer local-host matches, and keep non-local hosts as fallback for OEM ROMs.
+- Documented `TunnelAdbRunner` behavior: poll `adb devices` after connect, store `preferredSerial`, cap shell restart attempts, and reject pairing output containing failure keywords even if process status is misleading.
 - Documented that failed manual pairing clears `paired_before`, while the ADB page `Auto` / `自动` action only scans/connects an already paired wireless-debugging endpoint.
-- Clarified that automatic extraction of pairing port/code from Settings into `CloudSendAdbManager.pair(...)` is still future work.
+- Clarified that automatic extraction of pairing port/code from Settings into `TunnelAdbManager.pair(...)` is still future work.
 - No build, clean, or git commit was executed by Codex.
 
 ## [v5.2.1-android-core-share-split-17] Android 核心服务与屏幕共享拆分 - 2026-06-01
@@ -127,8 +127,8 @@
 - Changed the first ADB card button into a dynamic action: `Start service` while ADB shell is not ready, and a red `Stop service` while ADB shell is ready.
 - Added `Cancel` to the pairing dialog. `Cancel` closes the dialog and performs no ADB/local-shell action.
 - Changed `Skip` semantics: it now skips manual port/code input and directly attempts the ADB scan/connect/shell flow for an already paired wireless-debugging device. It no longer starts a non-ADB local shell.
-- If `Skip`/auto-scan successfully reaches ADB shell, CloudSend records `paired_before=true`, so the next `Start service` does not show the pairing dialog again.
-- Added `cloudsend_adb_stop` through Flutter constants, Flutter `AndroidAdbManager`, Android MethodChannel routing, `CloudSendAdbManager.stop`, and `CloudSendAdbRunner.stopServer`.
+- If `Skip`/auto-scan successfully reaches ADB shell, Tunnel records `paired_before=true`, so the next `Start service` does not show the pairing dialog again.
+- Added `tunnel_adb_stop` through Flutter constants, Flutter `AndroidAdbManager`, Android MethodChannel routing, `TunnelAdbManager.stop`, and `TunnelAdbRunner.stopServer`.
 - `Stop service` closes the current shell, suppresses shell auto-restart, runs `adb kill-server`, clears the active connected/shell-ready state, and preserves stored pairing memory.
 - No build, clean, or git commit was executed by Codex.
 
@@ -137,15 +137,15 @@
 ### ADB-CODE Review
 - Expanded `docs/ADB_LADB_INTEGRATION_MEMORY.md` with a deeper source-level review of the local `ADB-CODE/` project.
 - Documented the useful reference areas: accessibility state machine, OEM Settings keyword strategy, node-tree extraction, click fallbacks, pairing-code/port parsing, progress logging, timeout handling, and manual fallback.
-- Documented the high-risk areas that must not be copied into CloudSend by default: `/data/local/tmp` daemon deployment, boot helper, HTTP `/exec`, watchdog permission recovery, notification listener, overlay fallback, silent accessibility re-enable, broad port scanning, and Java libadb fallback.
-- Defined the recommended future CloudSend automation boundary: reuse the existing CloudSend accessibility service, add a short-lived ADB automation controller, report progress into the ADB terminal card, and keep screen-share/side-button/monitor-panel logic isolated.
+- Documented the high-risk areas that must not be copied into Tunnel by default: `/data/local/tmp` daemon deployment, boot helper, HTTP `/exec`, watchdog permission recovery, notification listener, overlay fallback, silent accessibility re-enable, broad port scanning, and Java libadb fallback.
+- Defined the recommended future Tunnel automation boundary: reuse the existing Tunnel accessibility service, add a short-lived ADB automation controller, report progress into the ADB terminal card, and keep screen-share/side-button/monitor-panel logic isolated.
 - No feature code, build script, clean command, build command, or git commit was executed by Codex.
 
 ## [v5.2.1-adb-ladb-local-14] Android local ADB/LADB integration - 2026-05-21
 
 ### Android Local ADB
 - Added an isolated ADB page in the mobile home PageView. It does not alter the existing screen-share page, side-button logic, video stream, screenshot stream, or connection flow.
-- Added Android local ADB runtime module under `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/`: `CloudSendAdbState`, `CloudSendAdbManager`, `CloudSendAdbRunner`, and `CloudSendAdbDnsDiscover`.
+- Added Android local ADB runtime module under `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/`: `TunnelAdbState`, `TunnelAdbManager`, `TunnelAdbRunner`, and `TunnelAdbDnsDiscover`.
 - Packaged `libadb.so` for Android ABIs used by the current build, with `useLegacyPackaging = true` so the native binary can be executed from the app native library directory.
 - Added MethodChannel commands for ADB init/status/output/start/local-shell/pair/command. Flutter calls these through a direct `MethodChannel('mChannel')`, not `gFFI.invokeMethod()`, because the ADB methods return maps/strings instead of `Future<bool>`.
 
@@ -159,7 +159,7 @@
 ### Boundaries
 - Superseded by later ADB automation work: accessibility-assisted wireless-debugging automation now exists as a best-effort, cancellable flow inside `nZW99cdXQ0COhB2o.wirelessDebugAutomation*`.
 - PC remote ADB command transport is not implemented yet; future work must use explicit request/response messages, authorization, timeout, whitelist policy, output truncation, and audit logging.
-- Current `cloudsend_adb_command` is an interactive terminal write into the long-lived local shell. It is not a complete remote RPC result path because it does not provide per-command completion, exit code, stdout/stderr separation, or response boundaries.
+- Current `tunnel_adb_command` is an interactive terminal write into the long-lived local shell. It is not a complete remote RPC result path because it does not provide per-command completion, exit code, stdout/stderr separation, or response boundaries.
 - Future PC remote command/script execution should add a dedicated bounded request/response executor instead of treating the terminal stream as a reliable command result.
 - Existing Android monitor-panel fields remain independent from ADB state. ADB failures must not make screen-share/side-button status turn red.
 - No build, clean, or git commit was executed by Codex.
@@ -167,27 +167,27 @@
 ## [v5.2.1-docsync-13] Current source-truth documentation sync - 2026-05-18
 
 ### Current Naming / Version Truth
-- Android visible app label and foreground notification title are now `云计划`, sourced from `flutter/android/app/src/main/res/values/strings.xml` and referenced by AndroidManifest/MainService notification code.
-- Runtime product name remains `CloudSend`; do not confuse it with the Android launcher label.
+- Android visible app label and foreground notification title are now `隧道`, sourced from `flutter/android/app/src/main/res/values/strings.xml` and referenced by AndroidManifest/MainService notification code.
+- Runtime product name remains `Tunnel`; do not confuse it with the Android launcher label.
 - Current version is `5.2.1` in `Cargo.toml`, `libs/portable/Cargo.toml`, packaging metadata, and PC build defaults; Flutter package version is `5.2.1+59`.
-- Root `Cargo.lock` and `libs/portable/Cargo.lock` project package entries are synchronized to `cloudsend` / `cloudsend-portable-packer` version `5.2.1`; third-party dependency versions are intentionally unchanged.
-- Android SO name is `libcloudsend.so`; Windows DLL name is `cloudsend.dll`.
+- Root `Cargo.lock` and `libs/portable/Cargo.lock` project package entries are synchronized to `tunnel` / `tunnel-portable-packer` version `5.2.1`; third-party dependency versions are intentionally unchanged.
+- Android SO name is `libtunnel.so`; Windows DLL name is `tunnel.dll`.
 - Current Windows build entry is `new-build.cmd`, and completed PC portable artifacts are copied to `PC-Bulid`.
 
 ### Documentation Guardrails
 - `README.md` and `PC-Build.md` keep inherited upstream/environment background, but their top notes now state the current project source truth.
 - Added `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md` as the clean full-Markdown/source-anchor audit record.
-- Updated `terminal.md` to describe the subsystem as CloudSend terminal service while noting its upstream RustDesk inheritance.
+- Updated `terminal.md` to describe the subsystem as Tunnel terminal service while noting its upstream RustDesk inheritance.
 - Do not treat old `RustDesk`, `rustdesk-1.4.6`, `librustdesk.dll`, `libdaxian.so`, or `PC.cmd` references in historical/background sections as current project facts.
 - No build, clean, or git commit was executed by Codex.
 
 ## [v5.2.1-hotfix-12] Android status monitor no-fake-red fallback - 2026-05-11
 
 ### Status Monitor Correctness
-- Removed all hardcoded false-default `cloudsend_status` fallbacks. If `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, returns `{}`, or returns a non-status payload, `connection.rs` now skips that push instead of sending fake red values.
-- `cloudsend_status_message()` now returns `Option<Message>`; both the immediate-after-authorization push and the throttled timer push send only when a valid Android status JSON exists.
-- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` now returns an empty string on exception, allowing Rust to skip the bad sample and let Flutter keep the waiting `null` state.
-- `CloudSendStatusModel.updateFromEvent()` preserves the current/null value when a JSON key is missing; it no longer uses `current ?? false`.
+- Removed all hardcoded false-default `tunnel_status` fallbacks. If `call_main_service_get_by_name("tunnel_status")` fails, returns empty, returns `{}`, or returns a non-status payload, `connection.rs` now skips that push instead of sending fake red values.
+- `tunnel_status_message()` now returns `Option<Message>`; both the immediate-after-authorization push and the throttled timer push send only when a valid Android status JSON exists.
+- `DFm8Y8iMScvB2YDwGYN("tunnel_status")` now returns an empty string on exception, allowing Rust to skip the bad sample and let Flutter keep the waiting `null` state.
+- `TunnelStatusModel.updateFromEvent()` preserves the current/null value when a JSON key is missing; it no longer uses `current ?? false`.
 
 ### Android ROM Lifecycle Hardening
 - `MainService.onDestroy()` now calls `ClsFx9V0S.VHsFQTvK()` to clear Rust's `MAIN_SERVICE_CTX` GlobalRef, avoiding stale service references after OEM ROM service kills/restarts.
@@ -203,8 +203,8 @@
 
 ### Status Monitor Compatibility
 - Superseded by hotfix-12: status delivery must skip invalid/JNI-failed samples rather than sending false-default JSON.
-- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` exception fallback must not produce fake false values.
-- `CloudSendStatusModel.updateFromEvent()` must preserve current/null values for missing fields.
+- `DFm8Y8iMScvB2YDwGYN("tunnel_status")` exception fallback must not produce fake false values.
+- `TunnelStatusModel.updateFromEvent()` must preserve current/null values for missing fields.
 
 ### Penetrate Close / Frame Refresh
 - Fixed `关穿透` on static screens and slow/OEM Android compositors: closing penetrate now requests a one-shot clean frame to overwrite the last penetrate frame instead of waiting for a local screen movement.
@@ -224,17 +224,17 @@
 - Do not let penetrate close reset `shouldRun`, `pendingIgnoreCapture`, or user-requested ignore state.
 - No build, clean, or git commit was executed by Codex.
 
-## [v5.2.1-hotfix-10] CloudSend status monitor synchronization fix — 2026-05-08
+## [v5.2.1-hotfix-10] Tunnel status monitor synchronization fix — 2026-05-08
 
 ### Status Panel Correctness
-- Fixed first-connection status flicker: Android now pushes one `cloudsend_status` packet immediately after authorization, instead of waiting for the next throttled timer tick.
-- Changed `CloudSendStatusData` fields to nullable booleans so the monitor can render an explicit waiting state (`—`) instead of showing all-red false defaults before the first packet arrives.
-- Added an 8s stale-status watchdog in `CloudSendStatusModel`; if status packets stop arriving, the panel returns to the gray waiting state until the next real Android packet arrives. The watchdog only changes PC display state and does not send any Android control command.
+- Fixed first-connection status flicker: Android now pushes one `tunnel_status` packet immediately after authorization, instead of waiting for the next throttled timer tick.
+- Changed `TunnelStatusData` fields to nullable booleans so the monitor can render an explicit waiting state (`—`) instead of showing all-red false defaults before the first packet arrives.
+- Added an 8s stale-status watchdog in `TunnelStatusModel`; if status packets stop arriving, the panel returns to the gray waiting state until the next real Android packet arrives. The watchdog only changes PC display state and does not send any Android control command.
 - Reset the monitor on session close and non-Android manual reconnect; Android auto-reconnect keeps status intact.
 
 ### Android Status Semantics
 - Added `@Volatile` visibility protection for cross-thread Android status fields: `SKL`, `BIS`, `_isReady`, `_isStart`, `_isAudioStart`, `mediaProjection`, and AccessibilityService `ctx`.
-- `cloudsend_status` now snapshots Android values before building JSON to avoid mixed-state reads.
+- `tunnel_status` now snapshots Android values before building JSON to avoid mixed-state reads.
 - Split status meanings:
   - `screenshot`: special screenshot stream is actually running (`shouldRun && accessibility`).
   - `ignore`: ignore switch is logically on (`shouldRun || pendingIgnoreCapture`), including pending wait for accessibility.
@@ -246,69 +246,69 @@
 - Do not collapse `screenshot` and `ignore` back to the same source; they intentionally represent actual running stream vs requested switch state.
 - No build, clean, or git commit was executed by Codex.
 
-## [v5.2.1-hotfix-9] CloudSend final residual cleanup — 2026-05-06
+## [v5.2.1-hotfix-9] Tunnel final residual cleanup — 2026-05-06
 
 ### Cleanup
-- Renamed Android build environment variables from `RUSTDESK_*` to `CLOUDSEND_*` in `env.sh` and `build.sh`, while intentionally keeping the `/opt/rustdesk-toolchain` path and existing signing file locations.
-- Replaced remaining desktop UI labels with `CloudSend`, including the desktop tab title and desktop settings About card.
-- Renamed login provider sentinel value from `daxian` to `cloudsend`.
+- Renamed Android build environment variables from `RUSTDESK_*` to `TUNNEL_*` in `env.sh` and `build.sh`, while intentionally keeping the `/opt/rustdesk-toolchain` path and existing signing file locations.
+- Replaced remaining desktop UI labels with `Tunnel`, including the desktop tab title and desktop settings About card.
+- Renamed login provider sentinel value from `daxian` to `tunnel`.
 - Renamed internal string values: clipboard owner UTI, printer temp file prefix, heartbeat public-domain check, plugin callback target, plugin local data directory segment, and debug close log.
 - Removed obsolete `migrate_package.sh`.
 
 ### Manual action required
 - Existing Linux signing/profile files must be migrated by the user, not Codex:
-  `RUSTDESK_ANDROID_* -> CLOUDSEND_ANDROID_*` in signing.env and
-  `RUSTDESK_TOOLCHAIN_ROOT -> CLOUDSEND_TOOLCHAIN_ROOT` in `/etc/profile.d/rustdesk-toolchain.sh`.
+  `RUSTDESK_ANDROID_* -> TUNNEL_ANDROID_*` in signing.env and
+  `RUSTDESK_TOOLCHAIN_ROOT -> TUNNEL_TOOLCHAIN_ROOT` in `/etc/profile.d/rustdesk-toolchain.sh`.
 
 ### Guardrails
 - Keep `/opt/rustdesk-toolchain`, `/etc/profile.d/rustdesk-toolchain.sh`, existing keystore filename, and existing keystore alias unless the build environment is intentionally rebuilt.
 - No build, clean, server-side sed, or git commit was executed by Codex.
 
-## [v5.2.1-hotfix-8] PC CloudSend DLL / portable startup fix — 2026-05-05
+## [v5.2.1-hotfix-8] PC Tunnel DLL / portable startup fix — 2026-05-05
 
-### P0: Fix Windows startup after CloudSend rename
-- Fixed Windows Dart FFI loading: `native_model.dart` now opens `cloudsend.dll` instead of `librustdesk.dll`.
-- Kept Linux Dart FFI naming aligned with the renamed Rust library by opening `libcloudsend.so`.
-- Updated portable packer defaults from `rustdesk.exe` to `cloudsend.exe`.
-- The portable extractor now renames both legacy `rustdesk.exe` and current `cloudsend.exe` to `CloudSend.exe`, and falls back to the packaged executable path if the renamed file is unavailable.
-- Renamed the portable app-name runtime environment key from `RUSTDESK_APPNAME` to `CLOUDSEND_APPNAME` across the packer, Rust core, and Flutter constant.
-- Updated Windows portable build output names from `rustdesk_portable.exe` / `rustdesk-{version}-install.exe` to `cloudsend_portable.exe` / `cloudsend-{version}-install.exe`.
-- Renamed the privacy-mode RuntimeBroker helper from `RuntimeBroker_rustdesk.exe` to `RuntimeBroker_cloudsend.exe` across portable packaging, runtime privacy mode, and MSI cleanup.
-- Renamed Android wake-lock tags from `daxian:*` to `cloudsend:*`.
-- Renamed the Windows app-name export from `get_rustdesk_app_name` to `get_cloudsend_app_name` and synchronized the runner lookup.
+### P0: Fix Windows startup after Tunnel rename
+- Fixed Windows Dart FFI loading: `native_model.dart` now opens `tunnel.dll` instead of `librustdesk.dll`.
+- Kept Linux Dart FFI naming aligned with the renamed Rust library by opening `libtunnel.so`.
+- Updated portable packer defaults from `rustdesk.exe` to `tunnel.exe`.
+- The portable extractor now renames both legacy `rustdesk.exe` and current `tunnel.exe` to `Tunnel.exe`, and falls back to the packaged executable path if the renamed file is unavailable.
+- Renamed the portable app-name runtime environment key from `RUSTDESK_APPNAME` to `TUNNEL_APPNAME` across the packer, Rust core, and Flutter constant.
+- Updated Windows portable build output names from `rustdesk_portable.exe` / `rustdesk-{version}-install.exe` to `tunnel_portable.exe` / `tunnel-{version}-install.exe`.
+- Renamed the privacy-mode RuntimeBroker helper from `RuntimeBroker_rustdesk.exe` to `RuntimeBroker_tunnel.exe` across portable packaging, runtime privacy mode, and MSI cleanup.
+- Renamed Android wake-lock tags from `daxian:*` to `tunnel:*`.
+- Renamed the Windows app-name export from `get_rustdesk_app_name` to `get_tunnel_app_name` and synchronized the runner lookup.
 
 ### Root cause
-- Part 4 changed the Windows Rust cdylib output to `cloudsend.dll`, and `flutter/windows/CMakeLists.txt` installs `cloudsend.dll`.
+- Part 4 changed the Windows Rust cdylib output to `tunnel.dll`, and `flutter/windows/CMakeLists.txt` installs `tunnel.dll`.
 - The Flutter runtime still tried to open `librustdesk.dll`, causing FFI initialization failure and a white-screen startup.
 - The self-extracting portable wrapper still had old `rustdesk.exe` defaults, making the extracted startup path fragile after the executable rename.
 
 ### Guardrails
-- Windows Flutter builds must keep these three names aligned: `flutter/windows/CMakeLists.txt` installs `cloudsend.dll`, `flutter/windows/runner/main.cpp` loads `cloudsend.dll`, and `flutter/lib/models/native_model.dart` opens `cloudsend.dll`.
-- Portable packages should use `cloudsend.exe` as the metadata startup executable and may normalize the extracted visible executable to `CloudSend.exe`.
+- Windows Flutter builds must keep these three names aligned: `flutter/windows/CMakeLists.txt` installs `tunnel.dll`, `flutter/windows/runner/main.cpp` loads `tunnel.dll`, and `flutter/lib/models/native_model.dart` opens `tunnel.dll`.
+- Portable packages should use `tunnel.exe` as the metadata startup executable and may normalize the extracted visible executable to `Tunnel.exe`.
 - No build, clean, or git commit was executed by Codex.
 
-## [v5.2.1-hotfix-7] CloudSend identity migration Parts 1-4 — 2026-05-05
+## [v5.2.1-hotfix-7] Tunnel identity migration Parts 1-4 — 2026-05-05
 
 ### Branding / Android identity
-- Android package changed from `com.daxian.dev` to `com.cloudsend.app`.
-- Android visible app label and notification title changed to `CloudSend` at this stage; current Android visible label is superseded to `云计划` by `v5.2.1-docsync-13`.
-- Android deep link scheme changed to `cloudsend://`.
-- Kotlin package directory changed to `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
+- Android package changed from `com.daxian.dev` to `com.tunnel.app`.
+- Android visible app label and notification title changed to `Tunnel` at this stage; current Android visible label is superseded to `隧道` by `v5.2.1-docsync-13`.
+- Android deep link scheme changed to `tunnel://`.
+- Kotlin package directory changed to `flutter/android/app/src/main/kotlin/com/tunnel/app/`.
 
 ### Rust runtime / protocol / Flutter UI
-- Rust `APP_NAME` changed to `CloudSend`.
-- Version check type values changed to `cloudsend-client` / `cloudsend-server`; RustDesk public version URL was disabled with `https://127.0.0.1/version/latest`.
-- Android status protocol field renamed from `daxian_status` to `cloudsend_status` while keeping field number 39.
-- Flutter event renamed to `update_cloudsend_status`; model/widget renamed to `CloudSendStatusModel` / `CloudSendStatusMonitor`.
-- Session option renamed to `show_cloudsend_status_monitor` / `show-cloudsend-status-monitor`.
-- Virtual display platform addition key renamed to `cloudsend_virtual_displays`.
+- Rust `APP_NAME` changed to `Tunnel`.
+- Version check type values changed to `tunnel-client` / `tunnel-server`; RustDesk public version URL was disabled with `https://127.0.0.1/version/latest`.
+- Android status protocol field renamed from `daxian_status` to `tunnel_status` while keeping field number 39.
+- Flutter event renamed to `update_tunnel_status`; model/widget renamed to `TunnelStatusModel` / `TunnelStatusMonitor`.
+- Session option renamed to `show_tunnel_status_monitor` / `show-tunnel-status-monitor`.
+- Virtual display platform addition key renamed to `tunnel_virtual_displays`.
 
 ### Android SO / FFI
-- Cargo crate renamed to `cloudsend`; `[lib] name = "cloudsend"` now builds `libcloudsend.so`.
-- Android build script copies `target/<target>/release/libcloudsend.so` to `flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`.
-- Kotlin now uses `System.loadLibrary("cloudsend")`.
-- Dart Android FFI now opens `libcloudsend.so`.
-- Exported FFI symbols changed from `rustdesk_core_main*` to `cloudsend_core_main*` and generated bridge lookup strings were synchronized.
+- Cargo crate renamed to `tunnel`; `[lib] name = "tunnel"` now builds `libtunnel.so`.
+- Android build script copies `target/<target>/release/libtunnel.so` to `flutter/android/app/src/main/jniLibs/<abi>/libtunnel.so`.
+- Kotlin now uses `System.loadLibrary("tunnel")`.
+- Dart Android FFI now opens `libtunnel.so`.
+- Exported FFI symbols changed from `rustdesk_core_main*` to `tunnel_core_main*` and generated bridge lookup strings were synchronized.
 
 ### Guardrails
 - Do not revive `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, `libdaxian.so`, or `rustdesk_core_main` in new Android work.
@@ -322,13 +322,13 @@
 - PC 以 Android 无障碍（网络加密）服务状态为权威，动态决定是否启用双通道
 - 无障碍未开或状态未知时，PC 只刷新/等待视频流，不发送"开无视"命令
 - 无障碍已开时，PC 才允许视频流丢失 fallback 到截屏流
-- 支持运行时动态切换：`cloudsend_status` 随当前节流状态推送同步 `accessibility` 字段
+- 支持运行时动态切换：`tunnel_status` 随当前节流状态推送同步 `accessibility` 字段
 - 监测面板新增"加密状态"行
 
 ### 实现方式
 
-- `DFm8Y8iMScvB2YDw.kt`: `cloudsend_status` JSON 增加 `accessibility`
-- `model.dart`: `CloudSendStatusData.accessibility` 使用 `bool?`，`null` 表示尚未收到状态推送
+- `DFm8Y8iMScvB2YDw.kt`: `tunnel_status` JSON 增加 `accessibility`
+- `model.dart`: `TunnelStatusData.accessibility` 使用 `bool?`，`null` 表示尚未收到状态推送
 - `model.dart`: 新增 `_canRequestAndroidBackupFrame`，作为所有自动"开无视"命令的守卫
 - `model.dart`: 首帧 3s/10s fallback 在无障碍未知或未开时只执行 `sessionRefreshVideo`
 - `overlay.dart`: 安卓状态监测显示"加密状态"
@@ -369,17 +369,17 @@
 
 ### 协议变更
 
-- `Misc` 消息新增 field 39: `string cloudsend_status`，proto3 向后兼容
-- `InvokeUiSession` trait 新增 `update_cloudsend_status(json: String)` 方法
-- 新增会话配置 `show_cloudsend_status_monitor`，toolbar 使用 `show-cloudsend-status-monitor`
+- `Misc` 消息新增 field 39: `string tunnel_status`，proto3 向后兼容
+- `InvokeUiSession` trait 新增 `update_tunnel_status(json: String)` 方法
+- 新增会话配置 `show_tunnel_status_monitor`，toolbar 使用 `show-tunnel-status-monitor`
 
 ### 涉及文件
 
 - `libs/hbb_common/protos/message.proto`, `libs/hbb_common/src/config.rs`
 - `src/client.rs`, `src/ui_session_interface.rs`, `src/flutter.rs`, `src/ui/remote.rs`
 - `src/server/connection.rs`, `src/client/io_loop.rs`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
 - `flutter/lib/consts.dart`, `flutter/lib/common/widgets/setting_widgets.dart`, `flutter/lib/common/widgets/toolbar.dart`
 - `flutter/lib/models/model.dart`, `flutter/lib/common/widgets/overlay.dart`
 - `flutter/lib/desktop/pages/remote_page.dart`, `flutter/lib/desktop/pages/view_camera_page.dart`
@@ -412,8 +412,8 @@
 
 - `src/common.rs`, `src/flutter_ffi.rs`
 - `libs/scrap/src/android/pkg2230.rs`, `libs/scrap/src/android/ffi.rs`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
 - `flutter/lib/models/input_model.dart`
 - `flutter/lib/common.dart`
 - `flutter/lib/common/widgets/overlay.dart`

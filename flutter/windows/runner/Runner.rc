@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "CloudSend Ltd" "\0"
-            VALUE "FileDescription", "CloudSend" "\0"
+            VALUE "CompanyName", "Tunnel" "\0"
+            VALUE "FileDescription", "Tunnel" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "CloudSend" "\0"
-            VALUE "LegalCopyright", "Copyright © 2025 CloudSend Ltd. All rights reserved." "\0"
-            VALUE "OriginalFilename", "CloudSend.exe" "\0"
-            VALUE "ProductName", "CloudSend" "\0"
+            VALUE "InternalName", "Tunnel" "\0"
+            VALUE "LegalCopyright", "Copyright © 2025 Tunnel contributors. All rights reserved." "\0"
+            VALUE "OriginalFilename", "Tunnel.exe" "\0"
+            VALUE "ProductName", "Tunnel" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

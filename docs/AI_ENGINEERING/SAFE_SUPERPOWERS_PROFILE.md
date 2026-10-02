@@ -1,19 +1,19 @@
-# CloudSend Safe Superpowers Profile
+# Tunnel Safe Superpowers Profile
 
 生效日期：2026-07-12  
 状态：`accepted`（ADR-0013）  
-实现：project-owned `cloudsend-superpowers-safe` policy adapter  
+实现：project-owned `tunnel-superpowers-safe` policy adapter
 外部包状态：not installed、not vendored、not executed
 
 ## 1. Purpose
 
-借鉴 Superpowers 的结构化思考方法，但不引入其执行、Git、分支或发布工作流。CloudSend 的 `PROJECT_START_HERE.md`、`AI_RULES.md`、T0—T8、C0—C3 和 V0—V5 永远优先。
+借鉴 Superpowers 的结构化思考方法，但不引入其执行、Git、分支或发布工作流。Tunnel 的 `PROJECT_START_HERE.md`、`AI_RULES.md`、T0—T8、C0—C3 和 V0—V5 永远优先。
 
 官方 upstream 只作为 2026-07-12 的只读设计参考：`https://github.com/obra/superpowers`。该 URL 不是 dependency source、自动更新源或执行授权。
 
 ## 2. Exact Capability Allowlist
 
-| Capability | CloudSend-safe behavior | Mandatory stop |
+| Capability | Tunnel-safe behavior | Mandatory stop |
 |---|---|---|
 | `brainstorming` | 理解目标、列约束、提出 2—3 个方案和 trade-offs | T3 design；不实现、不自动写文档/commit |
 | `planning` | 产生 Task Brief、Impact Map、sequence、rollback 和 TEST_MATRIX selection | T4 confirmation；不执行计划 |
@@ -40,7 +40,7 @@ Tests may be designed and selected from `TEST_MATRIX.md`; the adapter itself nev
 ## 4. Authority Model
 
 - The adapter always starts at `OBSERVE/C0`.
-- A request to persist a plan/review document is routed to `cloudsend-master` and needs explicit C1.
+- A request to persist a plan/review document is routed to `tunnel-master` and needs explicit C1.
 - A request to implement is routed to Master + domain Skill and needs C2.
 - Build/test/codegen/device/integration still needs the corresponding C3 + G2.
 - Commit/push/release are hard-denied inside this profile, even if another workflow would normally suggest them.

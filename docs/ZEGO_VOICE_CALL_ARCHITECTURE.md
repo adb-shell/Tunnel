@@ -2,7 +2,7 @@
 
 最后同步源码：2026-06-07
 
-本文是 CloudSend PC -> Android 1v1 ZEGO 语音通话的工程级链路说明。ZEGO 只承载语音媒体，CloudSend 原远控连接只承载邀请、接听、挂断和房间参数分发。
+本文是 Tunnel PC -> Android 1v1 ZEGO 语音通话的工程级链路说明。ZEGO 只承载语音媒体，Tunnel 原远控连接只承载邀请、接听、挂断和房间参数分发。
 
 官方依据：
 
@@ -17,14 +17,14 @@
 ```mermaid
 sequenceDiagram
     participant PC as "PC Flutter + Rust session"
-    participant Token as "CloudSend ZEGO Token Service"
-    participant Conn as "Existing CloudSend control channel"
+    participant Token as "Tunnel ZEGO Token Service"
+    participant Conn as "Existing Tunnel control channel"
     participant AndroidRust as "Android Rust connection-manager"
     participant AndroidUI as "Android Flutter UI"
     participant ZegoPC as "ZEGO SDK on PC"
     participant ZegoAndroid as "ZEGO SDK on Android"
 
-    PC->>Token: POST http://103.30.77.156:50003(pcPeerId, androidPeerId=remotePeerId, cloudsendSessionId)
+    PC->>Token: POST http://103.30.77.156:50003(pcPeerId, androidPeerId=remotePeerId, tunnelSessionId)
     Token-->>PC: roomId, caller/callee userId, caller/callee streamId, caller/callee token
     PC->>Conn: VoiceCallRequest(is_connect=true, callee ZEGO metadata)
     Conn->>AndroidRust: deliver VoiceCallRequest
@@ -49,7 +49,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    subgraph Control["CloudSend existing control connection"]
+    subgraph Control["Tunnel existing control connection"]
         A["PC voice button"] --> B["Rust Data::NewVoiceCall"]
         B --> C["VoiceCallRequest / VoiceCallResponse"]
         C --> D["Android auto-accept dialog"]
@@ -73,7 +73,7 @@ flowchart LR
     E -.hangup.-> M["stopPlayingStream + stopPublishingStream + logoutRoom"]
 ```
 
-CloudSend video, input, ADB/LADB, file transfer, clipboard, terminal, Android `MediaProjection`, `SKL`, `BIS`, `VIDEO_RAW`, and side-button command protocol are outside this media boundary.
+Tunnel video, input, ADB/LADB, file transfer, clipboard, terminal, Android `MediaProjection`, `SKL`, `BIS`, `VIDEO_RAW`, and side-button command protocol are outside this media boundary.
 
 ## 3. State Truth
 
@@ -114,7 +114,7 @@ Room and stream isolation:
 
 - PC obtains ZEGO metadata from the token service per call.
 - Current PC endpoint is `http://103.30.77.156:50003`, handled directly by the IP + port token service deployment. It does not use a domain or reverse proxy.
-- `cloudsendSessionId = pcPeerId_remotePeerId_reqTimestamp`.
+- `tunnelSessionId = pcPeerId_remotePeerId_reqTimestamp`.
 - Token service must create unique `roomId`, `callerUserId`, `calleeUserId`, `callerStreamId`, and `calleeStreamId`.
 - PC sends only the Android/callee token to the controlled side; caller token stays in PC memory.
 
@@ -138,9 +138,9 @@ Runtime isolation:
 
 ## 6. Official Demo Alignment
 
-The official ZEGO Flutter quick-start flow was reviewed as an implementation reference. The demo zip is not a Git-tracked project source file; if a local `ZegoExpressDemo_flutter_dart.zip` is provided again, treat it as external reference material and verify against current ZEGO docs plus CloudSend source anchors.
+The official ZEGO Flutter quick-start flow was reviewed as an implementation reference. The demo zip is not a Git-tracked project source file; if a local `ZegoExpressDemo_flutter_dart.zip` is provided again, treat it as external reference material and verify against current ZEGO docs plus Tunnel source anchors.
 
-| Official demo flow | Demo source | CloudSend source |
+| Official demo flow | Demo source | Tunnel source |
 |---|---|---|
 | Create engine with `ZegoEngineProfile` | `lib/topics/QuickStart/quick_start/quick_start_page.dart::createEngine` | `flutter/lib/models/zego_voice_call_model.dart::_ensureEngine` |
 | Login room before publish/play | `quick_start_page.dart::loginRoom` | `ZegoVoiceCallModel.join` |
@@ -153,9 +153,9 @@ The official ZEGO Flutter quick-start flow was reviewed as an implementation ref
 | Track sent audio first frame | `publish_stream_publishing_page.dart::onPublisherSendAudioFirstFrame` | `ZegoVoiceCallModel._installCallbacks` |
 | Track publish/play quality | `publish_stream_publishing_page.dart::onPublisherQualityUpdate`, `play_stream_page.dart::onPlayerQualityUpdate` | `ZegoVoiceCallModel._installCallbacks`, PC panel, Android status card |
 
-Intentional CloudSend differences:
+Intentional Tunnel differences:
 
-- CloudSend uses Token authentication from `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`; `ZEGO_SERVER_SECRET` stays server-side.
-- CloudSend uses `ZegoScenario.StandardVoiceCall` for 1v1 audio instead of the demo's generic/high-quality video scenario.
-- CloudSend does not create video canvas views because the module is audio-only; `startPlayingStream(streamID)` is still used for the audio stream.
-- CloudSend uses the existing remote-control channel only for invite/accept/hangup and ZEGO room metadata; audio frames never travel through RustDesk `audio_service`.
+- Tunnel uses Token authentication from `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`; `ZEGO_SERVER_SECRET` stays server-side.
+- Tunnel uses `ZegoScenario.StandardVoiceCall` for 1v1 audio instead of the demo's generic/high-quality video scenario.
+- Tunnel does not create video canvas views because the module is audio-only; `startPlayingStream(streamID)` is still used for the audio stream.
+- Tunnel uses the existing remote-control channel only for invite/accept/hangup and ZEGO room metadata; audio frames never travel through RustDesk `audio_service`.

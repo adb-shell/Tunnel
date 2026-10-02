@@ -1,0 +1,195 @@
+package com.tunnel.app.adb.probe
+
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.InputStream
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.min
+
+internal enum class ProcessFailure {
+    INVALID_LIMITS, BUSY, START_FAILED, TIMEOUT, INTERRUPTED, OUTPUT_LIMIT, DRAIN_FAILED, RUNNER_UNAVAILABLE
+}
+
+/** Output stays inside the Android implementation; never put it in logs or MethodChannel maps. */
+internal class BoundedProcessResult(
+    val exitCode: Int?,
+    val stdout: ByteArray,
+    val stderr: ByteArray,
+    val failure: ProcessFailure?,
+) {
+    val succeeded: Boolean get() = failure == null && exitCode == 0
+    override fun toString(): String = "BoundedProcessResult(exitCode=$exitCode, failure=$failure)"
+}
+
+/**
+ * Executes only caller-owned finite commands. No shell wrapper, logging, or global ADB cleanup.
+ * Callers must use fixed command forms and validated parameters; this is not a remote shell API.
+ * Runtime is bounded after start() returns; a stuck OS process-start syscall cannot be interrupted
+ * safely by Java. A drain that cannot terminate poisons this runner instead of leaking more threads.
+ */
+internal object BoundedProcessRunner {
+    private val unavailable = AtomicBoolean(false)
+    private val gate = Semaphore(1)
+
+    fun run(
+        command: List<String>,
+        workingDirectory: File,
+        environment: Map<String, String>,
+        timeoutMillis: Long = 5_000,
+        maxBytesPerStream: Int = 8 * 1024,
+    ): BoundedProcessResult = runWithFactory(timeoutMillis, maxBytesPerStream) {
+        ProcessBuilder(command)
+            .directory(workingDirectory)
+            .redirectErrorStream(false)
+            .apply {
+                // Do not inherit ADB_SERVER_SOCKET, ANDROID_SERIAL, ADB_TRACE or injected options.
+                environment().clear()
+                environment().putAll(environment)
+            }.start()
+    }
+
+    internal fun runWithFactory(
+        timeoutMillis: Long,
+        maxBytesPerStream: Int,
+        start: () -> Process,
+    ): BoundedProcessResult {
+        if (timeoutMillis !in 1..60_000 || maxBytesPerStream !in 1..1_048_576) {
+            return emptyResult(ProcessFailure.INVALID_LIMITS)
+        }
+        if (unavailable.get()) return emptyResult(ProcessFailure.RUNNER_UNAVAILABLE)
+        if (Thread.currentThread().isInterrupted) return emptyResult(ProcessFailure.INTERRUPTED)
+        if (!gate.tryAcquire()) return emptyResult(ProcessFailure.BUSY)
+        return try {
+            if (unavailable.get()) emptyResult(ProcessFailure.RUNNER_UNAVAILABLE)
+            else runOwned(timeoutMillis, maxBytesPerStream, start)
+        } finally {
+            gate.release()
+        }
+    }
+
+    private fun runOwned(
+        timeoutMillis: Long,
+        maxBytesPerStream: Int,
+        start: () -> Process,
+    ): BoundedProcessResult {
+        val process = try { start() } catch (_: Exception) {
+            return emptyResult(ProcessFailure.START_FAILED)
+        }
+        val stdout = Drain(process.inputStream, maxBytesPerStream)
+        val stderr = Drain(process.errorStream, maxBytesPerStream)
+        val outThread = drainThread(stdout, "tunnel-adb-probe-out")
+        val errThread = drainThread(stderr, "tunnel-adb-probe-err")
+        var failure: ProcessFailure? = null
+        var exitCode: Int? = null
+        var interrupted = false
+        try {
+            outThread.start()
+            errThread.start()
+            process.outputStream.close() // Finite commands are never interactive.
+            val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+            while (true) {
+                if (stdout.overflow.get() || stderr.overflow.get()) {
+                    failure = ProcessFailure.OUTPUT_LIMIT
+                    break
+                }
+                if (stdout.failed.get() || stderr.failed.get()) {
+                    failure = ProcessFailure.DRAIN_FAILED
+                    break
+                }
+                val remaining = deadline - System.nanoTime()
+                if (remaining <= 0) {
+                    failure = ProcessFailure.TIMEOUT
+                    break
+                }
+                if (process.waitFor(min(remaining, TimeUnit.MILLISECONDS.toNanos(50)), TimeUnit.NANOSECONDS)) {
+                    exitCode = process.exitValue()
+                    break
+                }
+            }
+        } catch (_: InterruptedException) {
+            interrupted = true
+            failure = ProcessFailure.INTERRUPTED
+        } catch (_: Exception) {
+            failure = ProcessFailure.DRAIN_FAILED
+        } finally {
+            if (exitCode == null) {
+                try { process.destroyForcibly() } catch (_: Exception) { }
+                try {
+                    if (process.waitFor(250, TimeUnit.MILLISECONDS)) exitCode = process.exitValue()
+                } catch (_: InterruptedException) {
+                    interrupted = true
+                } catch (_: Exception) { }
+            }
+            try {
+                outThread.join(250)
+                errThread.join(250)
+            } catch (_: InterruptedException) {
+                interrupted = true
+            }
+            if (outThread.isAlive || errThread.isAlive) {
+                // A pipe close may wait on the same monitor as a blocked read. Do not let
+                // teardown make the caller unbounded; retain at most these two daemon
+                // drains, with bounded buffers, and permanently reject further children.
+                unavailable.set(true)
+                if (failure == null) failure = ProcessFailure.DRAIN_FAILED
+            }
+            if (!outThread.isAlive) {
+                try { process.inputStream.close() } catch (_: Exception) { }
+            }
+            if (!errThread.isAlive) {
+                try { process.errorStream.close() } catch (_: Exception) { }
+            }
+            try { process.outputStream.close() } catch (_: Exception) { }
+            if (exitCode == null) {
+                try { exitCode = process.exitValue() } catch (_: IllegalThreadStateException) {
+                    unavailable.set(true) // Do not accumulate children that the OS did not reap.
+                }
+            }
+        }
+        if (failure == null && (stdout.overflow.get() || stderr.overflow.get())) failure = ProcessFailure.OUTPUT_LIMIT
+        if (failure == null && (stdout.failed.get() || stderr.failed.get())) failure = ProcessFailure.DRAIN_FAILED
+        if (interrupted) {
+            failure = ProcessFailure.INTERRUPTED
+            Thread.currentThread().interrupt()
+        }
+        return BoundedProcessResult(exitCode, stdout.snapshot(), stderr.snapshot(), failure)
+    }
+
+    private fun emptyResult(failure: ProcessFailure) =
+        BoundedProcessResult(null, ByteArray(0), ByteArray(0), failure)
+
+    private fun drainThread(drain: Drain, name: String): Thread = Thread(drain, name).apply {
+        isDaemon = true
+    }
+
+    private class Drain(private val input: InputStream, private val limit: Int) : Runnable {
+        private val bytes = ByteArrayOutputStream(min(limit, 1024))
+        val overflow = AtomicBoolean(false)
+        val failed = AtomicBoolean(false)
+
+        override fun run() {
+            try {
+                val buffer = ByteArray(4096)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    if (count == 0) continue
+                    synchronized(bytes) {
+                        val accepted = min(count, limit - bytes.size())
+                        if (accepted > 0) bytes.write(buffer, 0, accepted)
+                        if (accepted < count) overflow.set(true)
+                    }
+                    // Keep draining excess bytes until the owner terminates the process.
+                }
+            } catch (_: Exception) {
+                failed.set(true)
+            } finally {
+                try { input.close() } catch (_: Exception) { }
+            }
+        }
+
+        fun snapshot(): ByteArray = synchronized(bytes) { bytes.toByteArray() }
+    }
+}

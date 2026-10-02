@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tunnel Safe Superpowers"
+  short_description: "Safely brainstorm, plan, debug, verify, and review Tunnel"
+  default_prompt: "Use $tunnel-superpowers-safe to review this Tunnel task read-only and stop before any edit, build, Git write, or release action."

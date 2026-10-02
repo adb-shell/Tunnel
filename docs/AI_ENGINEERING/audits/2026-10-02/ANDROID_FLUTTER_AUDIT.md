@@ -26,12 +26,12 @@ Task：`T-2026-10-02-001`
 | Android core | `DFm8Y8iMScvB2YDw.onCreate/onStartCommand` + Rust core + JNI GlobalRef | `verified` 源码；持续可用 `verification-required` |
 | Screen share | Activity `start_screen_share` → permission Activity → MainService `startCapture` | `verified` |
 | PC side commands | `overlay.dart` → `common.dart` callback wiring → `InputModel` → FRB → Rust session/client → authenticated endpoint → JNI → Kotlin | `verified` |
-| ADB/LADB | `AdbPage` → `AndroidAdbManager` → `mChannel` → `CloudSendAdbManager` → Runner/DNS/Accessibility automation | `verified`；本地能力 |
+| ADB/LADB | `AdbPage` → `AndroidAdbManager` → `mChannel` → `TunnelAdbManager` → Runner/DNS/Accessibility automation | `verified`；本地能力 |
 | Voice media | Rust invite/control → Flutter `ZegoVoiceCallModel` → ZEGO SDK | `verified` 本地接线；RTC/broker `external` |
 
 重要导航边界：`HomePageState.build()` 访问 `_pages.elementAt(_selectedIndex)`；当非 Android 或 outgoing-only 配置使 `_pages` 为空时存在异常路径。源码支持这一条件组合，是否在实际发布配置可达须正式验证。不能把 Android 主页直接推广为所有 mobile 平台行为。
 
-Android manifest/build 事实：`flutter/android/app/build.gradle` 为 compileSdk 34、targetSdk 33、minSdk 21。MainService 声明 mediaProjection foreground-service type；Accessibility 非 exported，MainActivity 和 BootReceiver exported；scheme 为 `cloudsend`。`accessibility_service_config.xml` 配置 all-event/all-package、window content、gestures、screenshot 等能力。声明、SDK 分支、系统授予和运行可用性是四个不同层次。
+Android manifest/build 事实：`flutter/android/app/build.gradle` 为 compileSdk 34、targetSdk 33、minSdk 21。MainService 声明 mediaProjection foreground-service type；Accessibility 非 exported，MainActivity 和 BootReceiver exported；scheme 为 `tunnel`。`accessibility_service_config.xml` 配置 all-event/all-package、window content、gestures、screenshot 等能力。声明、SDK 分支、系统授予和运行可用性是四个不同层次。
 
 ## 3. 状态 owner 与资源生命周期
 
@@ -50,9 +50,9 @@ Android manifest/build 事实：`flutter/android/app/build.gradle` 为 compileSd
 | `ServerModel` 500ms timer | 每个 FFI 的 ServerModel constructor | 未保存 handle，未见 dispose/cancel | `FFI.close` 不关闭该轮询，需修复前评估真实实例数 |
 | Session event subscription | `FFI.start` 中 `stream.listen` | 未保存 subscription；callback 检查 closed，native sessionClose | 不足以证明 subscription 已释放；已开始的 async callback 仍须检查 |
 | ADB page timers/controllers | `_AdbPageState`：100ms output / 700ms debug timers | `dispose` 取消 timer 并 dispose controllers | stop service 不取消 output timer；in-flight Future 仍可返回 |
-| ADB process | `CloudSendAdbManager` singleton runner | explicit stop 关 shell/kill local ADB；generation 防旧 shell reader 回写 | 页面销毁不等于 native process 已停；并发 start/stop/pair 非统一锁 |
+| ADB process | `TunnelAdbManager` singleton runner | explicit stop 关 shell/kill local ADB；generation 防旧 shell reader 回写 | 页面销毁不等于 native process 已停；并发 start/stop/pair 非统一锁 |
 | ZEGO engine/media | `ZegoVoiceCallModel` static engine + engine-local active model，per-model payload/timers；Rust controller 另有 process owner mutex | `leave` stop play/publish、logout、清 timers/state；engine 可保留复用 | Dart static 与 Rust `ZEGO_VOICE_CALL_OWNER` 是不同层的锁；多进程边界需实测 |
-| Desktop window registry | `CloudSendMultiWindowManager` 按 type 保存 active/inactive window IDs | `_closeWindows` 保存位置并关闭窗口、清 type registry | hide/reuse/close 不等价；失败中止时 registry 需实测 |
+| Desktop window registry | `TunnelMultiWindowManager` 按 type 保存 active/inactive window IDs | `_closeWindows` 保存位置并关闭窗口、清 type registry | hide/reuse/close 不等价；失败中止时 registry 需实测 |
 
 ## 4. Core、授权与帧的完整链
 
@@ -131,7 +131,7 @@ Dev selector 是实际有路由的自动化功能：解析 start/pause/stop/clos
 
 ### ADB
 
-`CloudSendAdbManager` 是 application-context singleton facade；Activity handler 对较长操作使用 worker thread 并在 UI thread 返回结果。Runner 从 `nativeLibraryDir/libadb.so` 启动进程，NSD 查找 connect port，pair/connect 尝试 loopback/local Wi-Fi 候选并维护 preferred serial。`startLocalShell` 单独使用 `sh -l`，不应混称 ADB shell。ADB pairing code 通过 stdin；报告不保存任何 port/device/code 实值。
+`TunnelAdbManager` 是 application-context singleton facade；Activity handler 对较长操作使用 worker thread 并在 UI thread 返回结果。Runner 从 `nativeLibraryDir/libadb.so` 启动进程，NSD 查找 connect port，pair/connect 尝试 loopback/local Wi-Fi 候选并维护 preferred serial。`startLocalShell` 单独使用 `sh -l`，不应混称 ADB shell。ADB pairing code 通过 stdin；报告不保存任何 port/device/code 实值。
 
 `openShell` 非 local-shell 自动请求 `WRITE_SECURE_SETTINGS` grant。shell reader 以 generation 防旧实例回调，restart attempts 最大 3；输出显示缓存为 synchronized 16KiB ring。`runAdb/pair` 的 wait-before-read 和 `readText` 临时存储仍与该 ring buffer 不同；需要高输出和 stop/start 并发测试。
 
@@ -151,19 +151,19 @@ ServerModel 将 voice state Future 串行排队，按 native CM clients 清 stal
 
 ZEGO异步边界补充：voice state Future串行化不等于media操作串行化。`androidChannelInit` 对ready/closed分别启动unawaited join/leave；`ZegoVoiceCallModel.join`仅在入口等待已有leave，后续engine/config/login等await后没有generation/cancel检查。若leave发生于join中途，旧continuation存在继续置joined/publish的路径；这是`inferred / verification-required`，需测试“room login未完成即挂断”，不能写成已发生。
 
-以下锚点均按本次 HEAD 实查；Kotlin 简写前缀 `K/` = `flutter/android/app/src/main/kotlin/com/cloudsend/app/`，只用于本表导航。
+以下锚点均按本次 HEAD 实查；Kotlin 简写前缀 `K/` = `flutter/android/app/src/main/kotlin/com/tunnel/app/`，只用于本表导航。
 
 | 锚点 | 证明的事实 |
 |---|---|
 | `flutter/lib/main.dart::main` / `runMobileApp` / `runMultiWindow` | platform、CM、install、window 分流；Android启动次序 |
 | `flutter/lib/mobile/pages/home_page.dart::HomePageState.initPages` | mobile 当前 page 可达性与空列表分支 |
-| `flutter/lib/utils/multi_window_manager.dart::CloudSendMultiWindowManager._newSession` / `_closeWindows` | tab/复用/新窗口/关闭 owner |
+| `flutter/lib/utils/multi_window_manager.dart::TunnelMultiWindowManager._newSession` / `_closeWindows` | tab/复用/新窗口/关闭 owner |
 | `flutter/lib/models/native_model.dart::PlatformFFI._startListenEvent` / `syncAndroidServiceAppDirConfigPath` | global event stream、MethodChannel、未 await config helper |
 | `flutter/lib/models/model.dart::FFI` / `FFI.start` / `FFI.close` | 每实例模型创建、session stream 与 teardown |
 | `flutter/lib/models/model.dart::FfiModel._startAndroidAutoReconnect` | 2500ms、300ms、60s 与 forceRelay |
 | `flutter/lib/models/model.dart::FfiModel.showConnectedWaitingForImage` | waiting 仅 normal refresh |
 | `flutter/lib/models/model.dart::FFI.onEvent2UIRgba` | RGBA/Texture 公用清 waiting |
-| `flutter/lib/models/model.dart::CloudSendStatusModel.updateFromEvent` / `_restartStaleTimer` | missing-key、8s stale / 8.5s timer |
+| `flutter/lib/models/model.dart::TunnelStatusModel.updateFromEvent` / `_restartStaleTimer` | missing-key、8s stale / 8.5s timer |
 | `flutter/lib/models/server_model.dart::ServerModel` / `ensureCoreService` / `startService` / `stopService` | 500ms timer 与 core/share 分离 |
 | `flutter/lib/mobile/pages/server_page.dart::androidChannelInit` | JVM event consumer 与敏感 arguments 日志路径 |
 | `flutter/lib/models/input_model.dart::InputModel.sendMouse` / `onScreen*` | UI command permission exception、payload |
@@ -173,7 +173,7 @@ ZEGO异步边界补充：voice state Future串行化不等于media操作串行�
 | `libs/hbb_common/protos/message.proto::MouseEvent` / `VoiceCallRequest` | 自定义 url 字段和 voice metadata schema |
 | `src/client/io_loop.rs::try_acquire_zego_voice_call_owner` / `release_zego_voice_call_owner` | controller Rust process 级通话 owner |
 | `src/server/connection.rs::Connection::on_message` | authorized 后 Android input 未检查 keyboard capability |
-| `src/server/connection.rs::cloudsend_status_message` / `Connection::send_logon_response` | immediate status 尝试与有效 JSON gate |
+| `src/server/connection.rs::tunnel_status_message` / `Connection::send_logon_response` | immediate status 尝试与有效 JSON gate |
 | `src/ui_cm_interface.rs::remove_connection` | PC 移除不发送 Android stop capture |
 | `libs/scrap/src/android/mod.rs::pkg2230` | active module 唯一导出 |
 | `libs/scrap/src/android/pkg2230.rs::FrameRaw::update/take` | 外部 raw pointer 保存后延迟复制 |
@@ -196,9 +196,9 @@ ZEGO异步边界补充：voice state Future串行化不等于media操作串行�
 | `K/EqljohYazB0qrhnj.kt::a012933444444/a012933444445` / `imageBuffer` | shared screenshot/hierarchy buffer |
 | `K/DevAutoSelectorController.kt::handleCommand` / `selectNext` / `release` | 实际 Dev automation 和 cleanup |
 | `flutter/lib/mobile/pages/adb_page.dart::_ensurePolling` / `_appendLocalLine` / `dispose` | poll 重入和 async-dispose 风险 |
-| `K/adb/CloudSendAdbManager.kt::initialize` / `start` / `setWirelessDebugging` | singleton facade 与 supported 字段 |
-| `K/adb/CloudSendAdbRunner.kt::openShell` / `runAdb` / `append` | privilege command、wait/read、16KiB cache |
-| `K/adb/CloudSendAdbDnsDiscover.kt::discoverConnectPort` | NSD port discovery / retry |
+| `K/adb/TunnelAdbManager.kt::initialize` / `start` / `setWirelessDebugging` | singleton facade 与 supported 字段 |
+| `K/adb/TunnelAdbRunner.kt::openShell` / `runAdb` / `append` | privilege command、wait/read、16KiB cache |
+| `K/adb/TunnelAdbDnsDiscover.kt::discoverConnectPort` | NSD port discovery / retry |
 | `flutter/lib/models/server_model.dart::_startVoiceCallAutoAcceptTimer` / `showAutoAcceptVoiceCallDialog` / `onClientRemove` | consent 现状和 per-client cleanup |
 | `flutter/lib/models/zego_voice_call_model.dart::join` / `leave` / `mediaReady` | SDK media lifecycle 与真实 readiness predicate |
 
@@ -230,7 +230,7 @@ ZEGO异步边界补充：voice state Future串行化不等于media操作串行�
 | 首帧等待/静态画面 | FfiModel waiting + MainService normal refresh + FrameRaw | RGBA/Texture 两路、data ownership、force_next；AND-02、FLT-03、RST-04 |
 | 黑屏/无视/穿透/防触 | InputModel + pkg2230 masks + Accessibility + image helper | UI→wire→JNI 全链、brightness/pixel recovery、授权；AND-02/05 |
 | Dev 自动化 | DraggableMobileActionsDev + DevAutoSelectorController | 目标窗口、stop/revoke、privacy、blank overlay；AND-05 |
-| local ADB 稳定性 | AdbPage + CloudSendAdbManager/Runner/DnsDiscover | native process owner、polling、settings automation、provenance；AND-06/08 |
+| local ADB 稳定性 | AdbPage + TunnelAdbManager/Runner/DnsDiscover | native process owner、polling、settings automation、provenance；AND-06/08 |
 | 语音接听/无音频/忙状态 | ServerModel + ZegoVoiceCallModel + Rust invitation state | token scope/TLS、explicit consent、microphone、pending cache、日志脱敏；AND-07、NET-07、API-08 |
 | 多窗口/关闭后泄漏 | main.dart + MultiWindowManager + FFI/ServerModel | engine/session/window IDs、stream subscription、timer/controller teardown；FLT-02/04/05 |
 

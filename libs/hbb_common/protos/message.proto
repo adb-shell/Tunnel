@@ -841,8 +841,8 @@ message Misc {
     DisplayResolution change_display_resolution = 36;
     MessageQuery message_query = 37;
     int32 follow_current_display = 38;
-    // CloudSend: Android controlled-end feature status JSON push.
-    string cloudsend_status = 39;
+    // Tunnel: Android controlled-end feature status JSON push.
+    string tunnel_status = 39;
   }
 }
 
@@ -850,7 +850,7 @@ message VoiceCallRequest {
   int64 req_timestamp = 1;
   // Indicates whether the request is a connect action or a disconnect action.
   bool is_connect = 2;
-  // CloudSend: third-party RTC voice call metadata. These fields are only used
+  // Tunnel: third-party RTC voice call metadata. These fields are only used
   // by the ZEGO voice-call path and do not affect the existing remote-control
   // video/input/file/ADB channels.
   string rtc_provider = 3;

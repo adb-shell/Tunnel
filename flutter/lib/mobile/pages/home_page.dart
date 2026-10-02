@@ -217,7 +217,7 @@ class WebHomePage extends StatelessWidget {
           return;
         }
         list.removeAt(0);
-        fakelink = "cloudsend://${list.join(s)}";
+        fakelink = "tunnel://${list.join(s)}";
         break;
       }
     }

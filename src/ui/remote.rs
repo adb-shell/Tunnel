@@ -170,7 +170,7 @@ impl InvokeUiSession for SciterHandler {
         );
     }
 
-    fn update_cloudsend_status(&self, _json: String) {}
+    fn update_tunnel_status(&self, _json: String) {}
 
     fn set_cursor_id(&self, id: String) {
         self.call("setCursorId", &make_args!(id));

@@ -1,4 +1,6 @@
-# CloudSend Commercial Test Matrix
+# Tunnel Commercial Test Matrix
+
+2026-10-02 T004 身份迁移新增验证范围：包/namespace/deeplink/native exports/FRB 类名、portable marker与启动文件、Windows产品信息、broker新字段、新装授权与旧配置隔离。编译/签名/安装/设备回归均 NOT_RUN。逐项正式环境需求见 `docs/BASELINE/2026-10-02_TUNNEL_IDENTITY_BASELINE.md`，P0另遵循 `docs/plans/ADB_P0_VALIDATION_RUNBOOK.md`，不改变其默认关闭状态。
 
 最后更新：2026-07-12  
 Baseline：`CS-BL-2026-07-12-77062b4`  
@@ -171,7 +173,13 @@ Retention location:
 
 Never include token、password、credential、production URL/IP、peer/device ID、contacts、file/clipboard/terminal content or PII.
 
-## 14. Formal Verification Request
+## 14. Proposed Remote ADB Suite
+
+`ADBM-01`—`ADBM-30` 的前置条件、动作、结果和阶段统一维护于[ADB投屏方案第14节](docs/plans/ADB_REMOTE_MIRRORING_PLAN.md#14-验收矩阵与性能目标)，避免两处复制。运行状态全部 `NOT_RUN`。T003新增protocol/target/identity/process的JUnit源码与本地H264诊断入口，但不等于任何整项ADBM通过；正式命令与部分覆盖见[P0交接](docs/plans/ADB_P0_VALIDATION_RUNBOOK.md)。
+
+覆盖本机授权/helper/codec、输入与epoch切换、无障碍pause/disable/enable、其他服务共存、UiAutomation独占、侧按钮、弱网/资源上限/旧端/多窗口、回滚及产物来源。ADBM与AND-01—06/08、FLT-02—07、NET-01—06、E2E-01联合验收。现有AND-06的local-only基线保持；ADR-0014虽已接受分阶段实施，正式remote行为合同仍须P0与后续相应测试。
+
+## 15. Formal Verification Request
 
 When execution is needed but not authorized, output and stop:
 

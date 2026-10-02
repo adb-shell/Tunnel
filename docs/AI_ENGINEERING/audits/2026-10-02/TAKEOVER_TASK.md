@@ -1,4 +1,4 @@
-# T-2026-10-02-001：CloudSend 源码复核与接管文档整理
+# T-2026-10-02-001：Tunnel 源码复核与接管文档整理
 
 创建：2026-10-02（Asia/Shanghai）；Task Template：根目录 `TASK_TEMPLATE.md`。
 
@@ -8,7 +8,7 @@
 |---|---|
 | Status / T-state | complete / T8；repository-side C1 documentation |
 | Requester / Product Owner | 当前项目用户 |
-| Principal / Skill | Codex primary agent / `cloudsend-master` |
+| Principal / Skill | Codex primary agent / `tunnel-master` |
 | Domain reviewers | Android/Flutter；Rust/Network/Windows；API/Security/Release 三个协作 agent |
 | Source | detached HEAD `5cee6921ec10971bb4654bc010f9328d7f70d02b` |
 | Initial dirty / conflict | clean；无已有用户改动、无活动任务 |

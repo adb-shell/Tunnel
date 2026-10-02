@@ -1,4 +1,4 @@
-# CloudSend 2026-10-02 接管结果与维护入口
+# Tunnel 2026-10-02 接管结果与维护入口
 
 Task：`T-2026-10-02-001`；Baseline：`CS-BL-2026-10-02-5cee692`；Evidence：V0。
 源码观察点：`5cee6921ec10971bb4654bc010f9328d7f70d02b`；日期按 Asia/Shanghai。
@@ -23,7 +23,7 @@ Task：`T-2026-10-02-001`；Baseline：`CS-BL-2026-10-02-5cee692`；Evidence：V
 
 ## 2. 当前仓库事实
 
-- 产品 Rust `5.2.1`、Flutter `5.2.1+59`，crate/library `cloudsend`，Android applicationId `com.cloudsend.app`，显示名 `云计划`。
+- 产品 Rust `5.2.1`、Flutter `5.2.1+59`，crate/library `tunnel`，Android applicationId `com.tunnel.app`，显示名 `隧道`。
 - 初始工作区 clean、detached HEAD；本地非 shallow、只有一个可达 root commit。旧 `77062b4` 对象不存在，无法用本地 Git 比较旧基线或重放旧时间线。
 - HEAD tree 有 975 文件、104 Markdown、15,605,939 bytes；tracked 源码/headers/proto约 23.56 万文本行，包含 generated/vendor/空行。
 - 当前 `ADB-CODE/`、`LADB/`、`flutter/android/app/src/main/jniLibs/` 均不存在；旧 local-only 与 hash 记录不能当当前资产已就绪。

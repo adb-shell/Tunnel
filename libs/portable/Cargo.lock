@@ -160,7 +160,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cloudsend-portable-packer"
+name = "tunnel-portable-packer"
 version = "5.2.1"
 dependencies = [
  "brotli",

@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import '../../common.dart';
 import 'home_page.dart';
+import '../widgets/adb_mirror_probe_card.dart';
 
 class AdbPage extends StatefulWidget implements PageShape {
   @override
@@ -30,6 +31,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
   Timer? _debugPollTimer;
   String _terminalText = "";
   bool _busy = false;
+  bool _probeActive = false;
   bool _debugBusy = false;
   bool _wirelessDebugEnabled = false;
   bool _shellReady = false;
@@ -41,7 +43,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _appendLocalLine("CloudSend ADB module ready.");
+    _appendLocalLine("Tunnel ADB module ready.");
     _appendLocalLine("Tap Start service to begin wireless-debugging setup.");
     _refreshWirelessDebugStatus();
   }
@@ -446,6 +448,13 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
           child: ListView(
             padding: const EdgeInsets.only(bottom: 24),
             children: [
+              AdbMirrorProbeCard(
+                blocked: _busy || _debugBusy,
+                isPageVisible: () => HomePage.homeKey.currentState?.selectedIndex == 1,
+                onActiveChanged: (active) {
+                  if (mounted && _probeActive != active) setState(() => _probeActive = active);
+                },
+              ),
               _AdbCard(
                 title: "ADB",
                 titleIcon: const Icon(Icons.adb, color: MyTheme.accent),
@@ -467,7 +476,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
                               )
                             : null,
                         onPressed:
-                            _busy ? null : (adbRunning ? _stopAdbFlow : _startAdbFlow),
+                            _busy || _probeActive ? null : (adbRunning ? _stopAdbFlow : _startAdbFlow),
                         label: Text(_busy
                             ? "\u5904\u7406\u4e2d"
                             : adbRunning
@@ -501,7 +510,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
                                 foregroundColor: Colors.white,
                               )
                             : null,
-                        onPressed: _toggleWirelessDebug,
+                        onPressed: _probeActive ? null : _toggleWirelessDebug,
                         label: Text(_debugBusy
                             ? "\u505c\u6b62\u6267\u884c"
                             : _wirelessDebugEnabled
@@ -519,7 +528,7 @@ class _AdbPageState extends State<AdbPage> with WidgetsBindingObserver {
               ),
               _AdbCommandCard(
                 controller: _commandController,
-                enabled: _shellReady,
+                enabled: _shellReady && !_probeActive,
                 onSubmitted: _sendCommand,
               ),
             ],

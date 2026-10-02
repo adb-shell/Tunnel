@@ -9,7 +9,7 @@
 
 ## Decision
 
-CloudSend controller sessions set force-relay and reject explicit direct-address entry. Controlled endpoint rendezvous/direct/LAN/NAT compatibility code remains present; the decision is not a global removal of direct connectivity.
+Tunnel controller sessions set force-relay and reject explicit direct-address entry. Controlled endpoint rendezvous/direct/LAN/NAT compatibility code remains present; the decision is not a global removal of direct connectivity.
 
 ## Consequences
 

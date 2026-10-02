@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tunnel Android Engineer"
+  short_description: "Maintain Tunnel Android runtime and capture pipeline"
+  default_prompt: "Use $tunnel-android-engineer to handle this Android runtime task."

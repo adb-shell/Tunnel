@@ -1,4 +1,4 @@
-use cloudsend::*;
+use tunnel::*;
 
 #[cfg(not(target_os = "macos"))]
 fn main() {}

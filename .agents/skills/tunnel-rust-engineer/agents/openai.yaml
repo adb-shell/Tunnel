@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tunnel Rust Engineer"
+  short_description: "Maintain Tunnel Rust core, FFI, and unsafe code"
+  default_prompt: "Use $tunnel-rust-engineer to analyze this Rust or FFI task."

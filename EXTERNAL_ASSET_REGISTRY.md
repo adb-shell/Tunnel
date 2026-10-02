@@ -1,4 +1,4 @@
-# CloudSend External Asset Registry
+# Tunnel External Asset Registry
 
 最后更新：2026-10-02，Task `T-2026-10-02-001`
 状态：repository-side inventory rechecked at `HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`；owner/provenance onboarding incomplete
@@ -58,7 +58,7 @@ Owner 为空时统一写 `OWNER-REQUIRED`，不能由 AI 推断个人或组织�
 
 | ID | 资产 | 当前存在性 | 仓内消费/证据锚点 | Owner | 主要缺口 | 影响 |
 |---|---|---|---|---|---|---|
-| `EXT-BIN-ADB-001` | `libadb.so` for arm64-v8a / armeabi-v7a / x86_64 | `MISSING`：2026-10-02 当前 `jniLibs/` 不存在；旧记录为 ignored/local-only | `CloudSendAdbRunner.kt`, Android packaging | `OWNER-REQUIRED` | upstream/source commit、reproducible build recipe、per-ABI hash、signature、version、license mapping、artifact registry | clean clone 不能复现 ADB packaging；Android release `BLOCKING` |
+| `EXT-BIN-ADB-001` | `libadb.so` for arm64-v8a / armeabi-v7a / x86_64 | `MISSING`：2026-10-02 当前 `jniLibs/` 不存在；旧记录为 ignored/local-only | `TunnelAdbRunner.kt`, Android packaging | `OWNER-REQUIRED` | upstream/source commit、reproducible build recipe、per-ABI hash、signature、version、license mapping、artifact registry | clean clone 不能复现 ADB packaging；Android release `BLOCKING` |
 | `EXT-REF-ADB-002` | `ADB-CODE/` research/decompiled materials | `MISSING`：2026-10-02 当前目录不存在，ignore 规则仍在；historical local-only | `docs/ADB_LADB_INTEGRATION_MEMORY.md` 的研究背景 | `OWNER-REQUIRED` | origin、revision、legal/provenance、是否仅研究使用、保留策略 | 旧研究结论目前不可独立重证；不得直接进入 release source |
 | `EXT-REF-ADB-003` | `LADB/` reference source | `MISSING`：2026-10-02 当前目录不存在，ignore 规则仍在；historical local-only | ADB integration memory 与实现设计背景 | `OWNER-REQUIRED` | upstream URL/commit、license obligations、旧文档所述分发限制的原始证据、修改清单 | license/distribution 需资产到位后复核；不得等同 bundled binary source |
 
@@ -72,6 +72,15 @@ Owner 为空时统一写 `OWNER-REQUIRED`，不能由 AI 推断个人或组织�
 
 这些历史 hash 不能证明当前资产存在、source、publisher、license、完整性或 release approval。材料补齐后需同时核对 source/license/recipe 与实际文件，不能只匹配历史 hash。
 
+### 4.1 Remote ADB planning assets — proposed only
+
+| ID | Asset | State / owner | Required evidence / impact |
+|---|---|---|---|
+| EXT-SRC-ADB-HELPER-001 | scrcpy v4.1受限采集适配+Tunnel本地P0协议；参考2926c06c5dc3064ae6d8db706f1a98a37cfcf3f0 | SOURCE_IMPORTED / V0 / runtime NOT_RUN；正式Android+Security+Release owner required | [provenance](android-helper/server/PROVENANCE.md)、Apache license/NOTICE与修改清单；[独立构建配方](android-helper/README.md)；不是完整scrcpy原版产物或全部API/ROM通过证明 |
+| EXT-BIN-ADB-HELPER-001 | 从上述源码构建的dex/jar helper | NOT_BUILT；Android+Release owner required | 生成manifest记录hash/版本/source/tool关联，APK校验staging；实际hash/ROM矩阵/SBOM仍缺；P0和release gate未通过 |
+
+T-2026-10-02-002只登记未来依赖；不替代EXT-BIN-ADB-001，也不宣称已安装APK缺少ADB。当前worktree的缺失与用户设备上的产物是不同证据范围。
+
 ## 5. Windows Drivers, DLLs and Helpers
 
 | ID | 资产 | 当前存在性 | 仓内消费/证据锚点 | Owner | 主要缺口 | 影响 |
@@ -82,8 +91,8 @@ Owner 为空时统一写 `OWNER-REQUIRED`，不能由 AI 推断个人或组织�
 | `EXT-WIN-004` | Printer driver package | `EXTERNAL/UNVERIFIED` | `libs/remote_printer/`, `new-build.cmd` | `OWNER-REQUIRED` | driver source/version、INF/CAT/SYS hashes、signature/publisher、license、OS matrix | remote printer install/release `BLOCKING` |
 | `EXT-WIN-005` | `printer_driver_adapter.dll` | `EXTERNAL/UNVERIFIED` | `src/server/printer_service.rs`, `new-build.cmd` | `OWNER-REQUIRED` | source/ABI/version/hash/signature/license | runtime DLL loading and printer service `BLOCKING` |
 | `EXT-WIN-006` | `dylib_virtual_display.dll` | `GENERATED`：source tracked in `libs/virtual_display/`，artifact not tracked | Windows packaging and virtual display FFI | Release owner required | formal toolchain result、artifact hash、Authenticode、ABI test | source provenance较好；仍需正式 build/sign evidence |
-| `EXT-WIN-007` | `RuntimeBroker_cloudsend.exe` helper | `OS-DERIVED/UNVERIFIED`：运行时复制 Windows `RuntimeBroker.exe` 后改名；仓内不存在独立 helper source/binary 是预期状态 | `src/privacy_mode/win_topmost_window.rs`, Windows runtime copy path | Windows/Security owner required | supported Windows build matrix、源文件 Microsoft signature 校验、复制/注入/清理 contract、EDR compatibility | 行为随 OS build 漂移；privacy helper 路径必须按目标 OS 验证 |
-| `EXT-WIN-008` | Windows `XpsPrint.dll` OS prerequisite | `OS-DERIVED`：`PrintXPSRawData` implementation 已 tracked，仓外依赖仅为 Windows OS API/DLL | `src/platform/windows.cc`, `src/platform/windows.rs` | Windows owner required | supported OS/API matrix、resource/error contract | 不是缺失的 CloudSend function；仍需 Win10/11 print compatibility 验证 |
+| `EXT-WIN-007` | `RuntimeBroker_tunnel.exe` helper | `OS-DERIVED/UNVERIFIED`：运行时复制 Windows `RuntimeBroker.exe` 后改名；仓内不存在独立 helper source/binary 是预期状态 | `src/privacy_mode/win_topmost_window.rs`, Windows runtime copy path | Windows/Security owner required | supported Windows build matrix、源文件 Microsoft signature 校验、复制/注入/清理 contract、EDR compatibility | 行为随 OS build 漂移；privacy helper 路径必须按目标 OS 验证 |
+| `EXT-WIN-008` | Windows `XpsPrint.dll` OS prerequisite | `OS-DERIVED`：`PrintXPSRawData` implementation 已 tracked，仓外依赖仅为 Windows OS API/DLL | `src/platform/windows.cc`, `src/platform/windows.rs` | Windows owner required | supported OS/API matrix、resource/error contract | 不是缺失的 Tunnel function；仍需 Win10/11 print compatibility 验证 |
 | `EXT-WIN-009` | Dormant RustDesk IDD driver package | `DORMANT/MISSING`：user-mode dylib source tracked，driver INF/SYS/CAT 不在仓库；current active backend 为 Amyuni | `libs/virtual_display/dylib/src/win10/`, `src/virtual_display_manager.rs` | Architecture/Release owner required | 保留/淘汰决定；若启用则需 source/version/hash/signature/license/rollback | 不得误标为 active 或混入当前 release；启用前为 `BLOCKING` |
 
 ## 6. Signing, Build and Release Infrastructure
@@ -145,6 +154,17 @@ Status and review date：
 ```
 
 ## 10. Maintenance Rules
+
+### 2026-10-02 T004 身份迁移补充
+
+- `EXT-SVC-004`：仓内 broker 的请求字段、示例、systemd 服务与安装路径采用新品牌，request 为 `tunnelSessionId`。既有已部署实例/运维脚本未修改，owner 需配套部署或另做受控双字段兼容；不得声明仓库改名自动升级服务。
+- 产品 version API 所属服务需识别 `tunnel-client` / `tunnel-server`。`src/common.rs::is_public` 和 sync 的品牌 host 分类同步为 `tunnel.`；这只是既有分类规则的文字迁移，不是新域名注册/解析或生产地址切换。实际端点未改，后续应单独验证该旧式字符串分类行为。
+- `EXT-SIGN-001` / `002`：未轮换实际签名资产。App/bundle 改名不等于证书指纹变化；hash 和 fingerprint 以重建签名产物实测登记。Apple provisioning、Firebase 等外部注册必须对应新 bundle，旧资产不构成兼容证据。
+- `EXT-BIN-ADB-HELPER-001`：helper Java package、HMAC 域、magic 已迁移；binary 仍 NOT_BUILT，配套 manifest/hash 待正式配方生成。不可复用旧 helper、旧 bridge/native 或 portable data.bin。
+- `EXT-WIN-*`：第三方驱动、证书、硬件 GUID、ABI 名称保留真实值，没有通过改品牌伪造 vendor/source。安装元数据与本产品启动路径使用 Tunnel。
+- 详细迁移矩阵和编译验证需求：`docs/BASELINE/2026-10-02_TUNNEL_IDENTITY_BASELINE.md`。
+
+### 通用维护要求
 
 - 新增仓外依赖、binary、driver、service 或 database 前先登记，再设计集成。
 - version、source、hash、signature、owner、license 或 contract 改变时更新同一 ID，不复制新表。

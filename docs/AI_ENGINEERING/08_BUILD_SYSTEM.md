@@ -1,4 +1,4 @@
-# CloudSend 构建系统 / Build System
+# Tunnel 构建系统 / Build System
 
 接管基线：2026-07-12  
 最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
@@ -12,18 +12,20 @@
 
 ## 1. 版本与工具链锚点
 
+T004 身份链已按 [新基线](../BASELINE/2026-10-02_TUNNEL_IDENTITY_BASELINE.md) 对齐。FRB 1.80.1 生成入口显式 `--class-name Tunnel`，现有绑定仅机械同步；正式环境需重新生成并重建全部 native/helper/portable 数据。旧 artifact/hash 不可沿用；本轮未执行构建或 codegen。
+
 | 项目 | 当前源码值 |
 |---|---|
-| Rust package/crate | `cloudsend` |
+| Rust package/crate | `tunnel` |
 | Rust version | `5.2.1` |
 | Rust edition | `2021` |
 | Rust MSRV | `1.75` |
 | Flutter package | `flutter_hbb` |
 | Flutter version | `5.2.1+59` |
-| Android applicationId | `com.cloudsend.app` |
+| Android applicationId | `com.tunnel.app` |
 | Android compile/target/min SDK | `34 / 33 / 21` |
-| Android native library | `libcloudsend.so` |
-| Windows native library | `cloudsend.dll` |
+| Android native library | `libtunnel.so` |
+| Windows native library | `tunnel.dll` |
 
 版本号是发布资产。本轮和后续 AI 工作都不得自动修改。
 
@@ -75,8 +77,8 @@ FRB 文件带 1.80.1 生成标记；当前本地只有单个 root commit，不�
 
 - Rust Android targets。
 - Android SDK/NDK、vcpkg 与 native dependencies。
-- 构建 `libcloudsend.so`。
-- 复制到 `flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`。
+- 构建 `libtunnel.so`。
+- 复制到 `flutter/android/app/src/main/jniLibs/<abi>/libtunnel.so`。
 - Flutter/Gradle packaging、zipalign/signing 和产物命名。
 
 签名环境是发布机机密，不得复制到仓库或诊断输出。
@@ -128,7 +130,7 @@ cd flutter && flutter build apk --release
 cargo build --release --features flutter
 ```
 
-`build.py::make_parser()` 没有 `--release` 选项，旧文档中的 `python3 build.py --flutter --release` 不是当前有效参数组合；release flag 由脚本内部的 Cargo/Flutter 子命令使用。`build.py` 的 macOS/Linux 分支仍有 `librustdesk` 等上游命名残留，未在本轮验证。iOS、Linux、macOS、Web 的源码存在不等于 CloudSend 当前发布矩阵已经覆盖这些平台。
+`build.py::make_parser()` 没有 `--release` 选项，旧文档中的 `python3 build.py --flutter --release` 不是当前有效参数组合；release flag 由脚本内部的 Cargo/Flutter 子命令使用。`build.py` 的 macOS/Linux 分支仍有 `librustdesk` 等上游命名残留，未在本轮验证。iOS、Linux、macOS、Web 的源码存在不等于 Tunnel 当前发布矩阵已经覆盖这些平台。
 
 发布支持矩阵必须由产品 owner 明确：
 
@@ -143,7 +145,7 @@ cargo build --release --features flutter
 - 普通提交可能未经过格式、lint、unit test 或 platform build。
 - generated bridge 与 FFI drift 无自动检测。
 - dependency/supply-chain 检查无持续证据。
-- 发布 workflow 可见不等于已适配 CloudSend secrets、names 和 artifacts。
+- 发布 workflow 可见不等于已适配 Tunnel secrets、names 和 artifacts。
 
 恢复自动 CI 前要先最小化权限、固定 action revision、隔离 untrusted PR、清理上游发布目标，并由仓库所有者批准。
 
@@ -198,3 +200,9 @@ cargo build --release --features flutter
 - release notes、known issues、owner/on-call。
 
 本轮不具备也未执行上述发布动作。
+
+## 12. ADB helper P0 build recipe（source only）
+
+`android-helper/build_helper.py`新增显式离线Java8/SDK34/D8 minAPI30配方；每次输出唯一目录，记录源码/工具/许可/产物hash，携带Apache LICENSE/NOTICE/PROVENANCE。`--stage`仅首次写入Android native assets；不触发APK构建或下载。源码已落地，实际构建NOT_RUN。
+
+Android app直接编译共享`AdbWire.java`，test sourceSet加入protocol tests并声明JUnit4.13.2。`tunnelAdbMirrorP0`项目属性须精确为`true`才开启本地诊断，默认false。没有新增Gradle自动helper构建hook，也没有改版本或签名。正式命令、前置native资产与设备验收见[P0交接](../plans/ADB_P0_VALIDATION_RUNBOOK.md)和[helper README](../../android-helper/README.md)。

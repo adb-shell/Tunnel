@@ -26,7 +26,7 @@ For Android package, product identity, status protocol, or SO loading tasks, sta
 - `src/ui/remote.rs`
 - `flutter/android/app/src/main/AndroidManifest.xml`
 - `flutter/android/app/build.gradle`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/`
 - `flutter/android/app/src/main/kotlin/ffi.kt`
 - `flutter/android/app/src/main/kotlin/pkg2230.kt`
 - `flutter/lib/models/native_model.dart`
@@ -36,24 +36,24 @@ For Android package, product identity, status protocol, or SO loading tasks, sta
 
 Current canonical keywords:
 
-- `CloudSend`
-- `云计划`
-- `com.cloudsend.app`
-- `cloudsend_status`
-- `CloudSendStatusModel`
-- `CloudSendStatusMonitor`
-- `show-cloudsend-status-monitor`
-- `show_cloudsend_status_monitor`
-- `CloudSendStatusModel.reset`
+- `Tunnel`
+- `隧道`
+- `com.tunnel.app`
+- `tunnel_status`
+- `TunnelStatusModel`
+- `TunnelStatusMonitor`
+- `show-tunnel-status-monitor`
+- `show_tunnel_status_monitor`
+- `TunnelStatusModel.reset`
 - `_staleThreshold`
 - `isIgnorePending`
-- `set_cloudsend_status`
-- `cloudsend_virtual_displays`
-- `libcloudsend.so`
-- `System.loadLibrary("cloudsend")`
-- `DynamicLibrary.open('libcloudsend.so')`
-- `cloudsend_core_main`
-- `cloudsend_core_main_args`
+- `set_tunnel_status`
+- `tunnel_virtual_displays`
+- `libtunnel.so`
+- `System.loadLibrary("tunnel")`
+- `DynamicLibrary.open('libtunnel.so')`
+- `tunnel_core_main`
+- `tunnel_core_main_args`
 - `new-build.cmd`
 - `PC-Bulid`
 
@@ -61,7 +61,7 @@ Do not reintroduce `com.daxian.dev`, `daxian_status`, `DaxianStatusModel`, `libd
 
 ## ZEGO Voice Call Entrypoints (2026-05-31)
 
-For CloudSend third-party 1v1 voice call tasks, start here:
+For Tunnel third-party 1v1 voice call tasks, start here:
 
 - `docs/ZEGO_VOICE_CALL_INTEGRATION.md`
 - `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`
@@ -80,7 +80,7 @@ For CloudSend third-party 1v1 voice call tasks, start here:
 - `flutter/lib/models/server_model.dart`
 - `flutter/lib/mobile/pages/server_page.dart`
 - `flutter/lib/desktop/widgets/remote_toolbar.dart`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
 - `flutter/android/app/src/main/AndroidManifest.xml`
 - `flutter/android/app/proguard-rules`
 - `flutter/pubspec.yaml`
@@ -107,14 +107,14 @@ Current canonical keywords:
 Boundary:
 
 - ZEGO voice-call work must not modify video frame flow, Android `MediaProjection`, side-button command protocol, ADB/LADB, file transfer, clipboard, terminal, or port-forwarding unless the future task explicitly proves those systems are involved.
-- The original RustDesk voice-call media path must remain hidden from the CloudSend PC toolbar voice button.
+- The original RustDesk voice-call media path must remain hidden from the Tunnel PC toolbar voice button.
 - ZEGO business failure prompts must not use plain Flutter `error` / `warning` dialog types; use `custom-nook-nocancel-hasclose-*` so token failures or duplicate-call prompts do not close the remote-control session.
 
 Android visible app name tasks must start from:
 
 - `flutter/android/app/src/main/res/values/strings.xml` (`app_name`)
 - `flutter/android/app/src/main/AndroidManifest.xml` (`android:label="@string/app_name"`)
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt` (`NotificationChannel`, `setContentTitle`)
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt` (`NotificationChannel`, `setContentTitle`)
 
 Version / packaging tasks must start from:
 
@@ -182,12 +182,12 @@ For Android local ADB/LADB page, pairing, mDNS discovery, shell, command input, 
 - `flutter/lib/mobile/pages/adb_page.dart`
 - `flutter/lib/common.dart`
 - `flutter/lib/consts.dart`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/oFtTiPzsqzBHGigp.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbManager.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbRunner.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbDnsDiscover.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/CloudSendAdbState.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/oFtTiPzsqzBHGigp.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbManager.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbRunner.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbDnsDiscover.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/TunnelAdbState.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
 - `flutter/android/app/src/main/jniLibs/`
 - `flutter/android/app/src/main/AndroidManifest.xml`
 - `flutter/android/app/proguard-rules`
@@ -195,20 +195,20 @@ For Android local ADB/LADB page, pairing, mDNS discovery, shell, command input, 
 Current canonical keywords:
 
 - `AndroidAdbManager`
-- `cloudsend_adb_init`
-- `cloudsend_adb_status`
-- `cloudsend_adb_output`
-- `cloudsend_adb_start`
-- `cloudsend_adb_stop`
-- `cloudsend_adb_pair`
-- `cloudsend_adb_command`
-- `cloudsend_adb_wireless_debug_status`
-- `cloudsend_adb_wireless_debug_set`
-- `cloudsend_adb_wireless_debug_cancel`
-- `CloudSendAdbManager`
-- `CloudSendAdbRunner`
-- `CloudSendAdbDnsDiscover`
-- `CloudSendAdbState`
+- `tunnel_adb_init`
+- `tunnel_adb_status`
+- `tunnel_adb_output`
+- `tunnel_adb_start`
+- `tunnel_adb_stop`
+- `tunnel_adb_pair`
+- `tunnel_adb_command`
+- `tunnel_adb_wireless_debug_status`
+- `tunnel_adb_wireless_debug_set`
+- `tunnel_adb_wireless_debug_cancel`
+- `TunnelAdbManager`
+- `TunnelAdbRunner`
+- `TunnelAdbDnsDiscover`
+- `TunnelAdbState`
 - `adbEndpoints`
 - `preferredSerial`
 - `NsdManager.FAILURE_ALREADY_ACTIVE`
@@ -238,7 +238,7 @@ Boundary:
 
 黑屏 overlay / 远程输入卡顿相关任务，第一入口固定为：
 
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
 - `docs/ENGINEERING_ANDROID_RUNTIME.md`
 
 防止误改范围：
@@ -254,8 +254,8 @@ Boundary:
 - `src/flutter_ffi.rs`
 - `libs/scrap/src/android/pkg2230.rs`
 - `libs/scrap/src/android/ffi.rs`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
 
 防触摸排查关键词：
 
@@ -268,7 +268,7 @@ Boundary:
 
 安卓状态监测相关任务，第一入口固定为：
 
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
 - `src/server/connection.rs`
 - `libs/hbb_common/protos/message.proto`
 - `src/client/io_loop.rs`
@@ -278,18 +278,18 @@ Boundary:
 
 安卓状态监测排查关键词：
 
-- `cloudsend_status`
-- `CloudSendStatusModel`
-- `CloudSendStatusMonitor`
+- `tunnel_status`
+- `TunnelStatusModel`
+- `TunnelStatusMonitor`
 - `RemoteStatusMonitors`
-- `show-cloudsend-status-monitor`
-- `show_cloudsend_status_monitor`
+- `show-tunnel-status-monitor`
+- `show_tunnel_status_monitor`
 
 开共享后卡截屏流相关任务，第一入口固定为：
 
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/XerQvgpGBzr8FDFr.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/XerQvgpGBzr8FDFr.kt`
 - `flutter/lib/models/server_model.dart`
 - `flutter/lib/mobile/pages/server_page.dart`
 - `flutter/lib/models/model.dart`
@@ -312,7 +312,7 @@ Boundary:
 
 无障碍感知双通道相关任务，第一入口固定为：
 
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
 - `flutter/lib/models/model.dart`
 - `flutter/lib/common/widgets/overlay.dart`
 
@@ -385,9 +385,9 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 - `src/server/connection.rs`
 - `libs/scrap/src/android/pkg2230.rs`
 - `libs/scrap/src/android/ffi.rs`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DevAutoSelectorController.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DevAutoSelectorController.kt`
 
 新增命令时必须逐项确认：
 
@@ -417,9 +417,9 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 先看：
 
 - `docs/ENGINEERING_ANDROID_RUNTIME.md`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/common.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/common.kt`
 - `libs/scrap/src/android/pkg2230.rs`
 - `libs/scrap/src/android/ffi.rs`
 - `src/server/connection.rs`
@@ -436,8 +436,8 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 - `PIXEL_SIZEBack8`
 - `requestOneShotScreenshotFrame`
 - `forceVideoFrameRefresh`
-- `cloudsend_status_message`
-- `cloudsend_status_json_or_none`
+- `tunnel_status_message`
+- `tunnel_status_json_or_none`
 - `force_next`
 - `killMediaProjection()`
 - `handleProjectionStoppedKeepService()`
@@ -484,9 +484,9 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 
 - waiting dialog 与 Android overlay 的层级关系
 - waiting timer 不得自动发送 ignore/screenshot fallback；允许补发正常 `sessionRefreshVideo(...)` 来唤醒已授权的正常屏幕共享首帧，不能自动切无视或截屏。
-- Android auto reconnect 必须尊重 Rust `hasRetry`，使用 2.5s 单 timer，启动后允许一次带存活判断的短延迟首试，不能堆叠，不能在 retry tick 中反复清权限或 `CloudSendStatusModel`；前 60 秒静默后台重试并保持最后画面，超过 60 秒仍未恢复才显示 `Connecting...`
+- Android auto reconnect 必须尊重 Rust `hasRetry`，使用 2.5s 单 timer，启动后允许一次带存活判断的短延迟首试，不能堆叠，不能在 retry tick 中反复清权限或 `TunnelStatusModel`；前 60 秒静默后台重试并保持最后画面，超过 60 秒仍未恢复才显示 `Connecting...`
 - Android auto reconnect must force relay through `sessionReconnect(..., forceRelay: true)`. During Android reconnect, `input-password` / `re-input-password` should reuse the current PC process cache for that peer and may fall back to build-in `default-connect-password`; it must not use the local `mainGetPermanentPassword()` as the remote password.
-- CloudSend client sessions are strict relay-only in `src/client.rs`: `LoginConfigHandler.initialize(...)` forces relay; `Client::_start(...)` skips UDP/IPv6 punch setup and rejects explicit direct addresses; `Client::connect(...)` calls `request_relay(...)` without creating direct candidates. Initial connect and reconnect must not depend on direct/NAT punch behavior.
+- Tunnel client sessions are strict relay-only in `src/client.rs`: `LoginConfigHandler.initialize(...)` forces relay; `Client::_start(...)` skips UDP/IPv6 punch setup and rejects explicit direct addresses; `Client::connect(...)` calls `request_relay(...)` without creating direct candidates. Initial connect and reconnect must not depend on direct/NAT punch behavior.
 - Android visible `connectStatus` is raw rendezvous registration state. Check `flutter/lib/models/server_model.dart` `timerCallback()` before treating `Ready` / `not_ready_status` changes as service death: `status_num` is assigned directly to `_connectStatus`, with no debounce and no fake readiness.
 - Android 14+ screen-share permission/session cannot be reused after projection stop/loss. Check `XerQvgpGBzr8FDFr` fresh capture intent, `DFm8Y8iMScvB2YDw.reuseVirtualDisplay`, and `handleProjectionStoppedKeepService(...)` before changing screen-share recovery.
 - `init_service` and `ACT_INIT_MEDIA_PROJECTION_AND_SERVICE` without `EXT_MEDIA_PROJECTION_RES_INTENT` are core-service paths only; they must not request `MediaProjection`.
@@ -498,7 +498,7 @@ rg -n "<feature keyword>" src libs flutter docs AGENTS.md CLAUDE.md PC-Build.md 
 - Remote `start_capture2` open/close commands are ignored during the short authorized-connection settle window only if a live/starting/in-flight projection already exists, so PC first-connect cannot accidentally close/reopen a manually authorized share.
 - Android authorization must immediately push one real JNI status packet to PC, then continue on the normal 2s throttled status cadence. Do not fake readiness/share/ignore/blank state.
 - `remove_connection(...)` 不得因为最后一个 PC 连接被移除就向 Android 发送 `"stop_capture"`；屏幕共享只能由 Android UI 或远端侧按钮显式停止
-- ZEGO PC voice-call entrypoints and `src/client/io_loop.rs::Data::NewVoiceCall` must not reject by `PeerInfo.platform`; attempt the current connected session so misidentified Android devices can receive invites. The controlled side still needs valid CloudSend ZEGO metadata support to accept.
+- ZEGO PC voice-call entrypoints and `src/client/io_loop.rs::Data::NewVoiceCall` must not reject by `PeerInfo.platform`; attempt the current connected session so misidentified Android devices can receive invites. The controlled side still needs valid Tunnel ZEGO metadata support to accept.
 - ZEGO Android busy-state checks must clear disconnected-client residue and stale local `ZegoVoiceCallModel.active` before rejecting a new incoming call.
 - “任何真实首帧都能清理 waiting”的不变量
 
@@ -659,7 +659,7 @@ PC developer login bypass:
 重点核对：
 
 - `supported_privacy_mode_impl`
-- `cloudsend_virtual_displays`
+- `tunnel_virtual_displays`
 - 连接侧 turn on / turn off 路径
 - Windows-only 假设是否成立
 

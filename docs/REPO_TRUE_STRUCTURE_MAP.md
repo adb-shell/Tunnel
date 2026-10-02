@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> Current source-truth overlay (verified 2026-06-03): current project identity is CloudSend runtime + Android visible label `云计划`; Android package is `com.cloudsend.app`; Android SO is `libcloudsend.so`; Windows DLL is `cloudsend.dll`; current version is `5.2.1`; current Windows build script is `new-build.cmd` with output directory `PC-Bulid`.
+> Current source-truth overlay (verified 2026-06-03): current project identity is Tunnel runtime + Android visible label `隧道`; Android package is `com.tunnel.app`; Android SO is `libtunnel.so`; Windows DLL is `tunnel.dll`; current version is `5.2.1`; current Windows build script is `new-build.cmd` with output directory `PC-Bulid`.
 >
 > Documentation classification and handoff guidance were refreshed on 2026-06-03. For canonical current facts, prefer `docs/ENGINEERING_INDEX.md`, `docs/ENGINEERING_BASELINE.md`, `docs/ENGINEERING_ANDROID_RUNTIME.md`, `docs/TASK_ENTRYPOINTS.md`, and `docs/DOCUMENT_AUDIT.md`.
 
@@ -329,8 +329,8 @@ Android 重点：
 - `flutter/android/app/build.gradle`
 - `flutter/android/app/src/main/AndroidManifest.xml`
 - `flutter/android/app/src/main/jniLibs/`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/`
 
 Kotlin / Java 文件：
 
@@ -352,10 +352,10 @@ Kotlin / Java 文件：
 
 ADB/LADB files:
 
-- `adb/CloudSendAdbState.kt`
-- `adb/CloudSendAdbRunner.kt`
-- `adb/CloudSendAdbManager.kt`
-- `adb/CloudSendAdbDnsDiscover.kt`
+- `adb/TunnelAdbState.kt`
+- `adb/TunnelAdbRunner.kt`
+- `adb/TunnelAdbManager.kt`
+- `adb/TunnelAdbDnsDiscover.kt`
 - `flutter/android/app/src/main/jniLibs/<abi>/libadb.so`
 - `flutter/android/app/src/main/jniLibs/LIBADB_LICENSE`
 
@@ -483,9 +483,9 @@ Boundary:
 flutter/lib/mobile/pages/adb_page.dart
 → flutter/lib/common.dart::AndroidAdbManager
 → MethodChannel('mChannel')
-→ oFtTiPzsqzBHGigp.kt cloudsend_adb_* handlers
-→ CloudSendAdbManager.kt
-→ CloudSendAdbRunner.kt / CloudSendAdbDnsDiscover.kt
+→ oFtTiPzsqzBHGigp.kt tunnel_adb_* handlers
+→ TunnelAdbManager.kt
+→ TunnelAdbRunner.kt / TunnelAdbDnsDiscover.kt
 → packaged libadb.so
 ```
 
@@ -494,8 +494,8 @@ Wireless-debugging automation branch:
 ```text
 adb_page.dart
 → AndroidAdbManager.wirelessDebugStatus/set/cancel
-→ cloudsend_adb_wireless_debug_*
-→ CloudSendAdbManager.kt
+→ tunnel_adb_wireless_debug_*
+→ TunnelAdbManager.kt
 → nZW99cdXQ0COhB2o.wirelessDebugAutomation*
 ```
 
@@ -526,19 +526,19 @@ Android:
 
 ```text
 build.sh
-→ Rust target/<triple>/release/libcloudsend.so
-→ flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so
-→ Kotlin System.loadLibrary("cloudsend")
-→ Dart DynamicLibrary.open('libcloudsend.so')
+→ Rust target/<triple>/release/libtunnel.so
+→ flutter/android/app/src/main/jniLibs/<abi>/libtunnel.so
+→ Kotlin System.loadLibrary("tunnel")
+→ Dart DynamicLibrary.open('libtunnel.so')
 ```
 
 Windows:
 
 ```text
 new-build.cmd
-→ Rust/Flutter output cloudsend.dll
+→ Rust/Flutter output tunnel.dll
 → flutter/windows/CMakeLists.txt install/copy
-→ flutter/lib/models/native_model.dart DynamicLibrary.open('cloudsend.dll')
+→ flutter/lib/models/native_model.dart DynamicLibrary.open('tunnel.dll')
 → portable/self-extract output under PC-Bulid
 ```
 
@@ -554,7 +554,7 @@ new-build.cmd
 - Android Kotlin 主服务：`DFm8Y8iMScvB2YDw.kt` / `nZW99cdXQ0COhB2o.kt`
 - 账号 / 下载 / 上传：`src/hbbs_http/`
 - ZEGO voice-call Flutter model/UI plus Rust control shell：`flutter/lib/models/zego_voice_call_model.dart`, `src/client/io_loop.rs`, `src/server/connection.rs`
-- Android local ADB/LADB module：`flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/`, `flutter/lib/mobile/pages/adb_page.dart`
+- Android local ADB/LADB module：`flutter/android/app/src/main/kotlin/com/tunnel/app/adb/`, `flutter/lib/mobile/pages/adb_page.dart`
 
 ### 兼容 / 历史路径
 

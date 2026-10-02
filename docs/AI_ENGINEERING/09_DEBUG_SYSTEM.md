@@ -1,4 +1,4 @@
-# CloudSend 调试与验证体系 / Debug System
+# Tunnel 调试与验证体系 / Debug System
 
 接管基线：2026-07-12  
 最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
@@ -8,7 +8,7 @@
 
 ## 1. 调试原则
 
-CloudSend 的故障通常跨 Flutter、Rust、JNI、Kotlin、驱动和外部服务。调试必须先回答三个问题：
+Tunnel 的故障通常跨 Flutter、Rust、JNI、Kotlin、驱动和外部服务。调试必须先回答三个问题：
 
 1. 失败发生在哪个状态层或 trust boundary？
 2. 能否用同一个 correlation ID 串起控制端、受控端和外部服务？
@@ -131,7 +131,7 @@ API 专项还需检查：资格校验失败后 `UserModel.isLogin`/本地 option
 ## 8. 网络/API 调试树
 
 - 区分 rendezvous、relay、secure handshake、login 和 service permission。
-- CloudSend controller 预期始终 relay；出现 direct candidate 应记录为策略偏差。
+- Tunnel controller 预期始终 relay；出现 direct candidate 应记录为策略偏差。
 - 抓包只能在批准的测试环境进行，并在采集前替换生产 credential。
 - API 记录 method、endpoint label、status class、latency、timeout/retry；不记录 URL query/token/body。
 - heartbeat/config/disconnect 必须验证 server authentication。
@@ -186,7 +186,7 @@ cargo test
 
 环境要求：与项目锁定依赖兼容的 Rust 1.75、C/C++ toolchain、vcpkg/system dependencies、protobuf/FRB 相关工具；按目标平台准备驱动和系统 SDK。
 
-执行目录：CloudSend 仓库根目录。
+执行目录：Tunnel 仓库根目录。
 
 验证目标：workspace/feature 可编译；unit tests 通过；重点确认 `cli` feature/API drift、Android JNI symbol、generated bridge 与当前 FFI 一致。若要验证 `cli`，需另加显式 `--features cli` 的受控构建，不应混入发布构建。
 
@@ -203,7 +203,7 @@ flutter test
 
 环境要求：项目锁定 Flutter/Dart 版本与 plugin dependencies。当前唯一 `flutter/test/cm_test.dart` 是可运行的手工 CM UI harness，未见 `test` / `testWidgets` 断言；`pubspec.yaml` 的 `flutter_test` 被注释。需先获准建立/恢复实际 test target 后，再把 `flutter test` 纳入有效 oracle。
 
-执行目录：`CloudSend/flutter`。
+执行目录：`Tunnel/flutter`。
 
 验证目标：Dart analyzer、bridge API、widget/model lifecycle 和现有测试基线；不得把“无测试被发现”当作通过。
 
@@ -218,7 +218,7 @@ flutter test
 
 环境要求：项目规定 Linux Android 构建机、`/opt/rustdesk-toolchain` 等价受控环境、Rust/Flutter/JDK、Android SDK/NDK 27.2、vcpkg、签名环境、ZEGO SDK、受控 `libadb.so` artifacts；Android 10/13/14/15 真机。2026-10-02 当前 worktree 没有 `jniLibs` / `libadb.so`；`pubspec.lock` 也未锁定已声明的 ZEGO dependency，这两项不能用历史本机存在记录替代。
 
-执行目录：CloudSend 仓库根目录。
+执行目录：Tunnel 仓库根目录。
 
 验证目标：三 ABI packaging、签名、JNI linkage；MediaProjection one-shot；share loss 不杀 core；DirectBuffer ownership；旋转/折叠/小于 350px 边界；input permission enforcement；ADB 旧系统/高输出/并发；ZEGO 明确接受/拒绝和麦克风行为。
 
@@ -232,9 +232,9 @@ new-build.cmd
 
 环境要求：`PC-Build.md` 定义的 Windows Server/Windows 10-11 正式构建环境，`C:\DevEnv`、`C:\DevTool`、VS 2022 Build Tools、Rust 1.75 MSVC、Flutter 3.24.x、LLVM、vcpkg、Amyuni/driver/helper artifacts 和签名条件。
 
-执行目录：CloudSend 仓库根目录。
+执行目录：Tunnel 仓库根目录。
 
-验证目标：`cloudsend.exe`/`cloudsend.dll`/portable pack 一致；capture/input/file/terminal；Amyuni 单/多显示器；privacy mode 进入、异常恢复和退出；driver/DLL signature；无 RustDesk naming break。
+验证目标：`tunnel.exe`/`tunnel.dll`/portable pack 一致；capture/input/file/terminal；Amyuni 单/多显示器；privacy mode 进入、异常恢复和退出；driver/DLL signature；无 RustDesk naming break。
 
 ### 11.5 安全与协议验证
 

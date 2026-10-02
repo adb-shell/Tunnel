@@ -513,8 +513,8 @@ class FfiModel with ChangeNotifier {
         parent.target?.serverModel.onClientRemove(evt);
       } else if (name == 'update_quality_status') {
         parent.target?.qualityMonitorModel.updateQualityStatus(evt);
-      } else if (name == 'update_cloudsend_status') {
-        parent.target?.cloudSendStatusModel.updateFromEvent(evt);
+      } else if (name == 'update_tunnel_status') {
+        parent.target?.tunnelStatusModel.updateFromEvent(evt);
       } else if (name == 'update_block_input_state') {
         updateBlockInputState(evt, peerId);
       } else if (name == 'update_privacy_mode') {
@@ -1135,7 +1135,7 @@ class FfiModel with ChangeNotifier {
     bind.sessionReconnect(sessionId: sessionId, forceRelay: effectiveForceRelay);
     if (!isPeerAndroid) {
       clearPermissions();
-      parent.target?.cloudSendStatusModel.reset();
+      parent.target?.tunnelStatusModel.reset();
     }
     _stopAndroidAutoReconnect();
     if (isPeerAndroid) {
@@ -1669,7 +1669,7 @@ class FfiModel with ChangeNotifier {
     }
 
     if (updateData.isEmpty) {
-      _pi.platformAdditions.remove(kPlatformAdditionsCloudSendVirtualDisplays);
+      _pi.platformAdditions.remove(kPlatformAdditionsTunnelVirtualDisplays);
       _pi.platformAdditions.remove(kPlatformAdditionsAmyuniVirtualDisplays);
     } else {
       try {
@@ -1678,9 +1678,9 @@ class FfiModel with ChangeNotifier {
           _pi.platformAdditions[key] = updateJson[key];
         }
         if (!updateJson
-            .containsKey(kPlatformAdditionsCloudSendVirtualDisplays)) {
+            .containsKey(kPlatformAdditionsTunnelVirtualDisplays)) {
           _pi.platformAdditions
-              .remove(kPlatformAdditionsCloudSendVirtualDisplays);
+              .remove(kPlatformAdditionsTunnelVirtualDisplays);
         }
         if (!updateJson.containsKey(kPlatformAdditionsAmyuniVirtualDisplays)) {
           _pi.platformAdditions.remove(kPlatformAdditionsAmyuniVirtualDisplays);
@@ -3108,7 +3108,7 @@ class QualityMonitorModel with ChangeNotifier {
   }
 }
 
-class CloudSendStatusData {
+class TunnelStatusData {
   bool? video;
   bool? screenshot;
   bool? share;
@@ -3119,18 +3119,18 @@ class CloudSendStatusData {
   bool? accessibility;
 }
 
-class CloudSendStatusModel with ChangeNotifier {
+class TunnelStatusModel with ChangeNotifier {
   WeakReference<FFI> parent;
-  CloudSendStatusModel(this.parent);
+  TunnelStatusModel(this.parent);
 
   var _show = true;
-  final _data = CloudSendStatusData();
+  final _data = TunnelStatusData();
   static const Duration _staleThreshold = Duration(seconds: 8);
   DateTime? _lastUpdateTime;
   Timer? _staleTimer;
 
   bool get show => _show;
-  CloudSendStatusData get data => _data;
+  TunnelStatusData get data => _data;
 
   Duration? get sinceLastUpdate {
     final t = _lastUpdateTime;
@@ -3143,17 +3143,17 @@ class CloudSendStatusModel with ChangeNotifier {
     return since != null && since > _staleThreshold;
   }
 
-  Future<void> checkShowCloudSendStatusMonitor(SessionID sessionId) async {
+  Future<void> checkShowTunnelStatusMonitor(SessionID sessionId) async {
     try {
       final raw = await bind.sessionGetToggleOption(
-          sessionId: sessionId, arg: 'show-cloudsend-status-monitor');
+          sessionId: sessionId, arg: 'show-tunnel-status-monitor');
       final show = raw ?? true;
       if (_show != show) {
         _show = show;
         notifyListeners();
       }
     } catch (e) {
-      debugPrint('checkShowCloudSendStatusMonitor failed: $e');
+      debugPrint('checkShowTunnelStatusMonitor failed: $e');
     }
   }
 
@@ -3214,7 +3214,7 @@ class CloudSendStatusModel with ChangeNotifier {
       _restartStaleTimer();
       if (changed) notifyListeners();
     } catch (e) {
-      debugPrint('updateCloudSendStatus parse failed: $e');
+      debugPrint('updateTunnelStatus parse failed: $e');
     }
   }
 
@@ -3224,7 +3224,7 @@ class CloudSendStatusModel with ChangeNotifier {
         Timer(_staleThreshold + const Duration(milliseconds: 500), () {
       if (isStale) {
         debugPrint(
-            'CloudSendStatusModel: stale (>${_staleThreshold.inSeconds}s no update), mark status waiting');
+            'TunnelStatusModel: stale (>${_staleThreshold.inSeconds}s no update), mark status waiting');
         _clearStatusFields();
         _lastUpdateTime = null;
         _staleTimer?.cancel();
@@ -3319,7 +3319,7 @@ class FFI {
   late final UserModel userModel; // global
   late final PeerTabModel peerTabModel; // global
   late final QualityMonitorModel qualityMonitorModel; // session
-  late final CloudSendStatusModel cloudSendStatusModel; // session
+  late final TunnelStatusModel tunnelStatusModel; // session
   late final RecordingModel recordingModel; // session
   late final InputModel inputModel; // session
   late final ElevationModel elevationModel; // session
@@ -3350,7 +3350,7 @@ class FFI {
     abModel = AbModel(WeakReference(this));
     groupModel = GroupModel(WeakReference(this));
     qualityMonitorModel = QualityMonitorModel(WeakReference(this));
-    cloudSendStatusModel = CloudSendStatusModel(WeakReference(this));
+    tunnelStatusModel = TunnelStatusModel(WeakReference(this));
     recordingModel = RecordingModel(WeakReference(this));
     inputModel = InputModel(WeakReference(this));
     elevationModel = ElevationModel(WeakReference(this));
@@ -3698,7 +3698,7 @@ class FFI {
     await imageModel.update(null);
     cursorModel.clear();
     ffiModel.clear();
-    cloudSendStatusModel.reset();
+    tunnelStatusModel.reset();
     canvasModel.clear();
     inputModel.resetModifiers();
     if (closeSession) {
@@ -3824,8 +3824,8 @@ class PeerInfo with ChangeNotifier {
   bool get isInstalled =>
       platform != kPeerPlatformWindows ||
       platformAdditions[kPlatformAdditionsIsInstalled] == true;
-  List<int> get CloudSendVirtualDisplays => List<int>.from(
-      platformAdditions[kPlatformAdditionsCloudSendVirtualDisplays] ?? []);
+  List<int> get TunnelVirtualDisplays => List<int>.from(
+      platformAdditions[kPlatformAdditionsTunnelVirtualDisplays] ?? []);
   int get amyuniVirtualDisplayCount =>
       platformAdditions[kPlatformAdditionsAmyuniVirtualDisplays] ?? 0;
 
@@ -3854,7 +3854,7 @@ class PeerInfo with ChangeNotifier {
 
   bool get cursorEmbedded => tryGetDisplay()?.cursorEmbedded ?? false;
 
-  bool get isCloudSendIdd =>
+  bool get isTunnelIdd =>
       platformAdditions[kPlatformAdditionsIddImpl] == 'rustdesk_idd';
   bool get isAmyuniIdd =>
       platformAdditions[kPlatformAdditionsIddImpl] == 'amyuni_idd';

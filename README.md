@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> Current project identity (source-checked 2026-10-02, HEAD `5cee692`, V0 only): this repository contains the CloudSend runtime, with Android visible app name `云计划`, Android package `com.cloudsend.app`, version `5.2.1` (`flutter` package `5.2.1+59`), Android SO `libcloudsend.so`, Windows DLL `cloudsend.dll`, and Windows build entry `new-build.cmd`.
+> Current project identity (source-checked 2026-10-02, HEAD `5cee692`, V0 only): this repository contains the Tunnel runtime, with Android visible app name `隧道`, Android package `com.tunnel.app`, version `5.2.1` (`flutter` package `5.2.1+59`), Android SO `libtunnel.so`, Windows DLL `tunnel.dll`, and Windows build entry `new-build.cmd`.
 >
 > The upstream RustDesk README below is retained as inherited background only. Every AI or maintainer must start with `PROJECT_START_HERE.md`, then follow `.codex/AI_RULES.md` and `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`. Current domain truth lives in `docs/AI_ENGINEERING/`; the former `ENGINEERING_*` suite remains historical detail.
 

@@ -42,13 +42,13 @@ Observed HEAD：`5cee6921ec10971bb4654bc010f9328d7f70d02b`，detached HEAD
 
 | File::symbol / anchor | 事实 / 修改定位 |
 |---|---|
-| `Cargo.toml::[package]/[lib]` | `cloudsend` 5.2.1，edition 2021，rust-version 1.75；输出 cdylib/staticlib/rlib |
+| `Cargo.toml::[package]/[lib]` | `tunnel` 5.2.1，edition 2021，rust-version 1.75；输出 cdylib/staticlib/rlib |
 | `Cargo.toml::[workspace]` | 根 crate + scrap、hbb_common、enigo、clipboard、virtual_display、virtual_display/dylib、portable、remote_printer 共 8 members |
 | `Cargo.toml::[features]` | default `use_dasp`；Flutter、hardware codec、VRAM、MediaCodec、plugin、unix file clipboard 独立条件 |
 | `src/lib.rs` | desktop/mobile/feature 的编译边界；iOS 无 endpoint server；plugin 需 desktop+flutter+plugin_framework |
 | `src/main.rs::main` | Sciter、mobile/Flutter、CLI 三路 cfg；mobile/Flutter 的 binary main 不是 Flutter runtime 全部入口 |
 | `src/core_main.rs::core_main` | process args、bootstrap、installation、server、tray、CM、portable/elevation；返回 None 可提前终止 UI |
-| `src/flutter.rs::{cloudsend_core_main, cloudsend_core_main_args, free_c_args}` | native runner C ABI 与 args ownership；启动最终回到 core_main |
+| `src/flutter.rs::{tunnel_core_main, tunnel_core_main_args, free_c_args}` | native runner C ABI 与 args ownership；启动最终回到 core_main |
 | `src/flutter_ffi.rs::initialize` | Flutter async runner、APP_DIR、custom-client config、platform logging/Android NAT probe |
 | `src/flutter.rs::{session_add, session_start_}` | 逻辑 session 创建和异步连接；不能把每个 Flutter window 等同独立 remote peer |
 | `src/flutter.rs::sessions::{get_session_by_session_id, insert_session, remove_session_by_session_id}` | session ID registry 与多窗口 session 生命周期 |
@@ -89,7 +89,7 @@ Flutter / Sciter session
 
 | 检查点 | 源码锚点 | 当前事实 |
 |---|---|---|
-| Controller strategy | `src/client.rs::LoginConfigHandler::initialize` | `cloudsend_force_relay=true`；其他 bool 参数不能关闭此产品策略 |
+| Controller strategy | `src/client.rs::LoginConfigHandler::initialize` | `tunnel_force_relay=true`；其他 bool 参数不能关闭此产品策略 |
 | Direct entry/candidates | `src/client.rs::Client::_start` | force relay 拒绝 IP/domain:port，并跳过 UDP/IPv6 probe/candidate |
 | Late connect fallback | `src/client.rs::Client::connect` | force relay 分支优先 request_relay 后 secure_connection；不能把后续 retained direct code算作实际 controller default |
 | Relay request | `src/client.rs::Client::{request_relay, create_relay}` | RendezvousMessage 请求、relay UUID/conn type；hbbs/hbbr server实现/部署不在仓内 |
@@ -141,7 +141,7 @@ flutter/lib/common/widgets/overlay.dart
 
 type10/`wheelstop`只确认保留mapping，未证实当前有效Dart sender和专用JNI sink；完整active core JNI还包括`src/flutter_ffi.rs::server_side`，不只scrap模块。
 
-关键wire字段：`Message.mouse_event=10`、`key_event=15`、`clipboard=16`、`file_action=17`、`misc=19`、`voice_call_request/response=23/24`、`pointer_device_event=26`、`multi_clipboards=28`、`terminal_action/response=31/32`；`Misc.cloudsend_status=39`。这些号码不得复用；可被protobuf解析不代表有完整语义兼容。
+关键wire字段：`Message.mouse_event=10`、`key_event=15`、`clipboard=16`、`file_action=17`、`misc=19`、`voice_call_request/response=23/24`、`pointer_device_event=26`、`multi_clipboards=28`、`terminal_action/response=31/32`；`Misc.tunnel_status=39`。这些号码不得复用；可被protobuf解析不代表有完整语义兼容。
 
 ## 7. File / Terminal / Tunnel 具体维护点
 
@@ -177,7 +177,7 @@ type10/`wheelstop`只确认保留mapping，未证实当前有效Dart sender和�
 | `src/privacy_mode.rs::PrivacyMode::{check_on_conn_id, check_off_conn_id}` | connection owner互斥；system invalid ID可恢复 | 与UI view-only不是同一个边界 |
 | `src/privacy_mode.rs::{DEFAULT_PRIVACY_MODE_IMPL, get_supported_privacy_mode_impl}` | 19041+ exclude，否则mag/installed virtual；virtual列表需service running | 配置requested impl可fallback，实际impl应真实反馈 |
 | `win_topmost_window.rs::PrivacyModeImpl::{start, stop, turn_on_privacy, turn_off_privacy}` | suspended user-token helper + APC LoadLibraryW，窗口show/hide + input hooks | 外部WindowInjection.dll行为/签名无法由Rust侧证明 |
-| `src/platform/windows.rs::check_update_broker_process` | 从目标OS RuntimeBroker.exe复制命名为RuntimeBroker_cloudsend.exe | OS-DERIVED，不是丢失独立helper工程；当前以modified time判断更新，未见此处signature验证 |
+| `src/platform/windows.rs::check_update_broker_process` | 从目标OS RuntimeBroker.exe复制命名为RuntimeBroker_tunnel.exe | OS-DERIVED，不是丢失独立helper工程；当前以modified time判断更新，未见此处signature验证 |
 | `win_virtual_display.rs::PrivacyModeImpl::{ensure_virtual_display, set_primary_display, disable_physical_displays, restore}` | virtual primary、physical disable、registry recovery | Win24H2/third-party VD和快速拔插限制见源码注释；不是本轮真机结果 |
 | `win_virtual_display.rs::restore_reg_connectivity` | 读取reg_recovery恢复registry connectivity | kill/crash/driver失败的恢复必须真机证明 |
 | `virtual_display_manager.rs::IDD_IMPL` | active Amyuni；RustDesk IDD retained dormant | index/modes语义不能混用 |

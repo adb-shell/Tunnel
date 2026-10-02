@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tunnel Security Engineer"
+  short_description: "Threat-model and review Tunnel security boundaries"
+  default_prompt: "Use $tunnel-security-engineer to perform this security review safely."

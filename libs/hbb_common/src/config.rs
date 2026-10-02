@@ -43,7 +43,7 @@ pub const ENCRYPT_MAX_LEN: usize = 128; // used for password, pin, etc, not for 
 
 #[cfg(target_os = "macos")]
 lazy_static::lazy_static! {
-    pub static ref ORG: RwLock<String> = RwLock::new("com.carriez".to_owned());
+    pub static ref ORG: RwLock<String> = RwLock::new("com.tunnel".to_owned());
 }
 
 type Size = (i32, i32, i32, i32);
@@ -62,7 +62,7 @@ lazy_static::lazy_static! {
         _ => "",
     }.to_owned());
     pub static ref EXE_RENDEZVOUS_SERVER: RwLock<String> = Default::default();
-    pub static ref APP_NAME: RwLock<String> = RwLock::new("CloudSend".to_owned());
+    pub static ref APP_NAME: RwLock<String> = RwLock::new("Tunnel".to_owned());
     static ref KEY_PAIR: Mutex<Option<KeyPair>> = Default::default();
     static ref USER_DEFAULT_CONFIG: RwLock<(UserDefaultConfig, Instant)> = RwLock::new((UserDefaultConfig::load(), Instant::now()));
     pub static ref NEW_STORED_PEER_CONFIG: Mutex<HashSet<String>> = Default::default();
@@ -294,7 +294,7 @@ pub struct PeerConfig {
     #[serde(flatten)]
     pub show_quality_monitor: ShowQualityMonitor,
     #[serde(flatten)]
-    pub show_cloudsend_status_monitor: ShowCloudSendStatusMonitor,
+    pub show_tunnel_status_monitor: ShowTunnelStatusMonitor,
     #[serde(flatten)]
     pub follow_remote_cursor: FollowRemoteCursor,
     #[serde(flatten)]
@@ -380,7 +380,7 @@ impl Default for PeerConfig {
             disable_clipboard: Default::default(),
             enable_file_copy_paste: Default::default(),
             show_quality_monitor: Default::default(),
-            show_cloudsend_status_monitor: Default::default(),
+            show_tunnel_status_monitor: Default::default(),
             follow_remote_cursor: Default::default(),
             follow_remote_window: Default::default(),
             keyboard_mode: Default::default(),
@@ -1645,10 +1645,10 @@ serde_field_bool!(
     "ShowQualityMonitor::default_show_quality_monitor"
 );
 serde_field_bool!(
-    ShowCloudSendStatusMonitor,
-    "show_cloudsend_status_monitor",
-    default_show_cloudsend_status_monitor,
-    "ShowCloudSendStatusMonitor::default_show_cloudsend_status_monitor"
+    ShowTunnelStatusMonitor,
+    "show_tunnel_status_monitor",
+    default_show_tunnel_status_monitor,
+    "ShowTunnelStatusMonitor::default_show_tunnel_status_monitor"
 );
 serde_field_bool!(
     DisableAudio,
@@ -1956,7 +1956,7 @@ impl UserDefaultConfig {
             keys::OPTION_CUSTOM_IMAGE_QUALITY => self.get_num_string(key, 50.0, 10.0, 0xFFF as f64),
             keys::OPTION_CUSTOM_FPS => self.get_num_string(key, 30.0, 5.0, 120.0),
             keys::OPTION_ENABLE_FILE_COPY_PASTE => self.get_string(key, "Y", vec!["", "N"]),
-            keys::OPTION_SHOW_CLOUDSEND_STATUS_MONITOR => self.get_string(key, "Y", vec!["", "N"]),
+            keys::OPTION_SHOW_TUNNEL_STATUS_MONITOR => self.get_string(key, "Y", vec!["", "N"]),
             keys::OPTION_TRACKPAD_SPEED => self.get_num_string(key, 100, 10, 1000),
             _ => self
                 .get_after(key)
@@ -2423,7 +2423,7 @@ pub mod keys {
     pub const OPTION_FOLLOW_REMOTE_WINDOW: &str = "follow_remote_window";
     pub const OPTION_ZOOM_CURSOR: &str = "zoom-cursor";
     pub const OPTION_SHOW_QUALITY_MONITOR: &str = "show_quality_monitor";
-    pub const OPTION_SHOW_CLOUDSEND_STATUS_MONITOR: &str = "show_cloudsend_status_monitor";
+    pub const OPTION_SHOW_TUNNEL_STATUS_MONITOR: &str = "show_tunnel_status_monitor";
     pub const OPTION_DISABLE_AUDIO: &str = "disable_audio";
     pub const OPTION_ENABLE_REMOTE_PRINTER: &str = "enable-remote-printer";
     pub const OPTION_ENABLE_FILE_COPY_PASTE: &str = "enable-file-copy-paste";
@@ -2577,7 +2577,7 @@ pub mod keys {
         OPTION_FOLLOW_REMOTE_WINDOW,
         OPTION_ZOOM_CURSOR,
         OPTION_SHOW_QUALITY_MONITOR,
-        OPTION_SHOW_CLOUDSEND_STATUS_MONITOR,
+        OPTION_SHOW_TUNNEL_STATUS_MONITOR,
         OPTION_DISABLE_AUDIO,
         OPTION_ENABLE_FILE_COPY_PASTE,
         OPTION_DISABLE_CLIPBOARD,

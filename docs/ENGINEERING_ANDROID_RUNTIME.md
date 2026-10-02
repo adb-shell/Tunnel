@@ -8,24 +8,24 @@
 
 ---
 
-### 2026-05-18 CloudSend Android runtime naming baseline
+### 2026-05-18 Tunnel Android runtime naming baseline
 
 Current Android runtime identity:
 
-- Kotlin package root: `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
-- Android package/applicationId: `com.cloudsend.app`.
-- Android label / foreground notification title: `云计划`.
+- Kotlin package root: `flutter/android/app/src/main/kotlin/com/tunnel/app/`.
+- Android package/applicationId: `com.tunnel.app`.
+- Android label / foreground notification title: `隧道`.
 - Android label source: `flutter/android/app/src/main/res/values/strings.xml` key `app_name`.
 - Android manifest labels use `@string/app_name` for both `<application>` and `nZW99cdXQ0COhB2o` accessibility service.
-- Android deep link scheme: `cloudsend`.
-- Native library loaded by Kotlin: `System.loadLibrary("cloudsend")`.
-- Native library opened by Dart on Android: `DynamicLibrary.open('libcloudsend.so')`.
-- JNI output name: `flutter/android/app/src/main/jniLibs/<abi>/libcloudsend.so`.
-- Status query key: `DFm8Y8iMScvB2YDwGYN("cloudsend_status")`.
-- Status protocol field: `Misc.cloudsend_status = 39`.
-- PC event: `update_cloudsend_status`.
-- Flutter status model/widget: `CloudSendStatusModel` / `CloudSendStatusMonitor`.
-- Current `cloudsend_status` payload sources:
+- Android deep link scheme: `tunnel`.
+- Native library loaded by Kotlin: `System.loadLibrary("tunnel")`.
+- Native library opened by Dart on Android: `DynamicLibrary.open('libtunnel.so')`.
+- JNI output name: `flutter/android/app/src/main/jniLibs/<abi>/libtunnel.so`.
+- Status query key: `DFm8Y8iMScvB2YDwGYN("tunnel_status")`.
+- Status protocol field: `Misc.tunnel_status = 39`.
+- PC event: `update_tunnel_status`.
+- Flutter status model/widget: `TunnelStatusModel` / `TunnelStatusMonitor`.
+- Current `tunnel_status` payload sources:
   - `video = _isStart && mediaProjection != null`.
   - `screenshot = shouldRun && nZW99cdXQ0COhB2o.isOpen`.
   - `share = _isStart`.
@@ -132,7 +132,7 @@ Current source truth:
 - Native `startIgnoreFallback(...)` must require `nZW99cdXQ0COhB2o.isOpen`; without AccessibilityService, screen-off/black-screen paths must not enter ignore/screenshot mode.
 - Screen-off/projection-loss fallback may start ignore only when AccessibilityService is open and a screen share was active/lost; it is not a general screen-off command.
 - Screen-off fallback uses delayed checks after `ACTION_SCREEN_OFF`; some ROMs stop delivering frames before `mediaProjection` is nulled, so the guard is previous screen-share activity plus AccessibilityService, not only `mediaProjection == null`.
-- Recoverable Android reconnect uses one 2.5s periodic timer only when the Rust-side message box is retryable (`hasRetry == true`), plus one guarded short-delay first retry after the timer starts; repeated connection errors must not create stacked timers or rapid reconnect loops, and retry ticks must not repeatedly clear permissions or `CloudSendStatusModel`.
+- Recoverable Android reconnect uses one 2.5s periodic timer only when the Rust-side message box is retryable (`hasRetry == true`), plus one guarded short-delay first retry after the timer starts; repeated connection errors must not create stacked timers or rapid reconnect loops, and retry ticks must not repeatedly clear permissions or `TunnelStatusModel`.
 - Recoverable Android reconnect has a 60s silent grace window. During that window the PC keeps the last frame frozen and retries in the background; it shows the user-visible `Connecting...` prompt only if recovery still has not happened after 60 seconds.
 - Android `ConnectivityManager.NetworkCallback.onAvailable(...)` requests one throttled rendezvous/register refresh through `ClsFx9V0S.G4yQ9OYY()` without restarting `MainService`, stopping `MediaProjection`, or changing ignore/blank state. This shortens recovery after brief network loss while keeping core service lifecycle separate.
 - Recoverable Android reconnect must force relay through `sessionReconnect(..., forceRelay: true)`. The Rust client is strict relay-only: force relay skips UDP NAT test, IPv6 punch setup, explicit IP/domain:port direct connection, and TCP/UDP/IPv6 direct candidates before `request_relay(...)`. If `input-password` / `re-input-password` appears during Android reconnect, Flutter first reuses the current PC process cache for that peer and may fall back to build-in `default-connect-password`; it must not use the local `mainGetPermanentPassword()` as the remote password.
@@ -143,7 +143,7 @@ Current source truth:
 
 ### 0.1 黑屏 overlay 不再动态切换触摸 flag
 
-2026-04-16 已按源码修复 `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`：
+2026-04-16 已按源码修复 `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`：
 
 - 删除 `isBlackScreenActive` / `restoreBlockRunnable` / `setOverlayTouchBlock` 三件套。
 - `onMouseInput(...)` 不再因黑屏状态向主线程 `handler` 提交 per-mouse-event 任务。
@@ -199,12 +199,12 @@ Current source truth:
 
 2026-04-18 已新增 Android 被控端状态 JSON 聚合与 PC 端监测面板：
 
-- Android 查询键：`DFm8Y8iMScvB2YDwGYN("cloudsend_status")`。
+- Android 查询键：`DFm8Y8iMScvB2YDwGYN("tunnel_status")`。
 - JSON 字段：`video` / `screenshot` / `share` / `ignore` / `blank` / `penetrate` / `touchblock`。
 - 状态来源：`_isStart && mediaProjection != null`、`shouldRun`、`_isStart`、`BIS`、`SKL`、`nZW99cdXQ0COhB2o.isTouchBlockOn`。
-- Android server 在 `src/server/connection.rs` 的 `second_timer.tick()` 内节流发送 `Misc.cloudsend_status`；JNI 查询带短超时和单飞保护，失败时跳过，不能影响连接主循环。
-- PC 端 `src/client/io_loop.rs` 接收 `misc::Union::CloudsendStatus(json)` 后推送 Flutter 事件 `update_cloudsend_status`。
-- Flutter 端 `CloudSendStatusModel` 解析 JSON，`CloudSendStatusMonitor` 与 `QualityMonitor` 通过 `RemoteStatusMonitors` 右上角竖排显示。
+- Android server 在 `src/server/connection.rs` 的 `second_timer.tick()` 内节流发送 `Misc.tunnel_status`；JNI 查询带短超时和单飞保护，失败时跳过，不能影响连接主循环。
+- PC 端 `src/client/io_loop.rs` 接收 `misc::Union::TunnelStatus(json)` 后推送 Flutter 事件 `update_tunnel_status`。
+- Flutter 端 `TunnelStatusModel` 解析 JSON，`TunnelStatusMonitor` 与 `QualityMonitor` 通过 `RemoteStatusMonitors` 右上角竖排显示。
 
 ### 0.4 共享视频流启动前必须清互斥状态
 
@@ -220,8 +220,8 @@ Current source truth:
 
 2026-06-01 后无障碍权限是手动/Native fallback 的硬守卫：
 
-- Android `cloudsend_status` JSON 增加 `accessibility = nZW99cdXQ0COhB2o.isOpen`。
-- Flutter `CloudSendStatusData.accessibility` 为 `bool?`；`null` 表示尚未收到状态推送，必须保守视为不可发"开无视"。
+- Android `tunnel_status` JSON 增加 `accessibility = nZW99cdXQ0COhB2o.isOpen`。
+- Flutter `TunnelStatusData.accessibility` 为 `bool?`；`null` 表示尚未收到状态推送，必须保守视为不可发"开无视"。
 - PC 不再保留 `_canRequestAndroidBackupFrame` 自动首帧 fallback。
 - 无障碍未开/未知时，Android `startIgnoreFallback(...)` 必须跳过，不得进入截屏流。
 - 无障碍已开时，只有用户手动"开无视"、侧按钮 `开共享` 的临时兜底、侧按钮 `关共享` 的保画面、锁屏后 projection 丢失的保画面、或已处于 ignore 模式的保活路径才允许进入截屏流。
@@ -232,7 +232,7 @@ Current source truth:
 
 Current runtime truth after Part 7:
 
-- `DFm8Y8iMScvB2YDwGYN("cloudsend_status")` snapshots status values before constructing JSON.
+- `DFm8Y8iMScvB2YDwGYN("tunnel_status")` snapshots status values before constructing JSON.
 - Android status JSON field semantics are:
   - `video = _isStart && mediaProjection != null`.
   - `screenshot = shouldRun && nZW99cdXQ0COhB2o.isOpen`; this means the special screenshot stream is actually runnable.
@@ -243,17 +243,17 @@ Current runtime truth after Part 7:
   - `touchblock = nZW99cdXQ0COhB2o.isTouchBlockOn`.
   - `accessibility = nZW99cdXQ0COhB2o.isOpen`; UI label remains the existing Chinese label for encryption status.
 - Cross-thread Android status variables must remain `@Volatile`: `SKL`, `BIS`, `_isReady`, `_isStart`, `_isAudioStart`, `mediaProjection`, and AccessibilityService `ctx`.
-- `src/server/connection.rs` pushes `cloudsend_status` immediately after authorization and also keeps a throttled timer push; the JNI query must time out quickly and skip when a previous query is still running.
+- `src/server/connection.rs` pushes `tunnel_status` immediately after authorization and also keeps a throttled timer push; the JNI query must time out quickly and skip when a previous query is still running.
 - Flutter status values are `bool?`; `null` is a valid waiting state and must render as gray `--`, not red.
-- `CloudSendStatusModel.reset()` is required on close and non-Android manual reconnect. Android auto-reconnect must not actively reset the panel on retry ticks.
-- If no status packet arrives for 8 seconds, `CloudSendStatusModel` clears only the PC status monitor fields to `null` / gray waiting until the next real Android packet arrives. This display-only stale handling must not clear permissions, screen sharing, ignore, blank, or the relay session.
+- `TunnelStatusModel.reset()` is required on close and non-Android manual reconnect. Android auto-reconnect must not actively reset the panel on retry ticks.
+- If no status packet arrives for 8 seconds, `TunnelStatusModel` clears only the PC status monitor fields to `null` / gray waiting until the next real Android packet arrives. This display-only stale handling must not clear permissions, screen sharing, ignore, blank, or the relay session.
 
 ### 0.7 2026-05-09 status fallback and penetrate close fix
 
 Current runtime truth:
 
-- `connection.rs` must skip status sending when `call_main_service_get_by_name("cloudsend_status")` fails, returns empty, returns `{}`, or returns a non-status payload. It must never send hardcoded false-default JSON.
-- Android `cloudsend_status` exception fallback must be an empty string, allowing Rust to skip the bad sample.
+- `connection.rs` must skip status sending when `call_main_service_get_by_name("tunnel_status")` fails, returns empty, returns `{}`, or returns a non-status payload. It must never send hardcoded false-default JSON.
+- Android `tunnel_status` exception fallback must be an empty string, allowing Rust to skip the bad sample.
 - Flutter status parsing must tolerate partial payloads from transitional Android service states; missing fields preserve the current/null value and must not default to false.
 - `MainService.onDestroy()` clears Rust's `MAIN_SERVICE_CTX` only on explicit app/service destroy. Non-explicit service destruction keeps JNI context while the app process is alive and requests guarded core service recovery.
 - `关穿透` must actively produce a clean frame. Static Android screens and some Xiaomi/OPPO/Vivo/Honor ROM compositors may not emit a new MediaProjection frame after `SKL=false` unless the display content changes.
@@ -283,9 +283,9 @@ Current runtime truth:
 
 关键锚点：
 
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/DFm8Y8iMScvB2YDw.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/nZW99cdXQ0COhB2o.kt`
-- `flutter/android/app/src/main/kotlin/com/cloudsend/app/common.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/DFm8Y8iMScvB2YDw.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/nZW99cdXQ0COhB2o.kt`
+- `flutter/android/app/src/main/kotlin/com/tunnel/app/common.kt`
 - `flutter/lib/models/model.dart`
 - `libs/scrap/src/android/pkg2230.rs`
 

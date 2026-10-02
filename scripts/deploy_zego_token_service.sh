@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SERVICE_NAME="${SERVICE_NAME:-cloudsend-zego-token}"
-INSTALL_DIR="${INSTALL_DIR:-/www/wwwroot/cloudsend-zego-token}"
+SERVICE_NAME="${SERVICE_NAME:-tunnel-zego-token}"
+INSTALL_DIR="${INSTALL_DIR:-/www/wwwroot/tunnel-zego-token}"
 INSTALL_DIR="${INSTALL_DIR%/}"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
@@ -16,15 +16,15 @@ GOPROXY_VALUE="${GOPROXY_VALUE:-https://goproxy.cn,direct}"
 ACTION=""
 
 log() {
-  printf '\033[1;32m[cloudsend-zego]\033[0m %s\n' "$*"
+  printf '\033[1;32m[tunnel-zego]\033[0m %s\n' "$*"
 }
 
 warn() {
-  printf '\033[1;33m[cloudsend-zego]\033[0m %s\n' "$*"
+  printf '\033[1;33m[tunnel-zego]\033[0m %s\n' "$*"
 }
 
 fail() {
-  printf '\033[1;31m[cloudsend-zego]\033[0m %s\n' "$*" >&2
+  printf '\033[1;31m[tunnel-zego]\033[0m %s\n' "$*" >&2
   exit 1
 }
 
@@ -117,7 +117,7 @@ EOF
   umask 022
 
   cat > go.mod <<'EOF'
-module cloudsend-zego-token
+module tunnel-zego-token
 
 go 1.18
 
@@ -145,7 +145,7 @@ import (
 type createRequest struct {
 	PcPeerId           string `json:"pcPeerId"`
 	AndroidPeerId      string `json:"androidPeerId"`
-	CloudsendSessionId string `json:"cloudsendSessionId"`
+	TunnelSessionId string `json:"tunnelSessionId"`
 }
 
 type createResponse struct {
@@ -174,7 +174,7 @@ func main() {
 	http.HandleFunc("/api/v1/voice-call/create", handleCreate)
 
 	addr := host + ":" + port
-	log.Println("cloudsend zego token service listening on", addr)
+	log.Println("tunnel zego token service listening on", addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
 
@@ -211,7 +211,7 @@ func handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	pcPeerId := clean(req.PcPeerId)
 	androidPeerId := clean(req.AndroidPeerId)
-	sessionId := clean(req.CloudsendSessionId)
+	sessionId := clean(req.TunnelSessionId)
 
 	if pcPeerId == "" || androidPeerId == "" || sessionId == "" {
 		writeJSON(w, http.StatusBadRequest, errorResponse{"missing_required_id"})
@@ -341,7 +341,7 @@ install_systemd_service() {
   log "写入 systemd 服务：${SERVICE_FILE}"
   cat > "${SERVICE_FILE}" <<EOF
 [Unit]
-Description=CloudSend ZEGO Token Service
+Description=Tunnel ZEGO Token Service
 After=network.target
 
 [Service]
@@ -370,19 +370,19 @@ verify_service() {
 
   local health_url="http://127.0.0.1:${PORT}/api/v1/health"
   log "测试健康接口：${health_url}"
-  curl -fsS "${health_url}" >/tmp/cloudsend-zego-health.json
-  grep -q '"ok":true' /tmp/cloudsend-zego-health.json || fail "健康检查返回异常：$(cat /tmp/cloudsend-zego-health.json)"
+  curl -fsS "${health_url}" >/tmp/tunnel-zego-health.json
+  grep -q '"ok":true' /tmp/tunnel-zego-health.json || fail "健康检查返回异常：$(cat /tmp/tunnel-zego-health.json)"
 
   local token_url="http://127.0.0.1:${PORT}"
   log "测试 Token 创建接口：POST ${token_url}"
   curl -fsS -X POST "${token_url}" \
     -H "Authorization: Bearer ${VOICE_API_KEY}" \
     -H "Content-Type: application/json" \
-    -d '{"pcPeerId":"pc_test","androidPeerId":"android_test","cloudsendSessionId":"sess_test"}' \
-    >/tmp/cloudsend-zego-token-test.json
+    -d '{"pcPeerId":"pc_test","androidPeerId":"android_test","tunnelSessionId":"sess_test"}' \
+    >/tmp/tunnel-zego-token-test.json
 
-  grep -q '"callerToken"' /tmp/cloudsend-zego-token-test.json || fail "Token 测试返回异常：$(cat /tmp/cloudsend-zego-token-test.json)"
-  grep -q '"calleeToken"' /tmp/cloudsend-zego-token-test.json || fail "Token 测试缺少 calleeToken：$(cat /tmp/cloudsend-zego-token-test.json)"
+  grep -q '"callerToken"' /tmp/tunnel-zego-token-test.json || fail "Token 测试返回异常：$(cat /tmp/tunnel-zego-token-test.json)"
+  grep -q '"calleeToken"' /tmp/tunnel-zego-token-test.json || fail "Token 测试缺少 calleeToken：$(cat /tmp/tunnel-zego-token-test.json)"
 }
 
 print_summary() {
@@ -395,7 +395,7 @@ print_summary() {
   cat <<EOF
 
 ============================================================
-CloudSend ZEGO Token Service 部署完成
+Tunnel ZEGO Token Service 部署完成
 ============================================================
 
 服务名：${SERVICE_NAME}
@@ -463,7 +463,7 @@ uninstall_token_service() {
     warn "未找到服务目录：${INSTALL_DIR}"
   fi
 
-  rm -f /tmp/cloudsend-zego-health.json /tmp/cloudsend-zego-token-test.json
+  rm -f /tmp/tunnel-zego-health.json /tmp/tunnel-zego-token-test.json
 
   systemctl daemon-reload
   if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
@@ -479,7 +479,7 @@ uninstall_token_service() {
   cat <<EOF
 
 ============================================================
-CloudSend ZEGO Token Service 卸载完成
+Tunnel ZEGO Token Service 卸载完成
 ============================================================
 
 已处理：
@@ -499,7 +499,7 @@ show_menu() {
   cat <<EOF
 
 ============================================================
-CloudSend ZEGO Token Service 部署脚本
+Tunnel ZEGO Token Service 部署脚本
 ============================================================
 
 1.安装Token服务

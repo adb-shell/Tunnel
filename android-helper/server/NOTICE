@@ -1,0 +1,17 @@
+This local diagnostic includes modified portions of scrcpy v4.1:
+https://github.com/Genymobile/scrcpy
+Commit: 2926c06c5dc3064ae6d8db706f1a98a37cfcf3f0
+
+Copyright (C) 2018 Genymobile
+Copyright (C) 2018-2026 Romain Vimont
+
+The upstream portions are licensed under the Apache License, Version 2.0.
+The complete upstream license is reproduced in LICENSE.scrcpy.
+
+Tunnel modifications replace the upstream server with a short-lived local
+diagnostic, authenticated framing, bounded owned H264 buffers, explicit stop and
+watchdogs. Only display capture, shell context initialization and codec lifecycle
+patterns are adapted. Upstream audio, input, control, clipboard, file transfer,
+power/settings modifications and desktop components are not included.
+
+This is not an official scrcpy build or a claim of device compatibility.

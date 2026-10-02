@@ -1,4 +1,4 @@
-# CloudSend 源码地图 / Source Map
+# Tunnel 源码地图 / Source Map
 
 最近关键路径复核：2026-10-02，`HEAD 5cee692` / V0。按功能和接口定位见 [12_FEATURE_MAP.md](12_FEATURE_MAP.md)，覆盖边界见 [本轮审计](audits/2026-10-02/README.md)。
 
@@ -32,14 +32,14 @@
 
 | Crate | 关键目录 | 职责 |
 |---|---|---|
-| `cloudsend` | `src/` | controller、endpoint、FFI、平台与产品集成 |
+| `tunnel` | `src/` | controller、endpoint、FFI、平台与产品集成 |
 | `hbb_common` | `libs/hbb_common/` | protobuf、config、crypto、socket、fs |
 | `scrap` | `libs/scrap/` | capture、codec、Android raw/JNI |
 | `enigo` | `libs/enigo/` | desktop input injection |
 | `clipboard` | `libs/clipboard/` | clipboard/CLIPRDR/file clipboard |
 | `virtual_display` | `libs/virtual_display/` | RustDesk IDD wrapper |
 | `dylib_virtual_display` | `libs/virtual_display/dylib/` | virtual display DLL ABI |
-| `cloudsend-portable-packer` | `libs/portable/` | Windows self-extracting package |
+| `tunnel-portable-packer` | `libs/portable/` | Windows self-extracting package |
 | `remote_printer` | `libs/remote_printer/` | Windows printer/driver integration |
 
 `workspace.exclude` 指向的 `vdi/host`、`examples/custom_plugin` 当前不存在，是 manifest 历史残留。
@@ -117,7 +117,7 @@
 
 ### Kotlin/Java
 
-除特别说明外，下表业务类位于 `flutter/android/app/src/main/kotlin/com/cloudsend/app/`；`pkg2230.kt` 和 `ffi.kt` 实际位于 `flutter/android/app/src/main/kotlin/` 根目录。
+除特别说明外，下表业务类位于 `flutter/android/app/src/main/kotlin/com/tunnel/app/`；`pkg2230.kt` 和 `ffi.kt` 实际位于 `flutter/android/app/src/main/kotlin/` 根目录。
 
 | 文件 | 角色 |
 |---|---|
@@ -138,10 +138,10 @@
 
 ### ADB module
 
-- `adb/CloudSendAdbManager.kt`：facade/state。
-- `CloudSendAdbRunner.kt`：`libadb.so` process、pair/connect/shell。
-- `CloudSendAdbDnsDiscover.kt`：NSD discovery/fallback。
-- `CloudSendAdbState.kt`：snapshot。
+- `adb/TunnelAdbManager.kt`：facade/state。
+- `TunnelAdbRunner.kt`：`libadb.so` process、pair/connect/shell。
+- `TunnelAdbDnsDiscover.kt`：NSD discovery/fallback。
+- `TunnelAdbState.kt`：snapshot。
 - `flutter/lib/mobile/pages/adb_page.dart`：UI。
 - `jniLibs/*/libadb.so`：当前 MISSING；旧接管曾记为 LOCAL-ONLY，当前整个 `jniLibs/` 目录不存在。provenance 与获取方式见 External Asset Registry。
 
@@ -160,7 +160,7 @@
 - privacy：`src/privacy_mode.rs`, `src/privacy_mode/win_*`。
 - virtual display：`src/virtual_display_manager.rs`；当前 Amyuni。
 - driver/package：`res/vcpkg/`, `res/msi/`, external `usbmmidd_v2`, printer driver。
-- runner/library：`flutter/windows/runner/`, `cloudsend.dll`。
+- runner/library：`flutter/windows/runner/`, `tunnel.dll`。
 
 ## 8. Protocol 与 API 地图
 
@@ -190,3 +190,15 @@
 - MISSING/LOCAL-ONLY/EXTERNAL ADB、driver、assets 必须先进入受控 artifact manifest，不能依赖个人机器或旧 hash 记录。
 - Git dependency 应同时记录 manifest source 与 lock revision。
 - clean clone 复现是 release gate；当前尚未满足。
+
+## 11. ADB P0 原型新增地图（2026-10-02）
+
+| 路径 | 状态 | 作用 |
+|---|---|---|
+| `android-helper/protocol/` | DORMANT / source only | APK/helper共享认证framing、JUnit源码 |
+| `android-helper/server/` | DORMANT / source only | 固定来源shell H264原型、NOTICE/provenance |
+| `android-helper/build_helper.py` | NOT_RUN | 显式Java/D8构建、hash manifest和首次stage |
+| Android `adb/probe/`、`adb/mirror/` | DORMANT / default off | 本机UID探测、artifact校验、有限时supervisor |
+| `flutter/lib/mobile/widgets/adb_mirror_probe_card.dart` | DORMANT / default off | 本机诊断计数、生命周期取消 |
+
+本地MethodChannel位于FlutterActivity，不新增远程协议或JNI路径。源码变化来自T003；[验证交接](../plans/ADB_P0_VALIDATION_RUNBOOK.md)记录真实完成范围及未验证项。

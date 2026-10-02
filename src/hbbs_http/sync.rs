@@ -304,7 +304,7 @@ fn heartbeat_url() -> String {
         Config::get_option("api-server"),
         Config::get_option("custom-rendezvous-server"),
     );
-    if url.is_empty() || url.contains("cloudsend.") {
+    if url.is_empty() || url.contains("tunnel.") {
         return "".to_owned();
     }
     format!("{}/api/heartbeat", url)

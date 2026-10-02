@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tunnel Network Engineer"
+  short_description: "Maintain Tunnel relay, protocol, and authentication"
+  default_prompt: "Use $tunnel-network-engineer to analyze this network protocol task."

@@ -103,7 +103,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     _physicalFocusNode.requestFocus();
     gFFI.inputModel.listenToMouse(true);
     gFFI.qualityMonitorModel.checkShowQualityMonitor(sessionId);
-    gFFI.cloudSendStatusModel.checkShowCloudSendStatusMonitor(sessionId);
+    gFFI.tunnelStatusModel.checkShowTunnelStatusMonitor(sessionId);
     keyboardSubscription =
         keyboardVisibilityController.onChange.listen(onSoftKeyboardChanged);
     gFFI.chatModel
@@ -575,7 +575,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
               top: 10,
               right: 10,
               child: RemoteStatusMonitors(
-                  gFFI.qualityMonitorModel, gFFI.cloudSendStatusModel),
+                  gFFI.qualityMonitorModel, gFFI.tunnelStatusModel),
             ),
             KeyHelpTools(
                 keyboardIsVisible: keyboardIsVisible,

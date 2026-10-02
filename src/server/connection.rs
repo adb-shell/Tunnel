@@ -78,25 +78,25 @@ lazy_static::lazy_static! {
 }
 
 #[cfg(target_os = "android")]
-/// Get Android cloudsend_status JSON.
+/// Get Android tunnel_status JSON.
 ///
 /// Return None when MainService/JNI is not ready or the payload is invalid.
 /// Callers must skip pushing in that case so the PC monitor keeps the
 /// "waiting" state instead of showing fake red values.
-fn cloudsend_status_json_or_none_sync() -> Option<String> {
-    match call_main_service_get_by_name("cloudsend_status") {
+fn tunnel_status_json_or_none_sync() -> Option<String> {
+    match call_main_service_get_by_name("tunnel_status") {
         Ok(json) => {
             let trimmed = json.trim();
             if trimmed.is_empty() {
-                log::debug!("cloudsend_status: empty payload, skip push");
+                log::debug!("tunnel_status: empty payload, skip push");
                 return None;
             }
             if trimmed == "{}" {
-                log::debug!("cloudsend_status: empty object, skip push");
+                log::debug!("tunnel_status: empty object, skip push");
                 return None;
             }
             if !trimmed.starts_with('{') {
-                log::debug!("cloudsend_status: non-object payload [{}], skip push", trimmed);
+                log::debug!("tunnel_status: non-object payload [{}], skip push", trimmed);
                 return None;
             }
             let has_any_key = trimmed.contains("\"video\"")
@@ -108,14 +108,14 @@ fn cloudsend_status_json_or_none_sync() -> Option<String> {
                 || trimmed.contains("\"screenshot\"")
                 || trimmed.contains("\"accessibility\"");
             if !has_any_key {
-                log::debug!("cloudsend_status: no known field in payload, skip push");
+                log::debug!("tunnel_status: no known field in payload, skip push");
                 return None;
             }
             Some(json)
         }
         Err(err) => {
             log::debug!(
-                "cloudsend_status: JNI failed (service not ready or killed): {}",
+                "tunnel_status: JNI failed (service not ready or killed): {}",
                 err
             );
             None
@@ -124,16 +124,16 @@ fn cloudsend_status_json_or_none_sync() -> Option<String> {
 }
 
 #[cfg(target_os = "android")]
-async fn cloudsend_status_json_or_none() -> Option<String> {
-    if CLOUDSEND_STATUS_QUERY_IN_FLIGHT.swap(true, AtomicOrdering::AcqRel) {
-        log::debug!("cloudsend_status: previous JNI query still running, skip push");
+async fn tunnel_status_json_or_none() -> Option<String> {
+    if TUNNEL_STATUS_QUERY_IN_FLIGHT.swap(true, AtomicOrdering::AcqRel) {
+        log::debug!("tunnel_status: previous JNI query still running, skip push");
         return None;
     }
     match timeout(
         200,
         hbb_common::tokio::task::spawn_blocking(|| {
-            let json = cloudsend_status_json_or_none_sync();
-            CLOUDSEND_STATUS_QUERY_IN_FLIGHT.store(false, AtomicOrdering::Release);
+            let json = tunnel_status_json_or_none_sync();
+            TUNNEL_STATUS_QUERY_IN_FLIGHT.store(false, AtomicOrdering::Release);
             json
         }),
     )
@@ -141,22 +141,22 @@ async fn cloudsend_status_json_or_none() -> Option<String> {
     {
         Ok(Ok(json)) => json,
         Ok(Err(err)) => {
-            CLOUDSEND_STATUS_QUERY_IN_FLIGHT.store(false, AtomicOrdering::Release);
-            log::debug!("cloudsend_status: background JNI worker failed: {}", err);
+            TUNNEL_STATUS_QUERY_IN_FLIGHT.store(false, AtomicOrdering::Release);
+            log::debug!("tunnel_status: background JNI worker failed: {}", err);
             None
         }
         Err(_) => {
-            log::debug!("cloudsend_status: JNI query timed out, skip push");
+            log::debug!("tunnel_status: JNI query timed out, skip push");
             None
         }
     }
 }
 
 #[cfg(target_os = "android")]
-async fn cloudsend_status_message() -> Option<Message> {
-    let json = cloudsend_status_json_or_none().await?;
+async fn tunnel_status_message() -> Option<Message> {
+    let json = tunnel_status_json_or_none().await?;
     let mut misc = Misc::new();
-    misc.set_cloudsend_status(json);
+    misc.set_tunnel_status(json);
     let mut msg_out = Message::new();
     msg_out.set_misc(misc);
     Some(msg_out)
@@ -170,7 +170,7 @@ pub static CLICK_TIME: AtomicI64 = AtomicI64::new(0);
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub static MOUSE_MOVE_TIME: AtomicI64 = AtomicI64::new(0);
 #[cfg(target_os = "android")]
-static CLOUDSEND_STATUS_QUERY_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+static TUNNEL_STATUS_QUERY_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 #[cfg(all(feature = "flutter", feature = "plugin_framework"))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -394,7 +394,7 @@ const SEND_TIMEOUT_VIDEO: u64 = 12_000;
 const SEND_TIMEOUT_OTHER: u64 = SEND_TIMEOUT_VIDEO * 10;
 const SESSION_TIMEOUT: Duration = Duration::from_secs(30);
 #[cfg(target_os = "android")]
-const CLOUDSEND_STATUS_PUSH_INTERVAL_SECONDS: u8 = 2;
+const TUNNEL_STATUS_PUSH_INTERVAL_SECONDS: u8 = 2;
 
 impl Connection {
     pub async fn start(
@@ -570,7 +570,7 @@ impl Connection {
         std::thread::spawn(move || Self::handle_input(_rx_input, tx_cloned));
         let mut second_timer = crate::rustdesk_interval(time::interval(Duration::from_secs(1)));
         #[cfg(target_os = "android")]
-        let mut cloudsend_status_tick = 0u8;
+        let mut tunnel_status_tick = 0u8;
 
         #[cfg(feature = "unix-file-copy-paste")]
         let rx_clip_holder;
@@ -609,7 +609,7 @@ impl Connection {
                                 conn.authorized,
                             );
                             #[cfg(target_os = "android")]
-                            if let Some(msg) = cloudsend_status_message().await {
+                            if let Some(msg) = tunnel_status_message().await {
                                 conn.send(msg).await;
                             }
                             if conn.port_forward_socket.is_some() {
@@ -920,15 +920,15 @@ impl Connection {
                     conn.file_remove_log_control.on_timer().drain(..).map(|x| conn.send_to_cm(x)).count();
                     #[cfg(feature = "hwcodec")]
                     conn.update_supported_encoding();
-                    // CloudSend: keep Android status off the hot path; JNI failures must not disturb the session.
+                    // Tunnel: keep Android status off the hot path; JNI failures must not disturb the session.
                     #[cfg(target_os = "android")]
                     if conn.authorized {
-                        cloudsend_status_tick = cloudsend_status_tick.wrapping_add(1);
-                        if cloudsend_status_tick >= CLOUDSEND_STATUS_PUSH_INTERVAL_SECONDS {
-                            cloudsend_status_tick = 0;
+                        tunnel_status_tick = tunnel_status_tick.wrapping_add(1);
+                        if tunnel_status_tick >= TUNNEL_STATUS_PUSH_INTERVAL_SECONDS {
+                            tunnel_status_tick = 0;
                         }
-                        if cloudsend_status_tick == 0 {
-                            if let Some(msg) = cloudsend_status_message().await {
+                        if tunnel_status_tick == 0 {
+                            if let Some(msg) = tunnel_status_message().await {
                                 conn.send(msg).await;
                             }
                         }
@@ -1652,11 +1652,11 @@ impl Connection {
         let mut msg_out = Message::new();
         msg_out.set_login_response(res);
         self.send(msg_out).await;
-        // CloudSend: push one status frame immediately after authorization.
+        // Tunnel: push one status frame immediately after authorization.
         // If MainService/JNI is not ready yet, skip and let the timer retry.
         #[cfg(target_os = "android")]
         if self.authorized {
-            if let Some(msg) = cloudsend_status_message().await {
+            if let Some(msg) = tunnel_status_message().await {
                 self.send(msg).await;
             }
         }
@@ -3043,7 +3043,7 @@ impl Connection {
                         };
                         if !zego_voice_call.is_valid_callee_invite() {
                             log::warn!(
-                                "Rejecting voice call without a valid CloudSend ZEGO payload"
+                                "Rejecting voice call without a valid Tunnel ZEGO payload"
                             );
                             self.voice_call_request_timestamp = None;
                             self.pending_zego_voice_call = None;
@@ -3397,7 +3397,7 @@ impl Connection {
                 self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
                 self.send(new_voice_call_response(ts.get(), false)).await;
             }
-            // CloudSend ZEGO calls use Flutter/ZEGO for media. Keep the legacy
+            // Tunnel ZEGO calls use Flutter/ZEGO for media. Keep the legacy
             // audio_service voice-call flag off so permission/option updates
             // cannot subscribe the old RustDesk audio path by accident.
             self.voice_calling = false;
@@ -3794,7 +3794,7 @@ impl Connection {
             return;
         }
         self.closed = true;
-        // CloudSend voice calls are handled by ZEGO; connection close must not
+        // Tunnel voice calls are handled by ZEGO; connection close must not
         // reset legacy RustDesk audio_service voice-call devices.
         log::info!("#{} Connection closed: {}", self.inner.id(), reason);
         if lock && self.lock_after_session_end && self.keyboard {

@@ -57,3 +57,5 @@ vcpkg_installed
 flutter/lib/generated_plugin_registrant.dart
 libsciter.dylib
 flutter/web/
+# Explicitly staged local ADB P0 build artifacts are never source assets.
+/flutter/android/app/src/main/assets/adb-mirror-p0/

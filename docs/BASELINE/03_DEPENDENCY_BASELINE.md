@@ -1,4 +1,4 @@
-# CloudSend Dependency Baseline
+# Tunnel Dependency Baseline
 
 Baseline ID：`CS-BL-2026-07-12-77062b4`  
 状态：manifest/lock static baseline；clean resolution/build `VERIFICATION-REQUIRED`

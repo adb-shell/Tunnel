@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tunnel API Engineer"
+  short_description: "Maintain Tunnel account, HTTP, sync, and API contracts"
+  default_prompt: "Use $tunnel-api-engineer to analyze this API or backend-contract task."

@@ -51,9 +51,12 @@ protobuf {
 }
 
 android {
+    namespace "com.tunnel.app"
     compileSdkVersion 34
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
+        main.java.srcDirs += '../../../android-helper/protocol/src/main/java'
+        test.java.srcDirs += '../../../android-helper/protocol/src/test/java'
 
         main.proto.srcDirs += '../../../libs/hbb_common/protos'
         main.proto.includes += "message.proto"
@@ -64,13 +67,18 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
     }
 
+    buildFeatures { buildConfig true }
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "com.cloudsend.app"
+        applicationId "com.tunnel.app"
         minSdkVersion 21
         targetSdkVersion 33
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+        // Local P0 diagnostic only. Never enabled implicitly by a debug/release build.
+        buildConfigField 'boolean', 'ADB_MIRROR_P0',
+                (project.findProperty('tunnelAdbMirrorP0') == 'true' ? 'true' : 'false')
     }
 
     signingConfigs {
@@ -93,7 +101,7 @@ android {
 
     packagingOptions {
         jniLibs {
-            // CloudSend ADB module executes bundled libadb.so via ProcessBuilder.
+            // Tunnel ADB module executes bundled libadb.so via ProcessBuilder.
             // The library must be extracted to applicationInfo.nativeLibraryDir.
             useLegacyPackaging = true
         }
@@ -106,6 +114,7 @@ flutter {
 
 dependencies {
     implementation "androidx.media:media:1.6.0"
+    testImplementation 'junit:junit:4.13.2'
     implementation 'com.github.getActivity:XXPermissions:18.5'
     implementation("org.jetbrains.kotlin:kotlin-stdlib") { version { strictly("1.9.10") } }
     implementation 'com.caverock:androidsvg-aar:1.4'

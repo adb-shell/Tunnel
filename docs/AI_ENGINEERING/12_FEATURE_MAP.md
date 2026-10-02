@@ -1,4 +1,4 @@
-# CloudSend 功能定位与跨层对接地图
+# Tunnel 功能定位与跨层对接地图
 
 复核日期：2026-10-02；Baseline：`CS-BL-2026-10-02-5cee692`；证据：V0。
 用途：收到产品修改需求时确定入口、对接两端和验证范围。状态表示源码可达性/编译条件，不表示发布包或运行已验证。完整行为仍以对应领域文档和源码为准。
@@ -18,7 +18,7 @@ flowchart TD
     Platform --> Assets["OS permissions / drivers / native assets"]
 ```
 
-语义 owner：Flutter 管 UI/state；Android 管 OS/service/permission；Rust 管 ownership/ABI/实现；Network 管 peer 协议/会话权限；API 管产品 HTTP/schema/token；Security 与 Release 审查跨域边界。两个以上领域由 `cloudsend-master` 整合。
+语义 owner：Flutter 管 UI/state；Android 管 OS/service/permission；Rust 管 ownership/ABI/实现；Network 管 peer 协议/会话权限；API 管产品 HTTP/schema/token；Security 与 Release 审查跨域边界。两个以上领域由 `tunnel-master` 整合。
 
 ## 2. 功能入口表
 
@@ -26,7 +26,7 @@ flowchart TD
 
 | 功能 / 当前状态 | 用户或系统入口 → 核心对接 | 修改时必须同时核对 | 领域文档 / cases |
 |---|---|---|---|
-| 启动与角色：active/cfg | Sciter走`src/main.rs`→`core_main`；Flutter Windows走`flutter/windows/runner/main.cpp::wWinMain`→`cloudsend_core_main_args`→`core_main`；`flutter/lib/main.dart`再分窗口/角色 | process args、native runner、engine/window ID、全局与 session model | [03](03_MODULE_DESIGN.md)；FLT-02、RST-06 |
+| 启动与角色：active/cfg | Sciter走`src/main.rs`→`core_main`；Flutter Windows走`flutter/windows/runner/main.cpp::wWinMain`→`tunnel_core_main_args`→`core_main`；`flutter/lib/main.dart`再分窗口/角色 | process args、native runner、engine/window ID、全局与 session model | [03](03_MODULE_DESIGN.md)；FLT-02、RST-06 |
 | 主远控连接：active | Flutter connection UI → `src/flutter_ffi.rs` / `src/ui_session_interface.rs` → `src/client.rs` → `src/client/io_loop.rs` | relay policy、login、事件归属、关闭/重连、服务订阅 | [06](06_NETWORK_PROTOCOL.md)；NET-01/02/04、E2E-01 |
 | ID/在线状态：active | `src/rendezvous_mediator.rs::RendezvousMediator::start_all` → 外部 hbbs；Flutter `ServerModel` 查询 connect status | 注册状态≠core存活；endpoint direct/NAT 兼容仍在 | [06](06_NETWORK_PROTOCOL.md)；NET-02/08 |
 | Android core：active | `runMobileApp` / `ensure_core_service` / `BootReceiver` → `MainService` → JNI/Rust | config path 异步、显式/非显式 destroy、GlobalRef；不把 core 操作变成 projection 授权 | [04](04_ANDROID_PIPELINE.md)；AND-01、RST-03/04 |
@@ -40,7 +40,7 @@ flowchart TD
 | 文件管理/传输：active | Flutter FileModel → client/file_trait/io_loop → FileAction/FileResponse → endpoint → `hbb_common::fs::TransferJob` | 读写/覆盖/路径/摘要/压缩/中断、平台权限；没有独立session root sandbox | [03](03_MODULE_DESIGN.md)、[06](06_NETWORK_PROTOCOL.md)；RST-05、NET-06、E2E-04 |
 | 终端：active/platform gated | `terminal_connection_manager.dart` / `terminal_model.dart` → TerminalAction → `connection.rs` → `terminal_service.rs` / PTY | 已有进程内persistent registry与reattach；不是跨进程/重启持久化保证；service_id owner边界需验证 | [03](03_MODULE_DESIGN.md)、[06](06_NETWORK_PROTOCOL.md)；RST-05、NET-04/06 |
 | TCP tunnel / RDP：active/platform gated | Flutter port-forward UI → `src/port_forward.rs` → LoginRequest.PortForward → endpoint outbound TCP | 本地listener绑定、认证与connect执行顺序、目标host/port、凭据日志/关闭 | [06](06_NETWORK_PROTOCOL.md)、[10](10_SECURITY_MODEL.md)；NET-04/06 |
-| Android 本地 ADB：active UI / native asset missing | `adb_page.dart` → `common.dart::AndroidAdbManager` → mChannel → `CloudSendAdbManager` → Runner/DNS → `libadb.so` | 本地pair/connect/shell、mDNS、取消/轮询/输出/旧API；PC remote ADB 尚未实现 | [04](04_ANDROID_PIPELINE.md)；AND-06/08 |
+| Android 本地 ADB：active UI / native asset missing | `adb_page.dart` → `common.dart::AndroidAdbManager` → mChannel → `TunnelAdbManager` → Runner/DNS → `libadb.so` | 本地pair/connect/shell、mDNS、取消/轮询/输出/旧API；PC remote ADB 尚未实现 | [04](04_ANDROID_PIPELINE.md)；AND-06/08 |
 | ZEGO 语音：active / external SDK+broker | `Data::NewVoiceCall` → token helper → VoiceCallRequest/Response → `ServerModel` / `ZegoVoiceCallModel` → SDK | invitation、token授权、麦克风同意三域；auto-accept、stale busy、token日志、room/first-audio | [04](04_ANDROID_PIPELINE.md)、[06](06_NETWORK_PROTOCOL.md)、[07](07_API_SYSTEM.md)；AND-07、NET-07、API-08、E2E-05 |
 | Windows capture/input：active/cfg | `video_service.rs` → portable/DXGI/GDI；`input_service.rs` → enigo/SendInput | GPU/fallback、secure desktop/UAC、installed/portable、shared-memory contract | [05](05_WINDOWS_PIPELINE.md)；WIN-01/02 |
 | Windows privacy：active/cfg | peer privacy request → `privacy_mode.rs` → topmost/exclude/Magnifier/virtual display | connection owner、DLL injection、hook、超时、guard与失败返回、显示/输入恢复 | [05](05_WINDOWS_PIPELINE.md)；WIN-03/04/06、E2E-02 |

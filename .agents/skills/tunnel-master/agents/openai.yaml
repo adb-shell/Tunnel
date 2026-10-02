@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tunnel Master Engineer"
+  short_description: "Coordinate safe cross-domain Tunnel engineering"
+  default_prompt: "Use $tunnel-master to scope and coordinate this Tunnel task."

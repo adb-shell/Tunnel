@@ -1,4 +1,4 @@
-# CloudSend 旧文档迁移报告 / Legacy Document Migration Report
+# Tunnel 旧文档迁移报告 / Legacy Document Migration Report
 
 > 2026-10-02 补注：以下保留旧迁移记录，不代表当前可重放Git历史或库存。旧commit对象本地不可得；terminal已存在进程内persistent registry/reattach，不能把全部持久化归为未来设计。当前事实、更正和104份文档处理见 [接管索引](audits/2026-10-02/README.md)；本轮未恢复或删除旧文件。
 
@@ -51,7 +51,7 @@
 | <code>docs/ENGINEERING_INDEX.md</code> | 阅读顺序、写作契约、真相优先级 | <code>00_PROJECT_OVERVIEW.md</code>、<code>.codex/AI_RULES.md</code> | 已提取主规则 | 保留并标记 historical entry |
 | <code>docs/ENGINEERING_BASELINE.md</code> | 项目身份、顶层架构、主链、风险 | <code>00_PROJECT_OVERVIEW.md</code>、<code>01_ARCHITECTURE.md</code>、<code>03_MODULE_DESIGN.md</code>、<code>10_SECURITY_MODEL.md</code> | 已提取主链与风险 | 保留为历史详细基线 |
 | <code>docs/ENGINEERING_ANDROID_RUNTIME.md</code> | Android service/frame/waiting 三状态、投屏授权不变量、黑屏与无视链 | <code>04_ANDROID_PIPELINE.md</code>、<code>09_DEBUG_SYSTEM.md</code>、<code>10_SECURITY_MODEL.md</code> | 已提取当前主链；旧修复日志保留 | 保留为 historical/no-regression evidence |
-| <code>docs/TASK_ENTRYPOINTS.md</code> | 跨层入口、关键检索锚点、检查清单 | <code>02_SOURCE_MAP.md</code>、各专项文档、各 CloudSend skill | 已提取当前入口 | 保留旧任务导航 |
+| <code>docs/TASK_ENTRYPOINTS.md</code> | 跨层入口、关键检索锚点、检查清单 | <code>02_SOURCE_MAP.md</code>、各专项文档、各 Tunnel skill | 已提取当前入口 | 保留旧任务导航 |
 | <code>docs/REPO_TRUE_STRUCTURE_MAP.md</code> | 目录职责、平台层和跨层链路 | <code>02_SOURCE_MAP.md</code> | 已提取当前结构 | 保留；不存在路径仍由审计追踪 |
 | <code>docs/DOCUMENT_AUDIT.md</code> | 旧可信等级、历史漂移记录 | 本报告、<code>.codex/DECISION_LOG.md</code> | 已提取主要结论 | 保留为上一代审计 |
 | <code>docs/SOURCE_TRUTH_AUDIT_2026_05_18.md</code> | 2026-05-18 固定日期身份和构建审计 | 本报告的审计血缘、<code>.codex/DECISION_LOG.md</code> | 仅索引 | 保留，不提升为当前真相 |
@@ -62,7 +62,7 @@
 | <code>docs/CHANGELOG.md</code> | 2026-04 至 2026-06 的变更意图 | <code>.codex/DECISION_LOG.md</code>、<code>.codex/TASK_HISTORY.md</code> | 已筛选重大阶段；逐项产品日志仍待 owner | 保留；产品变更与 AI 会话元数据分离 |
 | <code>terminal.md</code> | Terminal 设计意图、消息概念和未完成持久化方案 | <code>03_MODULE_DESIGN.md</code>、<code>06_NETWORK_PROTOCOL.md</code>、<code>11_ROADMAP.md</code> | 已提取当前临时会话与未来持久化边界 | 保留为历史设计，不复制过时 service id |
 | <code>README.md</code>、<code>docs/README-ZH.md</code> | RustDesk 来源、上游项目背景、通用依赖 | <code>00_PROJECT_OVERVIEW.md</code> 的来源说明 | 只提取来源 | 保留；继续标注 upstream background |
-| CONTRIBUTING/SECURITY/CODE_OF_CONDUCT | 上游社区治理模板 | <code>.codex/AI_RULES.md</code> 不承载；未来独立治理文档 | 不迁移当前联系人 | 保留，等待 CloudSend 所有者提供真实治理信息 |
+| CONTRIBUTING/SECURITY/CODE_OF_CONDUCT | 上游社区治理模板 | <code>.codex/AI_RULES.md</code> 不承载；未来独立治理文档 | 不迁移当前联系人 | 保留，等待 Tunnel 所有者提供真实治理信息 |
 | <code>docs/DEVCONTAINER.md</code> | 历史 devcontainer 构建意图 | <code>08_BUILD_SYSTEM.md</code> 的“未验证/当前缺失”项 | 只记录缺失 | 保留，不执行其中命令 |
 | <code>flutter/README.md</code> | Flutter 模板背景 | 无 | 不迁移 | 保留模板遗留，后续可加状态说明 |
 | <code>libs/clipboard/**/README.md</code> | Clipboard 子库协议和 macOS 实现 | <code>03_MODULE_DESIGN.md</code> 中的子系统摘要 | 摘要提取 | 原文件继续作为模块真相 |
@@ -72,7 +72,7 @@
 | <code>res/msi/README.md</code> | MSI 子工程构建背景 | <code>08_BUILD_SYSTEM.md</code> | 待确认是否仍发布 | 原文件保留 |
 | <code>src/lang/README.md</code> | 翻译模板格式 | <code>02_SOURCE_MAP.md</code> 的局部入口 | 摘要提取 | 原文件继续作为局部说明 |
 | <code>.claude/commands/reflection.md</code> | Claude 指令反思流程 | <code>.codex/AI_RULES.md</code> 中的工具差异索引 | 不复制正文 | 原文件保留 |
-| vendored enigo issue templates | 上游 crate issue 模板 | 无 | 不迁移 | 原文件保留，明确不代表 CloudSend 流程 |
+| vendored enigo issue templates | 上游 crate issue 模板 | 无 | 不迁移 | 原文件保留，明确不代表 Tunnel 流程 |
 
 ---
 
@@ -112,7 +112,7 @@
 
 提交 <code>483a0a0</code> 删除 55 份翻译 Markdown。本次没有恢复这些文件。
 
-这些文件主要是 RustDesk 上游社区内容，不含已知 CloudSend 专属工程真相。迁移策略是记录审计血缘，不将其复制到 AI 工程体系。
+这些文件主要是 RustDesk 上游社区内容，不含已知 Tunnel 专属工程真相。迁移策略是记录审计血缘，不将其复制到 AI 工程体系。
 
 ### 5.1 CODE_OF_CONDUCT 翻译：6
 
@@ -187,8 +187,8 @@
 ### 5.6 处理结论
 
 - 不恢复。
-- 不把上游联系人迁入 CloudSend 安全或治理模型。
-- 若未来需要多语言产品文档，应从 CloudSend 自有 canonical policy 重新翻译，而不是恢复旧 RustDesk 版本。
+- 不把上游联系人迁入 Tunnel 安全或治理模型。
+- 若未来需要多语言产品文档，应从 Tunnel 自有 canonical policy 重新翻译，而不是恢复旧 RustDesk 版本。
 - Git 历史仍可通过 <code>96a9c7c:&lt;path&gt;</code> 查看原内容；是否恢复必须由用户明确决定。
 
 ---

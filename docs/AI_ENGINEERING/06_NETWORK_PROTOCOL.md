@@ -1,4 +1,4 @@
-# CloudSend 网络与协议 / Network Protocol
+# Tunnel 网络与协议 / Network Protocol
 
 原始接管基线：2026-07-12（historical）
 
@@ -12,7 +12,9 @@
 
 ## 1. 网络角色与边界
 
-CloudSend 同一二进制同时包含两类角色：
+2026-10-02 T004：品牌状态字段为 `tunnel_status`，protobuf field tag 39 保持；端内事件为 `update_tunnel_status`。独立身份部署采用成套新 PC/APK/native，不以 tag 保持推断所有应用层字段与旧端互通。参见 ADR-0015 和当前身份基线。
+
+Tunnel 同一二进制同时包含两类角色：
 
 - 控制端 client：发起远程桌面、文件、终端、端口转发、语音邀请等会话。
 - 受控端 server：注册 ID、接受登录、采集屏幕、注入输入并提供能力服务。
@@ -56,7 +58,7 @@ Flutter / legacy UI
 
 ### 3.1 控制端当前策略
 
-`src/client.rs::LoginConfigHandler::initialize(...)` 当前把 `force_relay` 固定为 true。其结果是 CloudSend 控制端会话：
+`src/client.rs::LoginConfigHandler::initialize(...)` 当前把 `force_relay` 固定为 true。其结果是 Tunnel 控制端会话：
 
 - 不启动 UDP punch、IPv6 punch 或直接连接候选。
 - 显式 IP/domain:port 的直接连接入口被拒绝。
@@ -75,7 +77,7 @@ Flutter / legacy UI
 
 因此准确结论是：
 
-> 当前 CloudSend 控制端强制 relay；受控端和兼容协议仍包含 direct/NAT 能力。
+> 当前 Tunnel 控制端强制 relay；受控端和兼容协议仍包含 direct/NAT 能力。
 
 未来若要做到全局 relay-only，必须单独审计受控端、LAN discovery、direct server、NAT/STUN 探测和兼容客户端影响，不能只依赖控制端常量。
 
@@ -142,7 +144,7 @@ Flutter InputModel
   -> platform input service or Android JNI
 ```
 
-CloudSend 在 `MouseEvent.url = 5` 上复用了若干 Android command 字符串，`mask` 还承载 command type 与 button bits。`src/common.rs::input` 的自定义类型为 5—12（blank/browser/analysis/back/start/stop/touch-block/Dev selector），经 `flutter_ffi::session_send_mouse()`、`Session::send_mouse()`、`client::send_mouse()` 发出。active JNI consumer 是 `libs/scrap/src/android/pkg2230.rs::call_main_service_pointer_input()`；`ffi.rs` 不是 active 导出。
+Tunnel 在 `MouseEvent.url = 5` 上复用了若干 Android command 字符串，`mask` 还承载 command type 与 button bits。`src/common.rs::input` 的自定义类型为 5—12（blank/browser/analysis/back/start/stop/touch-block/Dev selector），经 `flutter_ffi::session_send_mouse()`、`Session::send_mouse()`、`client::send_mouse()` 发出。active JNI consumer 是 `libs/scrap/src/android/pkg2230.rs::call_main_service_pointer_input()`；`ffi.rs` 不是 active 导出。
 
 修改这些命令必须同时检查 Dart、Rust FFI、client、protobuf usage、server、JNI 与 Kotlin，且需要验证旧端点收到未知命令时的行为。旧 client 对 mouse type 的低位解释与扩展命令不同，不能只凭 protobuf 可解析就声称业务兼容。
 
@@ -161,7 +163,7 @@ CloudSend 在 `MouseEvent.url = 5` 上复用了若干 Android command 字符串�
 - Terminal login 有 `OPTION_ENABLE_TERMINAL` 和会话认证门，但 `TERMINAL_SERVICES` 按客户端可提交的 `service_id` 索引，未见 peer-owner 字段/匹配。已授权 peer 持有另一个有效 service ID 时的 reattach/数据隔离需 NET-04/06 检验。
 - `port_forward::run_rdp()` 将包含 RDP password 参数的 args 写入 `println!`。这里只记录位置和数据类型，不读取或复制值；日志必须纳入敏感信息治理。
 
-当前 wire anchor：`LoginRequest.terminal = 16`、`OptionMessage.terminal_persistent = 18`、`TerminalOpened.service_id = 5`、`Message.terminal_action = 31` / `terminal_response = 32`、`Misc.cloudsend_status = 39`。这些号码是已部署兼容锚点，不得复用。
+当前 wire anchor：`LoginRequest.terminal = 16`、`OptionMessage.terminal_persistent = 18`、`TerminalOpened.service_id = 5`、`Message.terminal_action = 31` / `terminal_response = 32`、`Misc.tunnel_status = 39`。这些号码是已部署兼容锚点，不得复用。
 
 ## 8. ZEGO 语音控制面
 
@@ -219,8 +221,8 @@ Token 由外部 HTTP service 获取，音频经 ZEGO SDK 传输。原 RustDesk `
 
 ## 12. 待正式验证
 
-- CloudSend controller 与当前生产 hbbs/hbbr 的完整 handshake/relay 兼容矩阵。
-- 受控端是否仍可被非 CloudSend 兼容客户端请求 direct/punch hole。
+- Tunnel controller 与当前生产 hbbs/hbbr 的完整 handshake/relay 兼容矩阵。
+- 受控端是否仍可被非 Tunnel 兼容客户端请求 direct/punch hole。
 - signed key 异常时的真实 wire behavior。
 - secretbox 双向 nonce 是否会在同一 key 下重复。
 - Android input permission 关闭后的 server enforcement。

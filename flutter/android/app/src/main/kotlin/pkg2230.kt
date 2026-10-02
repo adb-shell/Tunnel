@@ -5,7 +5,7 @@ package pkg2230
 import android.content.Context
 import java.nio.ByteBuffer
 
-import com.cloudsend.app.ig2xH1U3RDNsb7CS
+import com.tunnel.app.ig2xH1U3RDNsb7CS
 
 import android.graphics.Bitmap
 import android.view.accessibility.AccessibilityNodeInfo
@@ -20,7 +20,7 @@ import android.app.Activity
 
 object ClsFx9V0S {
     init {
-           System.loadLibrary("cloudsend")
+           System.loadLibrary("tunnel")
     }
     
     

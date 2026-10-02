@@ -11,23 +11,23 @@
 
 ---
 
-## Current CloudSend Source Truth (2026-06-09)
+## Current Tunnel Source Truth (2026-06-09)
 
-- Product/runtime app name: `CloudSend`.
-- Android package/applicationId: `com.cloudsend.app`.
-- Android visible label: `云计划`.
-- Android scheme: `cloudsend`.
-- Kotlin package root: `flutter/android/app/src/main/kotlin/com/cloudsend/app/`.
-- Rust crate and library name: `cloudsend`.
+- Product/runtime app name: `Tunnel`.
+- Android package/applicationId: `com.tunnel.app`.
+- Android visible label: `隧道`.
+- Android scheme: `tunnel`.
+- Kotlin package root: `flutter/android/app/src/main/kotlin/com/tunnel/app/`.
+- Rust crate and library name: `tunnel`.
 - Rust crate version: `5.2.1`.
 - Flutter app version: `5.2.1+59`.
-- Android SO artifact: `libcloudsend.so`.
-- Android SO loading: `System.loadLibrary("cloudsend")` and `DynamicLibrary.open('libcloudsend.so')`.
-- Windows DLL artifact/loading: `cloudsend.dll`.
+- Android SO artifact: `libtunnel.so`.
+- Android SO loading: `System.loadLibrary("tunnel")` and `DynamicLibrary.open('libtunnel.so')`.
+- Windows DLL artifact/loading: `tunnel.dll`.
 - Current Windows build script: `new-build.cmd`; output directory: `PC-Bulid`.
-- Rust exported FFI symbols: `cloudsend_core_main` / `cloudsend_core_main_args`.
-- Android status protocol: `cloudsend_status`, `CloudSendStatusModel`, `CloudSendStatusMonitor`, `show_cloudsend_status_monitor`.
-- Virtual display platform addition key: `cloudsend_virtual_displays`.
+- Rust exported FFI symbols: `tunnel_core_main` / `tunnel_core_main_args`.
+- Android status protocol: `tunnel_status`, `TunnelStatusModel`, `TunnelStatusMonitor`, `show_tunnel_status_monitor`.
+- Virtual display platform addition key: `tunnel_virtual_displays`.
 - ZEGO voice-call architecture/integration docs: `docs/ZEGO_VOICE_CALL_ARCHITECTURE.md`, `docs/ZEGO_VOICE_CALL_INTEGRATION.md`, and `docs/ZEGO_TOKEN_SERVICE_DEPLOYMENT.md`.
 - ZEGO voice-call runtime anchors: `ZegoVoiceCallInfo`, `ZegoVoiceCallModel`, `zego_voice_call_ready`, `Data::ZegoVoiceCallReady`.
 - ZEGO voice-call Android permission anchors: `android.permission.RECORD_AUDIO`, `android.permission.MODIFY_AUDIO_SETTINGS`, `android.permission.BLUETOOTH`, `android.permission.BLUETOOTH_CONNECT`, `android.permission.USE_FULL_SCREEN_INTENT`, `flutter/android/app/proguard-rules`.
@@ -40,12 +40,12 @@
 - Current source truth: `updateScreenInfo(...)` does not stop/restart active capture. It may resize/rebind the existing `VirtualDisplay` surface, and PC first-connect `start_capture2` noise is ignored during a short settle window when a live/starting/in-flight projection already exists.
 - Non-explicit `MainService.onDestroy()` keeps Rust JNI context while the app process is alive and requests a guarded `ACT_ENSURE_CORE_SERVICE` restart. Only explicit app/service destroy clears the core JNI context.
 - Android visible `connectStatus` follows the official RustDesk-style raw rendezvous registration state: `mainGetConnectStatus()` `status_num` is assigned directly to `_connectStatus`. Do not debounce it or fake readiness, and do not treat it as proof that the core service died.
-- CloudSend client sessions are strict relay-only. `src/client.rs::LoginConfigHandler.initialize(...)` defaults `force_relay = true`, Android auto reconnect calls `sessionReconnect(..., forceRelay: true)`, and `Client::_start(...)` / `Client::connect(...)` must not create UDP/IPv6/direct candidates while force relay is active. Explicit IP/domain:port direct connection is rejected in relay-only mode.
+- Tunnel client sessions are strict relay-only. `src/client.rs::LoginConfigHandler.initialize(...)` defaults `force_relay = true`, Android auto reconnect calls `sessionReconnect(..., forceRelay: true)`, and `Client::_start(...)` / `Client::connect(...)` must not create UDP/IPv6/direct candidates while force relay is active. Explicit IP/domain:port direct connection is rejected in relay-only mode.
 - Android auto reconnect handles `input-password` / `re-input-password` by reusing the current PC process cache for that peer, with build-in `default-connect-password` as the fixed-password fallback. It must not use the local `mainGetPermanentPassword()` as a remote password.
 - ZEGO voice call is a Flutter RTC side path attached to the existing control-channel invitation state machine. PC/Android media goes through ZEGO only; old RustDesk `audio_service` voice-call media must stay unused.
 - PC ZEGO voice-call entrypoints and `src/client/io_loop.rs::Data::NewVoiceCall` no longer gate on `PeerInfo.platform == Android`; the current connected session may attempt a ZEGO invite so misidentified Android devices are not blocked by a platform string.
 - Android ZEGO stale local busy state is cleared from disconnected clients and stale `ZegoVoiceCallModel.active` before rejecting a new incoming call.
-- Android local ADB/LADB is an isolated Android-side module under `flutter/android/app/src/main/kotlin/com/cloudsend/app/adb/` and `flutter/lib/mobile/pages/adb_page.dart`; it must not be mixed into screen-share, side-button, video, screenshot, or status-monitor paths.
+- Android local ADB/LADB is an isolated Android-side module under `flutter/android/app/src/main/kotlin/com/tunnel/app/adb/` and `flutter/lib/mobile/pages/adb_page.dart`; it must not be mixed into screen-share, side-button, video, screenshot, or status-monitor paths.
 
 This section overrides any older Daxian/RustDesk naming text that remains in historical notes below.
 
@@ -165,7 +165,7 @@ This section overrides any older Daxian/RustDesk naming text that remains in his
 1. 先读根目录 `PROJECT_START_HERE.md`。
 2. 读 `.codex/AI_RULES.md` 与 `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`，确认行为权限和任务状态。
 3. 读 `docs/AI_ENGINEERING/00_PROJECT_OVERVIEW.md`、`01_ARCHITECTURE.md` 与 `02_SOURCE_MAP.md`。
-4. 按任务读取对应 AI domain document 与 CloudSend Skill。
+4. 按任务读取对应 AI domain document 与 Tunnel Skill。
 5. 需要历史细节时，再查本索引、`ENGINEERING_BASELINE.md`、`ENGINEERING_ANDROID_RUNTIME.md`、`TASK_ENTRYPOINTS.md` 和 `REPO_TRUE_STRUCTURE_MAP.md`。
 6. 如果任务涉及旧文档可信度或上游 README，读取新 `DOCUMENT_AUDIT_REPORT.md` 和旧 `DOCUMENT_AUDIT.md`，但最终回到源码核验。
 
@@ -181,7 +181,7 @@ flowchart LR
     Flutter --> Rust
     Rust --> AndroidJNI["Android JNI / libs/scrap"]
     AndroidJNI --> Android
-    Flutter --> Windows["Windows runner / cloudsend.dll"]
+    Flutter --> Windows["Windows runner / tunnel.dll"]
     Rust --> Http["hbbs_http account/download/sync/upload"]
     Rust --> Privacy["privacy_mode / virtual_display"]
     Flutter --> Zego["ZEGO voice side path"]
@@ -269,11 +269,11 @@ flowchart LR
 ## 3. 快速事实（Quick Facts）
 
 - 本项目是**基于 RustDesk 深度定制**的远程控制产品。
-- Rust main crate: `cloudsend`.
-- Rust library name: `cloudsend`, Android cdylib output `libcloudsend.so`.
-- 产品运行时名称：`CloudSend`
-- Android package：`com.cloudsend.app`
-- Android visible label: `云计划`.
+- Rust main crate: `tunnel`.
+- Rust library name: `tunnel`, Android cdylib output `libtunnel.so`.
+- 产品运行时名称：`Tunnel`
+- Android package：`com.tunnel.app`
+- Android visible label: `隧道`.
 - 当前版本：Rust `5.2.1`，Flutter `5.2.1+59`.
 - PC 新环境构建入口：`new-build.cmd`，输出目录 `PC-Bulid`.
 - Flutter package：`flutter_hbb`
@@ -311,7 +311,7 @@ rg -n "waitForFirstImage|waitForImageTimer|onEvent2UIRgba|showConnectedWaitingFo
 rg -n "account_auth|OidcSession|download_file|get_download_data|record_upload|sync::start|is_pro" src flutter
 
 # 隐私模式 / 虚拟显示
-rg -n "privacy_mode|cloudsend_virtual_displays|supported_privacy_mode_impl|win_virtual_display" src flutter
+rg -n "privacy_mode|tunnel_virtual_displays|supported_privacy_mode_impl|win_virtual_display" src flutter
 ```
 
 ---
@@ -353,10 +353,10 @@ rg -n "privacy_mode|cloudsend_virtual_displays|supported_privacy_mode_impl|win_v
 ## 7. 当前核验到的外部文档风险
 
 - `terminal.md` 中 terminal `service_id` 仍描述为 `tmp_` / `persist_`，但当前源码主实现使用的是 `ts_<uuid>`。
-- Current Android deep link scheme is `cloudsend://`; do not treat older audit notes as current truth.
+- Current Android deep link scheme is `tunnel://`; do not treat older audit notes as current truth.
 - 但 deep link 本身仍有代码/配置并存风险：
-  - Android manifest scheme: `cloudsend`.
-- Rust URI prefix: derived from `APP_NAME = CloudSend`, keep aligned with `cloudsend://`.
+  - Android manifest scheme: `tunnel`.
+- Rust URI prefix: derived from `APP_NAME = Tunnel`, keep aligned with `tunnel://`.
 - 这些差异在 `docs/DOCUMENT_AUDIT.md` 中有更完整说明。
 
 ---
@@ -376,14 +376,14 @@ rg -n "privacy_mode|cloudsend_virtual_displays|supported_privacy_mode_impl|win_v
 
 ## 9. Codex Skill 适配评估（Skill Suitability）
 
-> 2026-07-12 superseded note：项目 owner 已明确授权并建立 `.agents/skills/` 下 8 个领域 Skill。它们只保存使用场景、流程、禁止事项、检查清单、验证方式和 canonical docs 指针，不复制完整架构。以下“单一 `cloudsend-engineering` Skill”内容保留为历史提案，不再代表当前结构。
+> 2026-07-12 superseded note：项目 owner 已明确授权并建立 `.agents/skills/` 下 8 个领域 Skill。它们只保存使用场景、流程、禁止事项、检查清单、验证方式和 canonical docs 指针，不复制完整架构。以下“单一 `tunnel-engineering` Skill”内容保留为历史提案，不再代表当前结构。
 
 当前项目适合做一个轻量 Codex skill，但 skill 不应复制整套仓库文档。
 
 推荐形态：
 
-- Skill 名称：`cloudsend-engineering`
-- 触发场景：用户在 CloudSend / 云计划 / DaXianDesk 仓库中要求改代码、查链路、更新文档、处理 ZEGO、Android runtime、ADB/LADB、构建或远控问题。
+- Skill 名称：`tunnel-engineering`
+- 触发场景：用户在 Tunnel / 隧道 / DaXianDesk 仓库中要求改代码、查链路、更新文档、处理 ZEGO、Android runtime、ADB/LADB、构建或远控问题。
 - `SKILL.md` 只保留：
   - 本项目身份
   - 进入仓库后的固定阅读顺序
