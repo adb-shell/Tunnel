@@ -1,9 +1,9 @@
 # Tunnel Current Work
 
 Schema Version：`1.0`  
-Registry Revision：`WORK-20261003-010`
+Registry Revision：`WORK-20261003-012`
 Last Updated：2026-10-03（Asia/Shanghai）
-Active Task Count：4
+Active Task Count：5
 
 > 本文件是支持 0..N 个并行 Codex 会话的协作 registry，不是锁、不是真相层，也不是授权凭证。任何新会话都必须重新执行 T0；历史 C1/C2/C3 不能继承。每个会话只更新自己的 Task ID 段，并在写入前重新读取 revision，防止覆盖其他会话。
 
@@ -15,6 +15,9 @@ Active Task Count：4
 | T-2026-10-03-003 | tunnel-release-engineer | handoff / T6 | Windows产物/官方驱动供应/自解压源码修复及V0交付，待正式服务器验证；保留T002/3c22a25的Android helper修复；docs/plans/WINDOWS_BUILD_GUIDE.md |
 | T-2026-10-03-004 | tunnel-master | handoff / T6 | PC远程配对/连接授权与撤销、手机ADB页面移除、状态面板、首次daemon/独立连接修复；source/V0，服务器/Android11—16 NOT_RUN；docs/plans/ADB_REMOTE_PAIRING_TASK.md |
 | T-2026-10-03-005 | tunnel-master | handoff / T6 | 源码/V0交付；按当前用户要求取消10分钟授权，改为当前会话持续有效，断连/撤销/退出ADB撤权；docs/plans/ADB_SESSION_LIFETIME_TASK.md |
+| T-2026-10-03-006 | tunnel-flutter-engineer | handoff / T6 | 修复配对弹窗builder与CustomAlertDialog返回类型，保留全窗口拖动与关闭清理；V0，服务器重编待验；docs/plans/ADB_PAIRING_DIALOG_BUILD_FIX_TASK.md |
+
+T006当前Git交付：用户明确授权提交并推送origin/test，提交说明“修复编译”；范围为弹窗适配器、焦点修复及对应文档。操作前本地与远端均为da2923e；实际提交/push结果以HEAD与远端ref核对。Event CE-20261003-T006-02；运行验证仍待正式服务器。
 
 详情：`docs/plans/ADB_P0_P6_IMPLEMENTATION_TASK.md`；使用/构建/边界入口：`docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md`。用户要求改为先完成全链源码再服务器集中编译；remote运行仍须本机同意和真实能力，不能把源码交付当P0/P6实测通过。T003暂停状态由本轮明确继续指令解除并承接。测试机为两台Android16；构建不在本地。V0已完成，V1—V5/ADBM均NOT_RUN；触摸覆盖防触、任意Unicode及多指尚未支持，无障碍重新开启需手机确认。Event：CE-20261003-T001-01；Baseline：TUN-BL-2026-10-03-ADB。用户随后明确授权将本次修改提交并推送origin/test，提交说明“ADB版本首次测试”；Git结果以当前提交和远端ref核对，不改变设备验收状态。
 

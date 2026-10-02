@@ -1,5 +1,7 @@
 # Tunnel Project Memory
 
+- 2026-10-03 T006：OverlayDialogManager.show的DialogBuilder仅接受CustomAlertDialog；ADB配对窗用私有CustomAlertDialog适配器override build承载原StatefulWidget，保留全窗口约束，避免直接AlertDialog content的intrinsic布局。源码V0，正式重编待验；见docs/plans/ADB_PAIRING_DIALOG_BUILD_FIX_TASK.md。
+
 最后更新：2026-10-03
 
 Windows构建T-2026-10-03-003：new-build.cmd统一调用scripts/windows-build.ps1，build.cmd/pc-bulid.cmd同入口；固定来源的drivers自动准备、native/packer按Cargo实际artifact定位、独立DPI manifest、EXE完整payload核验，输出PC-Bulid并保留staging/log。正式使用/验证见docs/plans/WINDOWS_BUILD_GUIDE.md；仅V0，未在本地构建、下载binary或Git写入。

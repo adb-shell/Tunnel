@@ -1,7 +1,7 @@
 # Tunnel Project State
 
 Schema Version：`1.0`  
-State Revision：`STATE-20261003-006`
+State Revision：`STATE-20261003-008`
 Last Updated：2026-10-03（Asia/Shanghai）
 Observed At：2026-10-03（Asia/Shanghai）
 Evidence Scope：`repository-observed / V0 / external and runtime verification pending`
@@ -18,10 +18,10 @@ Evidence Scope：`repository-observed / V0 / external and runtime verification p
 | Branch | test（独立worktree） | 本任务只读Git观察；用户选择后续在worktree开发 |
 | ADB实施起点 | `bc50fe5b2061970e4e88ff58bbd76c7827de1159` | 初始干净；后续交付提交由Git log确认 |
 | Source delivery | ADB全链源码、本地配对/native供应、A11y适配、portable及文档；用户授权提交“ADB版本首次测试”并推送origin/test | T-2026-10-03-001；每次会话重查当前HEAD与远端ref |
-| Current source | test；基于3c22a25，T003 Windows构建修复+T004远程配对+T005会话生命周期；当前用户授权Git交付“尝试修复ADB” | 精确HEAD与origin/test在每次会话以Git重新核对；本次范围为现有源码与文档，不包含正式构建/运行 |
+| Current source | test；基于da2923e的T006弹窗类型/焦点修复，当前用户授权Git交付“修复编译” | 精确HEAD与origin/test每次会话重新核对；源码/V0，正式重编待验 |
 | Windows build baseline | TUN-BL-2026-10-03-WINDOWS-BUILD；统一CMD/PS入口、固定driver供应、Cargo DLL路径及payload核验 | docs/plans/WINDOWS_BUILD_GUIDE.md；V0，正式服务器NOT_RUN |
 | Highest completed verification | `V0` repository/document/schema checks | `TEST_MATRIX.md` + task records |
-| Formal build/runtime evidence | `NOT_RUN / VERIFICATION-REQUIRED` | 本轮未执行；未提供绑定当前HEAD的正式证据 |
+| Formal build/runtime evidence | 用户服务器Flutter3.24.5在配对弹窗类型处编译失败；修订版 `NOT_RUN / VERIFICATION-REQUIRED` | T006匹配源码根因；用户日志未绑定精确HEAD；本地未执行构建，其他阶段/设备未验 |
 | Release readiness | `BLOCKED` | security、external assets、V2—V4、signing/SBOM/rollback gaps |
 
 ## 2. Governance and Knowledge Readiness
@@ -57,7 +57,7 @@ Evidence Scope：`repository-observed / V0 / external and runtime verification p
 - Detailed task history：`TASK_HISTORY.md`。
 - Latest completed AI task：`T-2026-10-02-004`（身份迁移源码/V0；runtime未验）。
 - Current implementation：ADB T-2026-10-03-001承接T-2026-10-02-003；Windows后续T-2026-10-03-003源码/V0修复交付，正式服务器/设备验收待执行；状态以CURRENT_WORK为准。
-- Latest recorded modification event：`CE-20261003-T005-02`（当前用户授权提交/推送“尝试修复ADB”；结果以Git核对）。
+- Latest recorded modification event：`CE-20261003-T006-02`（当前用户授权提交/推送“修复编译”；结果以Git核对）。
 - Latest architecture amendment：`D-019` / ADR-0017（授权持续至会话结束、生产helper无固定期限）；治理决定D-014仍保持。
 - Architecture decisions：ADR-0014 / D-015由D-017追记用户顺序调整；有限typed远程范围扩展ADR-0007，任意shell仍local-only。
 - Identity decision：ADR-0015 / D-016 accepted；supersedes ADR-0002；新Android包com.tunnel.app、ORG com.tunnel；配置/授权独立，外部broker另行部署，证书未变。

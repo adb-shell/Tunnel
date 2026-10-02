@@ -1,5 +1,22 @@
 # Tunnel Change Event Log
 
+## CE-20261003-T006-02：弹窗编译修复Git交付授权
+
+- Timestamp/Task：2026-10-03；T-2026-10-03-006续接；root。
+- Permission：当前用户明确提交推送，提交说明“修复编译”；授权stage/commit/普通push现有弹窗修复与文档到origin/test，不包含main/merge/force-push/build/test/device/release。
+- Source：操作前本地HEAD与远端test均da2923eaab656bace5e2d70d4ad60037998e8957，工作树仅T006源码/文档。
+- Verification：diff/staged diff检查；提交后HEAD、远端ref与工作树核对。实际结果以Git为准，正式编译和运行仍NOT_RUN。
+- Docs：CURRENT_WORK/PROJECT_STATE及本event同步；原T006-01中Git none保留原时点含义。STATE-20261003-008 / WORK-20261003-012。
+
+## CE-20261003-T006-01：配对弹窗类型编译修复
+
+- Date/Owner：2026-10-03；T-2026-10-03-006 / tunnel-flutter-engineer；test/da2923e起点干净。
+- Authority：用户回报ADB版本Android编译错误，修复当前UI类型契约；仅源码/文档/V0，无Git/build/test执行授权。
+- Code：flutter/lib/desktop/widgets/android_adb_pairing_dialog.dart；导入common.dart并添加CustomAlertDialog私有适配器override build；不改通用DialogBuilder API，保留原StatefulWidget、拖动/表单/取消清理；CallbackShortcuts内autofocus FocusScope由框架管理焦点与释放。
+- Docs：docs/plans/ADB_PAIRING_DIALOG_BUILD_FIX_TASK.md、AI_ENGINEERING/03_MODULE_DESIGN.md、CURRENT_WORK/PROJECT_STATE/PROJECT_MEMORY/TASK_HISTORY/CHANGELOG_AI与本event。
+- Evidence：用户Flutter3.24.5日志直接报告返回类型错误，未绑定source hash；修订源码V0类型/词法/引用/链接/diff，正式编译与运行NOT_RUN。APK缺失为kernel_snapshot失败后续结果。
+- Decision/External：无新ADR或资产变化；回滚只适配器与import。Git/Build/Device/Delete/Move/Generated/Release：none；STATE-20261003-007 / WORK-20261003-011，T6 handoff。
+
 ## CE-20261003-T005-02：源码提交与GitHub推送授权
 
 - Timestamp / Actor：2026-10-03 Asia/Shanghai；root；Task T-2026-10-03-005续接Git交付。

@@ -1,5 +1,12 @@
 # Tunnel Task History
 
+## T-2026-10-03-006：ADB配对弹窗类型编译修复
+
+- Source：test/da2923e干净起点；Baseline TUN-BL-2026-10-03-ADB；用户服务器Flutter3.24.5类型编译失败，APK未输出。
+- Fix：DialogBuilder要求CustomAlertDialog，使用私有子类override build返回原StatefulWidget；保留全窗口LayoutBuilder/拖动与FFI overlay关闭、controller/worker取消；通用common.dart/native/权限不改。
+- Evidence：V0类型/词法/引用/文档/diff；正式重编、FLT-01/02/04/07与ADBP-11待验。无Git/build/test/device/sign/release。
+- Handoff：docs/plans/ADB_PAIRING_DIALOG_BUILD_FIX_TASK.md；CE-20261003-T006-01；STATE-20261003-007 / WORK-20261003-011；无新ADR。
+
 ## T-2026-10-03-005：ADB授权与生产投屏随会话持续
 
 - Authority：当前用户明确要求授权连接后保持，直到断连/手动撤销/切普通投屏；C2源码/文档，非Git/构建/测试执行授权。

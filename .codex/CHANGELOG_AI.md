@@ -1,5 +1,10 @@
 # Tunnel AI Changelog
 
+## T-2026-10-03-006：ADB配对窗类型修复
+
+- 修复Android/PC共用Dart编译链中StatefulWidget返回值不满足CustomAlertDialog的问题；私有overlay适配器保留全窗口拖动和取消生命周期。
+- V0源码交付，正式Flutter3.24.5/PC构建和弹窗运行待验；无Git写入。任务ADB_PAIRING_DIALOG_BUILD_FIX_TASK；Event CE-20261003-T006-01。
+
 ## T-2026-10-03-005：ADB会话持续授权
 
 - 按当前用户指令取消600秒授权与生产helper一小时硬期限；conn scopes/status consentActive随连接持续，断连/撤销/退出ADB/故障清理。关共享只暂停采集。

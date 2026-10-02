@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../common.dart';
 import '../../models/android_adb_pairing_model.dart';
 import '../../models/model.dart';
 
@@ -10,10 +11,25 @@ Future<void> showAndroidAdbPairingDialog(FFI ffi) async {
   ffi.dialogManager.dismissByTag(tag);
   try {
     await ffi.dialogManager.show<void>((_, close, context) =>
-      AndroidAdbPairingDialog(ffi: ffi, onClose: () => close()), tag: tag);
+      _AndroidAdbPairingOverlay(ffi: ffi, onClose: () => close()), tag: tag);
   } catch (_) {
     // A closing window may already have released its overlay.
   }
+}
+
+// OverlayDialogManager requires CustomAlertDialog. Use its managed overlay
+// lifecycle while preserving full-window constraints for the draggable card;
+// nesting LayoutBuilder in AlertDialog's intrinsic layout is not supported.
+class _AndroidAdbPairingOverlay extends CustomAlertDialog {
+  const _AndroidAdbPairingOverlay({required this.ffi, required this.onClose})
+      : super(content: const SizedBox.shrink());
+
+  final FFI ffi;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) =>
+      AndroidAdbPairingDialog(ffi: ffi, onClose: onClose);
 }
 
 class AndroidAdbPairingDialog extends StatefulWidget {
@@ -95,6 +111,7 @@ class _AndroidAdbPairingDialogState extends State<AndroidAdbPairingDialog> {
         _offset.dy.clamp(-limitY, limitY).toDouble());
       return CallbackShortcuts(
         bindings: {const SingleActivator(LogicalKeyboardKey.escape): widget.onClose},
+        child: FocusScope(autofocus: true,
         child: Center(child: Transform.translate(offset: position,
         child: Material(
           key: _cardKey,
@@ -172,7 +189,7 @@ class _AndroidAdbPairingDialogState extends State<AndroidAdbPairingDialog> {
             ),
           ),
         ),
-      )));
+      ))));
     }),
   );
 }

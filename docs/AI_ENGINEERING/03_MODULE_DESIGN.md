@@ -1,5 +1,7 @@
 # Tunnel 模块设计 / Module Design
 
+2026-10-03 T006：common.dart::DialogBuilder要求返回CustomAlertDialog；配对窗使用私有_AndroidAdbPairingOverlay子类override build承载原StatefulWidget，保留OverlayDialogManager生命周期和全窗口拖动约束。不能将含LayoutBuilder的完整窗口直接嵌入AlertDialog intrinsic content。修复用户Flutter3.24.5返回类型编译错误；源码/V0，重编待验。[任务](../plans/ADB_PAIRING_DIALOG_BUILD_FIX_TASK.md)。
+
 2026-10-03 T004当前ADB：RemoteAdbPairing单后台worker与独立pairing状态；PC主动请求、端fresh probe后当前conn会话scopes（T005/ADR-0017无固定期限；helper protocol3 duration=0；断连/撤销/退出ADB清理）；旧手机页移除。本机consent旧设计由[ADR-0016](../ADR/0016-pc-owned-adb-pairing-and-session-consent.md)限定替代；视频epoch/帧事务保留。
 
 > 2026-10-03 当前增量（T-2026-10-03-001 / V0）：本地ADB Runner改为有限子进程与共享transport lease；Runtime持本机consent与唯一input/source所有权；Server endpoint再次验证加密、授权、键盘权限、订阅及owner；Dart状态按FFI窗口隔离。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
