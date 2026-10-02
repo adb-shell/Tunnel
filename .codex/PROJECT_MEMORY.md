@@ -2,6 +2,8 @@
 
 最后更新：2026-10-03
 
+Windows构建T-2026-10-03-003：new-build.cmd统一调用scripts/windows-build.ps1，build.cmd/pc-bulid.cmd同入口；固定来源的drivers自动准备、native/packer按Cargo实际artifact定位、独立DPI manifest、EXE完整payload核验，输出PC-Bulid并保留staging/log。正式使用/验证见docs/plans/WINDOWS_BUILD_GUIDE.md；仅V0，未在本地构建、下载binary或Git写入。
+
 当前ADB增量T-2026-10-03-001：用户已要求先交付P0—P6源码，再在其他服务器编译、以OnePlus ACE6T/iQOO Neo9 Android16测试。实现/路径/限制和验证见 `docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md`；仅V0，不是设备PASS。T003暂停已由继续指令解除并承接，旧P0-only描述仅为历史阶段。
 用途：AI 会话的稳定入口，不替代源码和完整工程文档。
 
@@ -62,7 +64,7 @@
 - Android 真实 RGBA/Texture frame 必须清 PC waiting。
 - controller 当前强制 relay；受控端仍保留 rendezvous/direct/NAT compatibility code。
 - Windows 当前 virtual display implementation 是 Amyuni；RustDesk IDD 分支是 dormant。
-- Android ADB包含本地LADB与受控remote协议；PC只经既有加密会话发送typed操作，手机本机consent/scopes/TTL，任意shell仍local-only。
+- Android ADB包含本地LADB与受控remote协议；专用手机UI移除，PC经既有加密已认证/输入视频权限会话发送typed pair/authorize/revoke；fresh本机UID2000后当前conn取得会话scopes（ADR-0016/0017），无固定时长；断连/撤销/退出ADB或故障结束，关共享保留helper；生产helper protocol3 duration=0，P0仍20秒，任意remote shell拒绝。pair与连接端口分离，server用-H localhost，配对进度不改视频epoch；取消/断线阻止lategrant；状态在TunnelStatusMonitor。Android11—16/16KiB运行待验。
 - ZEGO 媒体不走原 RustDesk audio service；peer protocol 只传 invitation/control state。
 - `verify_login()` 的 legacy UI bypass 不等于产品 API、hbbs 或 endpoint authentication bypass。
 - terminal已实现进程内persistent registry与service-ID reattach；不等于跨重启耐久化，peer-owner隔离仍待验证。

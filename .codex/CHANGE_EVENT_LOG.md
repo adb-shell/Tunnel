@@ -1,5 +1,48 @@
 # Tunnel Change Event Log
 
+## CE-20261003-T005-02：源码提交与GitHub推送授权
+
+- Timestamp / Actor：2026-10-03 Asia/Shanghai；root；Task T-2026-10-03-005续接Git交付。
+- Permission：当前用户明确“提交到github，提交说明‘尝试修复ADB’”；授权stage/commit/push现有T003/T004/T005源码和文档到origin/test，不包含merge/main/force-push/build/device/release。
+- Source：操作前本地HEAD与远端test均为3c22a25f0151f0dea408c0c03c6e818cdf31fe98；现有工作树含上述源码、三个已授权UI删除、新文档与Windows合同测试源码。
+- Documentation：CURRENT_WORK与PROJECT_STATE记录本次Git授权；原source/V0事件中的“Git none”保留其原时点含义。
+- Verification：提交前diff --check；stage内容核对，提交后HEAD/远端ref/worktree核对；Git实际结果以ref为准，不将提交视作构建或真机通过。
+- Operation boundary：只提交/普通push test，不覆盖远端历史、不修改原checkout；本地构建、测试、设备、签名、发布none。STATE-20261003-006 / WORK-20261003-010；运行验证handoff保持。
+
+## CE-20261003-T005-01：ADB会话生命周期
+
+- Timestamp / Actor：2026-10-03 Asia/Shanghai；root tunnel-master / Android / Flutter / Security；Task T-2026-10-03-005。
+- Permission：当前用户明确要求授权连接ADB后持续，断连/手动撤销/切普通结束；C2源码与文档，未授权执行构建/测试/Git/发布。
+- Source：test/3c22a25 + 保留T003/T004工作树；Baseline TUN-BL-2026-10-03-ADB。
+- Created：docs/plans/ADB_SESSION_LIFETIME_TASK.md、docs/ADR/0017-adb-session-lifetime.md。
+- Updated code：TunnelAdbRuntime.kt、TunnelAdbSession.kt、oFtTiPzsqzBHGigp.kt；android_mode_model.dart、android_adb_menu.dart、android_adb_pairing_dialog.dart、overlay.dart；AdbWire.java、AdbWireTest.java、Server.java、build_helper.py、app/build.gradle。
+- Docs：helper README/server README/PROVENANCE、AGENTS/PROJECT_START_HERE、EXTERNAL_ASSET_REGISTRY/TEST_MATRIX、AI_ENGINEERING03/04/06/08/09/10、ADR0014/0016/index、ADB_REMOTE_IMPLEMENTATION_GUIDE/PAIRING_TASK及本任务记忆/state/registry/history/decision同步。
+- Delta：取消10分钟grant及生产helper1h；conn scopes直到断连/revoke/退出/故障，暂停保留helper，真实会话状态、旧replay不复活；protocol3/duration0与包检查同步，故障守卫和P0期限保留。
+- Decision：D-019/ADR-0017限定替代D-018/ADR-0016期限；原权限/配对政策保持。
+- Verification：源码/引用/词法/版本/Python AST/文档/diff V0；测试源码、服务器/设备V1—V5 NOT_RUN。Git/Build/Device/External/Sign/Release/Delete/Move/Generated：none。T6 handoff；STATE-20261003-005 / WORK-20261003-009。
+
+## CE-20261003-T004-01：PC无线ADB配对与授权入口迁移
+
+- Timestamp：2026-10-03 Asia/Shanghai；Task T-2026-10-03-004；Actor tunnel-master与Android/Flutter/Network/Security协作；C2及用户当前明确三项UI移除授权。
+- Type：create/update/delete；Source HEAD test/3c22a25 + T003 dirty patch保留；不修改原checkout。
+- Created：flutter/lib/models/android_adb_pairing_model.dart、flutter/lib/desktop/widgets/android_adb_pairing_dialog.dart、flutter/android/app/src/main/kotlin/com/tunnel/app/adb/RemoteAdbPairing.kt、docs/plans/ADB_REMOTE_PAIRING_TASK.md、docs/ADR/0016-pc-owned-adb-pairing-and-session-consent.md。
+- Updated：src/server/android_control.rs、src/client/io_loop.rs、src/ui_session_interface.rs；Android DFm8Y8iMScvB2YDw.kt、adb/LocalAdbProcessSpec.kt、TunnelAdbRunner/Manager/DnsDiscover.kt、mirror/TunnelAdbRuntime.kt、probe/BoundedProcessRunner/LocalAdbIdentityProbe.kt；Flutter android_mode_model/android_adb_menu/overlay/home_page.dart。
+- Deleted：flutter/lib/mobile/pages/adb_page.dart、flutter/lib/mobile/widgets/adb_mirror_probe_card.dart、adb_remote_consent_card.dart；仅专用UI，内部suite保留，恢复来源HEAD；全Flutter引用0。
+- Docs：ADB_REMOTE_IMPLEMENTATION_GUIDE、ADR0014/README、AI_ENGINEERING 02/03/04/06/10/12、TEST_MATRIX、android-adb/README、EXTERNAL_ASSET_REGISTRY、AGENTS/PROJECT_START_HERE及本任务memory/state/history/decision/registry同步。
+- Delta：localhost初次server启动、pair后独立connect/freshUID2000；typed PC配对/重连授权/取消/撤销，后台有限worker、cancel实际确认、conn600s scopes、lategrant阻断、权限恢复、视频事务隔离；状态迁到右上面板，首页fallback。
+- Decision：D-018 / ADR-0016限定替代旧phone-only code/consent；授权来自已认证加密且有输入/视频权限的当前controller显式请求，不由历史pair hint授予。
+- Verification：source/引用/词法/秘密/回调/权限/文档/diff V0；Rust新负例测试源码 NOT_RUN；V1—V5与Android11—16/16KiB NOT_RUN。
+- Git/Build/Device/External binary/Sign/Release：none；Delete仅上述明确授权UI三件；Move/generated：none。STATE-20261003-004 / WORK-20261003-007；T6 handoff。
+
+## CE-20261003-T003-01：Windows 产物、驱动与自解压构建闭环
+
+- 日期/授权：2026-10-03；用户明确要求完善Windows脚本；修改源码/配方/文档，无本地build/test/download-binary/Git/sign/release。
+- Source：test/3c22a25 + 当前工作树；Task T-2026-10-03-003；Baseline TUN-BL-2026-10-03-WINDOWS-BUILD。
+- Files：new-build.cmd/build.cmd/pc-bulid.cmd；scripts/windows-build.ps1/windows_assets.py/windows-assets.lock.json；build.py/flutter/windows/CMakeLists.txt；portable generate/build；合同测试源码及对应文档/记忆/ignore。
+- Delta：新staging与正确robocopy退出码、单checkout文件锁、.info兼容及脱敏日志、Cargo artifact DLL/EXE、官方驱动锁/receipt/zip约束与源编注入DLL、独立DPI manifest、EXE精确本次payload核验；统一入口与失败即停。
+- V0：源码与官方文本对照、AST/JSON/PowerShell语法、路径/diff；项目测试/服务器/驱动均NOT_RUN。无长期产品架构变化。
+- Handoff：docs/plans/WINDOWS_BUILD_GUIDE.md，new-build.cmd或-PackageOnly；旧Release/输出/缓存保留。未获取binary，未改原checkout或执行Git写入。
+
 ## CE-20261003-T001-01：ADB全链、首轮故障修复与交付知识同步
 
 - Timestamp：2026-10-03 Asia/Shanghai；Task T-2026-10-03-001。

@@ -43,3 +43,7 @@
 ## 2026-10-03 UiAutomation 与辅助源
 
 已只读核对官方 [AOSP android-16.0.0_r1 UiAutomation.java](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/java/android/app/UiAutomation.java)：隐藏构造 `(Looper,IUiAutomationConnection)`、`connect(int)` 和 `disconnect()` 通过反射适配；显式使用公开 `FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES`。有限输入、semantic node renderer、bitmap/EGL 和 endpoint consent 由 Tunnel 自行实现，不复制 upstream Controller。未调用 executeShellCommand、权限代用或 secure settings 写入。上述证据是签名/权限边界核对，正式构建与 Android 16 两机验证仍 `NOT_RUN`。
+
+## 2026-10-03 T005 会话生命周期
+
+Tunnel自有AdbWire升级VERSION3并同步HMAC域：Bootstrap durationSeconds=0表示生产会话持续至EOF/撤销/退出/故障，无一小时截止；1—3600保留有限诊断。Server.captureStarted只取消生产使用期限，启动/心跳/操作/写阻塞watchdog仍保留。P0仍20秒helper/10秒采样。上述修改不是upstream scrcpy原版行为；实际产物由本地source hash/manifest确定，二进制与设备验收NOT_RUN。

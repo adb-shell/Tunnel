@@ -4,7 +4,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `Server.java` | shell UID/API gate、双通道认证、有限操作队列、EOF/心跳/硬期限 |
+| `Server.java` | shell UID/API gate、双通道认证、有限操作队列、EOF/心跳/启动超时及有限诊断期限 |
 | `ShellEnvironment.java` | shell ActivityThread/context、可退出 main Looper |
 | `DisplayCapture.java` | display 0 non-secure mirror、版本固定的反射适配 |
 | `VideoEncoder.java` | 硬件 H264 Surface encoder、CSD/IDR、旋转重建和源切换 |
@@ -21,7 +21,7 @@ APK 持有全进程唯一 mirror lease，核验目标为本机且 shell UID=2000
 
 APK listener 只能绑定 `127.0.0.1`。helper 依次连接 VIDEO、CONTROL，双方 nonce/HMAC 认证完成后才初始化 Android API。helper 为协议 server，APK 为 client，与 TCP 发起方向无关。HMAC 不加密本机媒体；公网媒体只允许走现有认证、加密、relay-only 的远程会话。
 
-`TunnelAdbRuntime` 是本机同意和 scope 边界：video/input/accessibility/display/snapshot/hierarchy/overlay 独立；远端不能指定 target、端口、文件、shell 或授权 scope。默认未同意时仅回 `LOCAL_CONSENT_REQUIRED`。UiAutomation 使用 `FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES`，从不修改 `enabled_accessibility_services`，不调用 executeShellCommand/adoptShellPermissionIdentity。本应用无障碍服务关闭后，helper 的节点/截图/输入来源仍是自己拥有的 UiAutomation。
+`TunnelAdbRuntime` 是当前已授权连接的 scope 边界（PC显式pair/authorize，fresh probe；ADR-0016/0017）：video/input/accessibility/display/snapshot/hierarchy/overlay 独立；远端只可提交本机无线调试的配对/连接端口，不能指定外部 target、文件、shell 或任意授权 scope。默认未授权时仅回 `SESSION_ADB_AUTHORIZATION_REQUIRED`。UiAutomation 使用 `FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES`，从不修改 `enabled_accessibility_services`，不调用 executeShellCommand/adoptShellPermissionIdentity。本应用无障碍服务关闭后，helper 的节点/截图/输入来源仍是自己拥有的 UiAutomation。
 
 ## 源和首帧
 
@@ -35,7 +35,7 @@ APK listener 只能绑定 `127.0.0.1`。helper 依次连接 VIDEO、CONTROL，�
 
 ## 有界资源与恢复
 
-启动 helper 15 秒、APK 含 probe/stage 45 秒；本机 control 每秒 PING，5 秒无有效 control 停止。每个方向 sequence 连续，command ID 严格递增；最多 64 条排队操作、每秒 240 条 control、操作 10 秒、写阻塞 2 秒。Runtime 控制者心跳 15 秒过期；Bootstrap 硬上限一小时，旋转不延期。
+启动 helper 15 秒、APK 含 probe/stage 45 秒；本机 control 每秒 PING，5 秒无有效 control 停止。每个方向 sequence 连续，command ID 严格递增；最多 64 条排队操作、每秒 240 条 control、操作 10 秒、写阻塞 2 秒。Runtime 控制者心跳 15 秒过期；生产 Bootstrap durationSeconds=0，无固定使用期限；断连/撤销/退出ADB/故障清理。有限诊断1—3600秒、P0 20秒，旋转不延期。
 
 VIDEO packet 拷贝 codec buffer，outputBuffer 总在 finally 释放；截图最长边 1280，树最多 1024 节点/depth32/text32KiB/JSON256KiB；跨线程 bitmap 槽最多一个，旧图 recycle。bitmap 与 GL 资源归明确线程所有。control 只有固定数值操作，没有远程任意命令解释器。
 
@@ -51,4 +51,4 @@ VIDEO packet 拷贝 codec buffer，outputBuffer 总在 finally 释放；截图�
 4. 无障碍共存/暂停/恢复/disableSelf、本机重新开启；拒绝输入、按住时断线和旋转不能留下 stuck key/touch。
 5. snapshot/hierarchy 切换、无节点/截图失败、password/FLAG_SECURE 页面、EGL 失败和源回退。
 6. display0 off/on、helper EOF/应用退出/被杀、物理键唤醒与恢复；防触保持不可用直至有独立可靠 provider。
-7. 一小时/持续重连和 100 次启动取消：fd/thread/native/GPU/bitmap 不持续增长、不残留 helper。
+7. 健康连续运行超过一小时/持续重连和 100 次启动取消：fd/thread/native/GPU/bitmap 不持续增长、不残留 helper。

@@ -22,7 +22,9 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class AdbWire {
     public static final String LOOPBACK_HOST = "127.0.0.1";
-    public static final int VERSION = 2, CHANNEL_VIDEO = 1, CHANNEL_CONTROL = 2;
+    public static final int VERSION = 3, CHANNEL_VIDEO = 1, CHANNEL_CONTROL = 2;
+    /** Production sessions end on cancellation/disconnect, not elapsed usage time. */
+    public static final int SESSION_DURATION = 0;
     public static final int CAPABILITIES = 1, VIDEO_CONFIG = 2, VIDEO_FRAME = 3;
     public static final int REQUEST_KEYFRAME = 4, STOP = 5, PING = 6, PONG = 7;
     public static final int OPERATION = 8, RESULT = 9;
@@ -48,7 +50,7 @@ public final class AdbWire {
             if (secret == null || secret.length != 32 || epoch <= 0 || videoPort < 1 || videoPort > 65535
                     || controlPort < 1 || controlPort > 65535 || videoPort == controlPort
                     || maxSize < 256 || maxSize > 1920 || fps < 1 || fps > 60
-                    || bitrate < 128000 || bitrate > 16000000 || durationSeconds < 1 || durationSeconds > 3600)
+                    || bitrate < 128000 || bitrate > 16000000 || durationSeconds < SESSION_DURATION || durationSeconds > 3600)
                 throw invalid("bootstrap bounds");
             this.secret = secret.clone(); this.epoch = epoch;
             this.videoPort = videoPort; this.controlPort = controlPort; this.maxSize = maxSize;
@@ -289,7 +291,7 @@ public final class AdbWire {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(key, "HmacSHA256"));
-            mac.update(("Tunnel/ADB/v2/" + purpose + "\0").getBytes(StandardCharsets.US_ASCII));
+            mac.update(("Tunnel/ADB/v" + VERSION + "/" + purpose + "\0").getBytes(StandardCharsets.US_ASCII));
             for (byte[] part : data) mac.update(part);
             return mac.doFinal();
         } catch (GeneralSecurityException e) { throw new IOException("ADB protocol cryptography unavailable", e); }

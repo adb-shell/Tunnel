@@ -97,7 +97,10 @@ internal object BoundedProcessRunner {
             outThread.start()
             errThread.start()
             // At most 128 bytes (pairing code only); never arbitrary interactive stdin.
-            if (stdin != null) process.outputStream.write(stdin)
+            if (stdin != null) {
+                process.outputStream.write(stdin)
+                process.outputStream.flush()
+            }
             process.outputStream.close()
             val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
             while (true) {

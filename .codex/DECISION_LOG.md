@@ -184,6 +184,14 @@
 
 ### 新决定字段
 
+## D-018：PC 无线 ADB 配对与连接授权
+
+- 日期：2026-10-03；accepted；项目用户明确要求移除 Android ADB 页面并由 PC 输入系统码/端口发给 APK 立即配对。
+- Decision：typed pair/authorize/pair_cancel/revoke；本地后台有限 worker；fresh 本机 uid2000 后为当前加密已授权连接授予600秒 scopes；历史配对/普通连接不自动授权；PC 撤销、断线、撤权、到期清理。
+- Policy delta：PC 短暂接触 code；授权来源是具备输入/视频权限的已认证加密 controller 主动请求，不继续声称 phone-local consent。仅替代 ADR-0014 相关条款，任意 remote shell 仍拒绝。
+- Verification：source/V0；V1—V5 NOT_RUN；Android11—16/ROM/ABI/16KiB 实测待补，不声明100%兼容。
+- Related：ADR-0016；T-2026-10-03-004；CE-20261003-T004-01；ADB_REMOTE_PAIRING_TASK.md。
+
 ```text
 ## D-NNN：标题
 - 日期：
@@ -198,3 +206,11 @@
 - Approved by：
 - Related task/commit/docs：
 ```
+
+## D-019：ADB授权与生产投屏随当前会话持续
+
+- 日期/状态：2026-10-03，accepted；当前用户明确要求直到断连、撤销或切回普通投屏。
+- Decision：取消600秒conn scopes及生产helper3600秒截止；授权状态consentActive/consentLifetime=session；stop/故障清理，暂停采集保留helper/control。系统pair key保留，重新进入须显式authorize。
+- Supersedes：D-018/ADR-0016仅期限部分；认证/权限/fresh probe/typed范围不变。helper protocol3/duration0，同批重建；故障守卫/P0有限期限保留。
+- Verification：source/V0，新增协议测试源码NOT_RUN；服务器健康超过1小时/断线/退出/撤销/重放/故障ADBP-08/09/10 NOT_RUN。
+- Related：ADR-0017、T-2026-10-03-005、CE-20261003-T005-01；回滚只本任务并配套PC/APK/helper，不覆盖T003/T004。

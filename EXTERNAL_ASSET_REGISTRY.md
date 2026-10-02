@@ -1,5 +1,9 @@
 # Tunnel External Asset Registry
 
+2026-10-03 T004：ADB native供应仍为固定LADB prebuilt（未变更版本/blob），手机界面移除不移除libadb/helper准入。RemoteAdbPairing使用其本机TLS配对与独立connect。APK内所有所选ABI/native/helper缺失仍构建失败；未在本地取得/执行binary。Android11—16及16KiB运行证据仍external/verification-required，不能以供应脚本或API30门槛当全设备PASS。
+
+2026-10-03 T-2026-10-03-003 Windows增量：scripts/windows-assets.lock.json与windows_assets.py形成正式服务器供应入口；打印driver1.4/adapter/checksum的官方API digest固定，usbmmidd旧asset无digest但记录实际hash并支持owner pin；WindowInjection可固定commit源编译或采用owner提供DLL。binary未在本地取得，签名/publisher/OS验证仍外部未完成。详见docs/plans/WINDOWS_BUILD_GUIDE.md。
+
 最后更新：2026-10-03（ADB binary/helper 来源与服务器准备入口补充；其余 inventory 保留各自日期）
 状态：repository-side inventory rechecked at `HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`；owner/provenance onboarding incomplete
 范围：不在 Git tracked source 中，或不能由 clean clone 独立复现的 service、database、driver、binary、signing/build/release infrastructure 和历史 provenance
@@ -76,7 +80,7 @@ Owner 为空时统一写 `OWNER-REQUIRED`，不能由 AI 推断个人或组织�
 
 | ID | Asset | State / owner | Required evidence / impact |
 |---|---|---|---|
-| EXT-SRC-ADB-HELPER-001 | scrcpy v4.1 受限采集适配与 Tunnel helper protocol 2；来源参考 `2926c06c5dc3064ae6d8db706f1a98a37cfcf3f0` | SOURCE_IMPLEMENTED / V0 / runtime NOT_RUN；正式 Android+Security+Release owner required | [provenance](android-helper/server/PROVENANCE.md)、Apache license/NOTICE 与修改清单；[独立构建配方](android-helper/README.md)；本地源码 hash 决定实际实现，不能用 upstream reference 冒充完整 scrcpy 原版产物或 ROM 通过证明 |
+| EXT-SRC-ADB-HELPER-001 | scrcpy v4.1 受限采集适配与 Tunnel helper protocol 3（生产duration=0，APK/helper配套重建；P0有限诊断保留）；来源参考 `2926c06c5dc3064ae6d8db706f1a98a37cfcf3f0` | SOURCE_IMPLEMENTED / V0 / runtime NOT_RUN；正式 Android+Security+Release owner required | [provenance](android-helper/server/PROVENANCE.md)、Apache license/NOTICE 与修改清单；[独立构建配方](android-helper/README.md)；本地源码 hash 决定实际实现，不能用 upstream reference 冒充完整 scrcpy 原版产物或 ROM 通过证明 |
 | EXT-BIN-ADB-HELPER-001 | 从上述源码构建的 dex/JAR helper，APK native assets `adb-mirror-p0/` | NOT_BUILT；Android+Release owner required | `build.sh` 默认构建/stage，不依赖 P0 开关；manifest 绑定 artifact/source/resource/tool/build-script hash，Gradle 与运行时分别核验；实际 artifact SHA-256、ROM 矩阵、SBOM 仍待服务器和设备验证 |
 
 T-2026-10-02-002只登记未来依赖；不替代EXT-BIN-ADB-001，也不宣称已安装APK缺少ADB。当前worktree的缺失与用户设备上的产物是不同证据范围。
@@ -93,11 +97,11 @@ T-2026-10-02-002只登记未来依赖；不替代EXT-BIN-ADB-001，也不宣称�
 
 | ID | 资产 | 当前存在性 | 仓内消费/证据锚点 | Owner | 主要缺口 | 影响 |
 |---|---|---|---|---|---|---|
-| `EXT-WIN-001` | Amyuni/`usbmmidd_v2` virtual-display package | `EXTERNAL/UNVERIFIED`，正式构建从外部 cache 复制 | `src/virtual_display_manager.rs`, `new-build.cmd` | `OWNER-REQUIRED` | vendor/upstream source/version、INF/CAT/SYS/installer hashes、publisher/signature、license、OS support | current active virtual display；Windows build/release `BLOCKING` |
+| `EXT-WIN-001` | Amyuni/`usbmmidd_v2` virtual-display package | `SOURCE-RECORDED / BINARY-NOT-ACQUIRED`；官方asset180784412/199309bytes，无上游digest，服务器receipt与可选owner SHA256 | `src/virtual_display_manager.rs`, `scripts/windows_assets.py`/lock | `OWNER-REQUIRED` | vendor/source、INF/CAT/SYS/installer hashes、publisher/signature、license、OS support | active virtual display；正式运行/发行仍待验证 |
 | `EXT-WIN-002` | `deviceinstaller64.exe` | `EXTERNAL`，随 `usbmmidd_v2` package 使用 | `src/virtual_display_manager.rs` | `OWNER-REQUIRED` | binary version/hash/signature/source/license | 高权限 driver install/uninstall `BLOCKING` |
-| `EXT-WIN-003` | `WindowInjection.dll` / RustDeskTempTopMostWindow source | `EXTERNAL/UNVERIFIED`；当前 binary 缺失，workflow 能从固定 upstream commit 构建，但 action/upload provenance 仍可漂移 | `src/privacy_mode/win_topmost_window.rs`, `new-build.cmd`, legacy workflow | `OWNER-REQUIRED` | approved source fork/commit、immutable CI actions、reproducible build、hash/Authenticode、license、ABI matrix | privacy injection 与本地高权限代码执行 `BLOCKING` |
-| `EXT-WIN-004` | Printer driver package | `EXTERNAL/UNVERIFIED` | `libs/remote_printer/`, `new-build.cmd` | `OWNER-REQUIRED` | driver source/version、INF/CAT/SYS hashes、signature/publisher、license、OS matrix | remote printer install/release `BLOCKING` |
-| `EXT-WIN-005` | `printer_driver_adapter.dll` | `EXTERNAL/UNVERIFIED` | `src/server/printer_service.rs`, `new-build.cmd` | `OWNER-REQUIRED` | source/ABI/version/hash/signature/license | runtime DLL loading and printer service `BLOCKING` |
+| `EXT-WIN-003` | `WindowInjection.dll` / RustDeskTempTopMostWindow source | `SOURCE-PINNED / BINARY-NOT-BUILT`：固定commit53b548a5398624f7149a382000397993542ad796，服务器MSBuild/receipt；owner现有DLL只记录hash | `src/privacy_mode/win_topmost_window.rs`, `scripts/windows_assets.py`/lock | `OWNER-REQUIRED` | complete reproducible build、hash/Authenticode、license、ABI matrix | privacy injection运行/发行 `BLOCKING` |
+| `EXT-WIN-004` | Printer driver package | `API-DIGEST-PINNED / NOT-DOWNLOADED`，v4-1.4与checksum表；服务器取得后核对 | `libs/remote_printer/`, `scripts/windows-assets.lock.json` | `OWNER-REQUIRED` | driver source、INF/CAT hashes、signature/publisher、license、OS matrix | printer install/release `BLOCKING` |
+| `EXT-WIN-005` | `printer_driver_adapter.dll` | `API-DIGEST-PINNED / NOT-DOWNLOADED`，zip SHA256与checksum表；服务器PE x64校验 | `src/server/printer_service.rs`, `scripts/windows-assets.lock.json` | `OWNER-REQUIRED` | source/ABI/version/signature/license | runtime DLL与printer运行/发行 `BLOCKING` |
 | `EXT-WIN-006` | `dylib_virtual_display.dll` | `GENERATED`：source tracked in `libs/virtual_display/`，artifact not tracked | Windows packaging and virtual display FFI | Release owner required | formal toolchain result、artifact hash、Authenticode、ABI test | source provenance较好；仍需正式 build/sign evidence |
 | `EXT-WIN-007` | `RuntimeBroker_tunnel.exe` helper | `OS-DERIVED/UNVERIFIED`：运行时复制 Windows `RuntimeBroker.exe` 后改名；仓内不存在独立 helper source/binary 是预期状态 | `src/privacy_mode/win_topmost_window.rs`, Windows runtime copy path | Windows/Security owner required | supported Windows build matrix、源文件 Microsoft signature 校验、复制/注入/清理 contract、EDR compatibility | 行为随 OS build 漂移；privacy helper 路径必须按目标 OS 验证 |
 | `EXT-WIN-008` | Windows `XpsPrint.dll` OS prerequisite | `OS-DERIVED`：`PrintXPSRawData` implementation 已 tracked，仓外依赖仅为 Windows OS API/DLL | `src/platform/windows.cc`, `src/platform/windows.rs` | Windows owner required | supported OS/API matrix、resource/error contract | 不是缺失的 Tunnel function；仍需 Win10/11 print compatibility 验证 |

@@ -1,5 +1,9 @@
 # AGENTS.md — Tunnel / 隧道 v5.2.1
 
+2026-10-03 T004：Android专用ADB页/诊断与consent卡已移除，内部suite保留；PC `android_adb_pairing_dialog.dart` / `android_adb_pairing_model.dart` 通过 typed pair/authorize/revoke执行，APK `RemoteAdbPairing.kt`后台配对→独立连接→fresh uid2000。ADB状态在TunnelStatusMonitor；授权改为当前已认证加密且有输入/视频权限的PC conn显式操作后当前会话scopes（ADR-0016/0017）；取消10分钟授权和生产helper一小时限制，断连/撤销/退出ADB清理，侧按钮关共享仅暂停采集。源码/V0，Android11—16/16KiB运行待验。
+
+2026-10-03 Windows增量：new-build.cmd/build.cmd/pc-bulid.cmd统一入口；scripts/windows-build.ps1负责产物/staging/log/调用，windows_assets.py供应官方drivers，Cargo artifact定位及精确payload验证。正式使用与验证见docs/plans/WINDOWS_BUILD_GUIDE.md；本地只有V0，构建/驱动未验。
+
 2026-10-03增量：远程ADB已加入typed控制、helper H264、source/input事务、手机consent与PC顶栏；本轮仅源码/V0，真实构建和双Android16验收待执行。`docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md`为当前ADB地图/使用入口，替代下文旧“PC remote ADB future work”阶段判断。
 
 最后一次与全仓源码对齐：2026-07-12
@@ -52,7 +56,7 @@
 6. Legacy desktop UI：`src/ui/`
 7. Account / HTTP / sync / upload：`src/hbbs_http/`
 8. Windows privacy mode / virtual display：`src/privacy_mode.rs` + `src/virtual_display_manager.rs`
-9. Android local ADB/LADB：`flutter/android/app/src/main/kotlin/com/tunnel/app/adb/` + `flutter/lib/mobile/pages/adb_page.dart`
+9. Android local ADB/LADB：`flutter/android/app/src/main/kotlin/com/tunnel/app/adb/`；PC入口 `flutter/lib/desktop/widgets/android_adb_pairing_dialog.dart`
 10. ZEGO voice call：Flutter RTC side path + Rust control-channel invitation state
 
 不要把项目误读成：
@@ -83,7 +87,7 @@
 - `adb/TunnelAdbRunner.kt` = packaged `libadb.so` runner
 - `adb/TunnelAdbDnsDiscover.kt` = wireless debugging mDNS discovery
 - `adb/TunnelAdbState.kt` = ADB state snapshot
-- ADB pair/connect currently uses endpoint fallback (`localhost`, `127.0.0.1`, active Wi-Fi IPv4), mDNS retry/fallback, `preferredSerial`, and cancellable wireless-debugging automation. PC remote ADB command protocol is still future work.
+- ADB pair/connect uses local endpoint fallback/mDNS与独立connection port。`-H localhost`允许首次启动本机daemon；typed remote pair/authorize与后台worker已接入，任意remote shell仍拒绝。
 - `pkg2230.kt` = 主 JNI bridge
 - `ffi.kt` = 兼容 JNI bridge
 - `p50.java` + `q50.java` = XOR / 混淆辅助

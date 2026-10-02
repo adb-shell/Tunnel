@@ -103,7 +103,11 @@ endif()
 # flutter_rust_bridge
 set(RUSTDESK_LIB_BUILD_TYPE $<IF:$<CONFIG:Debug>,debug,release>)
 message(STATUS "tunnel lib build type: ${RUSTDESK_LIB_BUILD_TYPE}")
-set(RUSTDESK_LIB "../../target/${RUSTDESK_LIB_BUILD_TYPE}/tunnel.dll")
+if(DEFINED ENV{TUNNEL_RUST_LIBRARY} AND NOT "$ENV{TUNNEL_RUST_LIBRARY}" STREQUAL "")
+  file(TO_CMAKE_PATH "$ENV{TUNNEL_RUST_LIBRARY}" RUSTDESK_LIB)
+else()
+  set(RUSTDESK_LIB "../../target/${RUSTDESK_LIB_BUILD_TYPE}/tunnel.dll")
+endif()
 install(FILES "${RUSTDESK_LIB}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
 COMPONENT Runtime RENAME tunnel.dll)
 

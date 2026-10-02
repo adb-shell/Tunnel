@@ -61,3 +61,10 @@ flutter/web/
 /flutter/android/app/src/main/assets/adb-mirror-p0/
 /flutter/android/app/src/main/assets/adb-provenance/
 /flutter/android/app/src/main/assets/.adb-mirror-*
+# Windows build outputs and packaging inputs are generated on formal servers.
+/PC-Bulid/
+/libs/portable/data.bin
+/libs/portable/data.bin.new
+/libs/portable/app_metadata.toml
+/libs/portable/payload-manifest.json
+/libs/portable/portable-manifest.xml

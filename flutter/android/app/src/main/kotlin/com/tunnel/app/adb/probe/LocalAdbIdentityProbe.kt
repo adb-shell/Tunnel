@@ -51,14 +51,15 @@ class AdbIdentityProbeResult internal constructor(
 }
 
 /**
- * Explicit local-user diagnostic only. Does not connect, pair, grant, change settings or kill ADB.
+ * Fixed local identity preflight. Does not connect, pair, grant, change settings or kill ADB.
  * Invoke on a worker thread. The packaged CLI's own internal behavior requires provenance review;
  * an existing server preflight is not a guarantee against an unknown binary auto-starting a daemon.
  */
 class LocalAdbIdentityProbe(context: Context) {
     private val appContext = context.applicationContext
 
-    fun probe(serial: String): AdbIdentityProbeResult {
+    fun probe(serial: String, cancelled: () -> Boolean = { false },
+              timeoutMillis: Long = 5_000): AdbIdentityProbeResult {
         val startedAt = SystemClock.elapsedRealtime()
         val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
         val adb = File(appContext.applicationInfo.nativeLibraryDir, "libadb.so")
@@ -78,12 +79,14 @@ class LocalAdbIdentityProbe(context: Context) {
         if (!gate.tryAcquire()) return result(AdbProbeReason.BUSY)
         try {
             target = LocalAdbTargetPolicy.validate(serial) ?: return result(AdbProbeReason.TARGET_NOT_LOCAL)
-            // No discovery or implicit target selection; the existing local ADB page owns transport.
+            if (cancelled()) return result(AdbProbeReason.PROCESS_INTERRUPTED)
+            // No discovery or implicit target selection; the local pairing runner owns transport.
             if (!existingServerReachable()) return result(AdbProbeReason.SERVER_UNAVAILABLE)
             val spec = LocalAdbProcessSpec(appContext)
             val prefix = spec.command(target!!, emptyList())
             val environment = spec.environment
-            val transport = BoundedProcessRunner.run(prefix + "get-state", appContext.filesDir, environment)
+            val transport = BoundedProcessRunner.run(prefix + "get-state", appContext.filesDir, environment,
+                timeoutMillis.coerceIn(1, 5_000), cancelled = cancelled)
             if (!transport.succeeded) return result(processReason(transport, AdbProbeReason.TRANSPORT_UNAVAILABLE))
             if (transport.stdout.toString(Charsets.US_ASCII).trim() != "device") {
                 return result(AdbProbeReason.TRANSPORT_UNAVAILABLE)
@@ -99,6 +102,7 @@ class LocalAdbIdentityProbe(context: Context) {
             val identity = BoundedProcessRunner.run(
                 prefix + listOf("shell", "-T", "-n", AdbIdentityOutputParser.command(nonce)),
                 appContext.filesDir, environment,
+                timeoutMillis.coerceIn(1, 5_000), cancelled = cancelled,
             )
             if (!identity.succeeded) return result(processReason(identity, AdbProbeReason.PROCESS_FAILED))
             val uid = AdbIdentityOutputParser.parseUid(identity.stdout, nonce)

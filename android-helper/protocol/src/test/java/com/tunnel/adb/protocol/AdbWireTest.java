@@ -67,6 +67,20 @@ public class AdbWireTest {
         boot.close(); read.close(); rejects(read::secretCopy);
     }
 
+    @Test public void sessionDurationRoundTripsAndOlderHelpersAreRejected() throws Exception {
+        try (AdbWire.Bootstrap boot = new AdbWire.Bootstrap(secret(), 9, 1234, 1235, 1280, 30,
+                4000000, AdbWire.SESSION_DURATION)) {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream(); AdbWire.writeBootstrap(bytes, boot);
+            byte[] wire = bytes.toByteArray();
+            try (AdbWire.Bootstrap read = AdbWire.readBootstrap(new ByteArrayInputStream(wire))) {
+                assertEquals(AdbWire.SESSION_DURATION, read.durationSeconds);
+            }
+            wire[4] = 0; wire[5] = 2;
+            rejects(() -> AdbWire.readBootstrap(new ByteArrayInputStream(wire)));
+        }
+        rejects(() -> new AdbWire.Bootstrap(secret(), 9, 1, 2, 1280, 30, 4000000, -1));
+    }
+
     @Test public void packetsOwnPayloadAndRejectBoundsAndUnknownCommands() throws Exception {
         byte[] data = {1, 2};
         AdbWire.Packet p = AdbWire.Packet.of(AdbWire.VIDEO_CONFIG, 0, 9, 1, 1, 0, 1280, 720, data);

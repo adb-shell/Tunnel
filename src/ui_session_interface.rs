@@ -607,7 +607,7 @@ impl<T: InvokeUiSession> Session<T> {
             if crate::server::android_control::parse(&v).is_some() {
                 self.send(Data::Message(crate::server::android_control::message(v)));
             } else {
-                self.update_android_control("{\"v\":1,\"phase\":\"ERROR\",\"code\":\"MALFORMED\"}".into());
+                self.update_android_control(crate::server::android_control::request_error(&v, "MALFORMED"));
             }
             return;
         }

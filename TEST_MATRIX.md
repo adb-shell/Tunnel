@@ -1,5 +1,26 @@
 # Tunnel Commercial Test Matrix
 
+2026-10-03 T005：ADBP-06/09按会话授权更新；新增AdbWireTest duration=0往返、旧version与负duration拒绝测试源码 NOT_RUN。生产helper protocol3，旧manifest/helper必须拒绝；P0 20秒有限诊断保留。服务器同批重编，长时运行/退出/重放仍 NOT_RUN。
+
+2026-10-03 T004远程配对增量：[当前指南](docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)与[任务](docs/plans/ADB_REMOTE_PAIRING_TASK.md)。以下新增案例均 NOT_RUN，必须同批 PC/APK/helper 构建；Rust 新增 malformed/port/code/payload/revoke/secret-error 单元测试源码尚未执行。
+
+| Case | 验证目标 / 通过条件 | Level / 当前状态 |
+|---|---|---|
+| ADBP-01 | APK所选ABI均含libadb.so与固定helper/receipt，native可执行；缺件构建失败 | V2/V3 NOT_RUN |
+| ADBP-02 | 未启动5037 daemon，PC输入有效port+六位码；localhost启动成功且45s预算内明确终态 | V3/V4 NOT_RUN |
+| ADBP-03 | 保持系统码窗口：pair→独立NSD connection port→connect→fresh nonce uid2000→conn grant；原普通视频继续 | V3/V4 NOT_RUN |
+| ADBP-04 | 过期/错误码、错端口/窗口关闭：稳定错误可见、非ready、不假grant、secret无日志/偏好/argv | V3/V4 NOT_RUN |
+| ADBP-05 | 本机IPv4/IPv6 NSD、resolver busy、发现失败；手填独立connectPort仍可连接，拒绝foreign host/serial | V3/V4 NOT_RUN |
+| ADBP-06 | 已系统配对key，无code显式authorize；fresh probe与会话scopes，忘记key不得绕过系统配对 | V3/V4 NOT_RUN |
+| ADBP-07 | 取消/关闭弹窗/断线/撤输入或视频权限：中断仅自己worker；late VERIFIED无grant；取消ack/10s未确认明确显示 | V3/V4 NOT_RUN |
+| ADBP-08 | 撤权后恢复输入权限，同一连接可显式重新authorize；旧grant/worker不恢复；实际断线清身份 | V3/V4 NOT_RUN |
+| ADBP-09 | 健康运行超过10/30分钟及1小时仍授权；关共享暂停保留helper；退出ADB/PC撤销/断线/关闭无线调试清理scopes/helper/input、正常共享回退，原系统pair key保留 | V3/V4 NOT_RUN |
+| ADBP-10 | pair progress/error乱序/迟到/同ID重放/取消ERROR不改video epoch/冻结；active helper拒绝pair/authorize；busy不沿用旧verified grant | V1/V4 NOT_RUN |
+| ADBP-11 | 手机无ADB tab/card；outgoing-only首页fallback；PC拖动/小窗口/ESC、图标、菜单动作、右上ADB指标正常 | V2/V3 NOT_RUN |
+| ADBP-12 | 原生Android11/12/13/14/15/16 + Android16 OnePlus/iQOO；记录ROM/ABI/getconf PAGESIZE，含16KiB native ELF及实际运行 | V3/V4 NOT_RUN |
+
+2026-10-03 T003 Windows构建增量：WIN-05/07/08正式验证首次驱动下载/离线/坏hash、Release布局与Cargo target、DLL架构、完整payload、EXE解压启动及驱动运行；新增合同测试源码NOT_RUN。步骤见docs/plans/WINDOWS_BUILD_GUIDE.md；本轮只V0。
+
 2026-10-02 T004 身份迁移新增验证范围：包/namespace/deeplink/native exports/FRB 类名、portable marker与启动文件、Windows产品信息、broker新字段、新装授权与旧配置隔离。编译/签名/安装/设备回归均 NOT_RUN。逐项正式环境需求见 `docs/BASELINE/2026-10-02_TUNNEL_IDENTITY_BASELINE.md`，P0另遵循 `docs/plans/ADB_P0_VALIDATION_RUNBOOK.md`，不改变其默认关闭状态。
 
 最后更新：2026-07-12  

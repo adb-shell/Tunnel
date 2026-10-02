@@ -32,9 +32,31 @@ pub fn parse(json: &str) -> Option<Request> {
             .iter().any(|value| *value > MAX_SAFE_INTEGER) { return None; }
     let payload = request.payload.as_object()?;
     match request.op.as_str() {
+        "pair" => {
+            if !(payload.len() == 2 || payload.len() == 3)
+                || !payload.keys().all(|key| ["port", "code", "connectPort"].contains(&key.as_str()))
+                || !valid_local_port(payload.get("port")?.as_str()?) { return None; }
+            let code = payload.get("code")?.as_str()?;
+            if code.len() != 6 || !code.bytes().all(|c| c.is_ascii_digit()) { return None; }
+            if let Some(port) = payload.get("connectPort") {
+                if !valid_local_port(port.as_str()?) { return None; }
+            }
+        }
+        "authorize" => {
+            if payload.len() > 1 || !payload.keys().all(|key| key == "connectPort") { return None; }
+            if let Some(port) = payload.get("connectPort") {
+                if !valid_local_port(port.as_str()?) { return None; }
+            }
+        }
+        "pair_cancel" => {
+            if payload.len() != 1 { return None; }
+            let id = payload.get("pairOperationId")?.as_str()?;
+            if id.is_empty() || id.len() > 64
+                || !id.bytes().all(|c| c.is_ascii_alphanumeric() || b"-_".contains(&c)) { return None; }
+        }
         "status" | "start" | "activate" | "presented" | "stop" | "keyframe"
         | "heartbeat" | "accessibility_pause" | "accessibility_resume"
-        | "accessibility_disable" | "accessibility_enable" => {
+        | "accessibility_disable" | "accessibility_enable" | "revoke" => {
             if !payload.is_empty() { return None; }
         }
         "side_action" => {
@@ -76,6 +98,11 @@ pub fn parse(json: &str) -> Option<Request> {
     Some(request)
 }
 
+fn valid_local_port(port: &str) -> bool {
+    !port.is_empty() && port.len() <= 5 && port.bytes().all(|c| c.is_ascii_digit())
+        && port.parse::<u16>().map_or(false, |port| port > 0)
+}
+
 pub fn message(json: String) -> Message {
     let mut misc = Misc::new();
     misc.set_android_control(AndroidControl { json, ..Default::default() });
@@ -86,6 +113,15 @@ pub fn message(json: String) -> Message {
 
 pub fn error(operation_id: &str, code: &str) -> Message {
     message(json!({"v":1,"operationId":operation_id,"phase":"ERROR","code":code}).to_string())
+}
+
+/// Correlate a rejected request without copying its payload/secret to an error or log.
+pub fn request_error(raw: &str, code: &str) -> String {
+    let value = if raw.len() <= MAX_JSON { serde_json::from_str::<Value>(raw).ok() } else { None };
+    let id = value.as_ref().and_then(|v| v.get("operationId")).and_then(Value::as_str)
+        .filter(|id| !id.is_empty() && id.len() <= 64
+            && id.bytes().all(|c| c.is_ascii_alphanumeric() || b"-_".contains(&c))).unwrap_or("");
+    json!({"v":1,"operationId":id,"phase":"ERROR","code":code}).to_string()
 }
 
 pub fn video_event(metadata: &hbb_common::message_proto::AndroidVideoMetadata, phase: &str) -> String {
@@ -119,6 +155,9 @@ mod endpoint {
         subscribers: HashSet<i32>, lease: Option<Lease>, next_epoch: u64,
         barriers: VecDeque<(i32, Message)>, normal_refresh: HashSet<i32>,
         rates: HashMap<i32, (Instant, u32)>,
+        // Pairing and its scoped authorization exist independently of a video lease.
+        // Keep the connection tracked until disconnect/revocation, including after success.
+        pairing_connections: HashSet<i32>,
     }
     lazy_static::lazy_static! { static ref STATE: Mutex<State> = Mutex::new(State::default()); }
 
@@ -183,7 +222,7 @@ mod endpoint {
     }
 
     pub fn permission_revoked(conn: i32) {
-        let _ = call_main_service_set_by_name("adb_control_disconnect", Some(&conn.to_string()), Some(""));
+        let _ = call_main_service_set_by_name("adb_control_revoke", Some(&conn.to_string()), Some(""));
         rollback(conn, "permission-revoked");
     }
 
@@ -203,7 +242,7 @@ mod endpoint {
         if counts && state.lease.is_some() && !rate_allowed(&mut state, conn) {
             drop(state);
             rollback(conn, "rate-limit");
-            let _ = call_main_service_set_by_name("adb_control_disconnect", Some(&conn.to_string()), Some(""));
+            let _ = call_main_service_set_by_name("adb_control_revoke", Some(&conn.to_string()), Some(""));
             return true;
         }
         let Some(lease) = state.lease.as_mut() else { return false; };
@@ -246,7 +285,7 @@ mod endpoint {
         if state.lease.is_some() && !rate_allowed(&mut state, conn) {
             drop(state);
             rollback(conn, "rate-limit");
-            let _ = call_main_service_set_by_name("adb_control_disconnect", Some(&conn.to_string()), Some(""));
+            let _ = call_main_service_set_by_name("adb_control_revoke", Some(&conn.to_string()), Some(""));
             return true;
         }
         let Some(lease) = state.lease.as_mut() else { return false; };
@@ -344,7 +383,8 @@ mod endpoint {
     }
 
     pub fn request(conn: i32, raw: &str, allowed: bool, view_allowed: bool, h264: bool) -> Option<Message> {
-        let mut request = match parse(raw) { Some(request) => request, None => return Some(error("", "MALFORMED")) };
+        let mut request = match parse(raw) { Some(request) => request,
+            None => return Some(message(super::request_error(raw, "MALFORMED"))) };
         let mut state = STATE.lock().unwrap();
         let rollback_ack = request.op == "presented" && state.lease.as_ref().map_or(false,
             |lease| lease.conn == conn && lease.phase == Phase::Rollback);
@@ -357,8 +397,23 @@ mod endpoint {
         if !rate_allowed(&mut state, conn) {
             drop(state);
             rollback(conn, "rate-limit");
-            let _ = call_main_service_set_by_name("adb_control_disconnect", Some(&conn.to_string()), Some(""));
+            let _ = call_main_service_set_by_name("adb_control_revoke", Some(&conn.to_string()), Some(""));
             return Some(error(&request.operation_id, "RATE_LIMIT"));
+        }
+        if matches!(request.op.as_str(), "pair" | "authorize" | "pair_cancel" | "revoke") {
+            if matches!(request.op.as_str(), "pair" | "authorize") && state.lease.is_some() {
+                return Some(error(&request.operation_id, "STOP_ADB_VIDEO_BEFORE_PAIRING"));
+            }
+            state.pairing_connections.insert(conn);
+            // No video generation/epoch, decoder barrier or normal-capture change.
+            request.generation = 0; request.epoch = 0; request.revision = 0;
+            request.sequence = 0; request.input_frozen = false;
+            drop(state);
+            if !forward(conn, &request) {
+                return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE"));
+            }
+            if request.op == "revoke" { rollback(conn, &request.operation_id); }
+            return None;
         }
         if request.op == "status" {
             if let Some(lease) = state.lease.as_ref().filter(|lease| lease.conn == conn && lease.phase == Phase::Rollback) {
@@ -518,8 +573,9 @@ mod endpoint {
         }
         state.normal_refresh.remove(&conn);
         state.rates.remove(&conn);
+        state.pairing_connections.remove(&conn);
         drop(state);
-        // Also remove local-consent eligibility when a connection never acquired a lease.
+        // Also remove connection eligibility when a connection never acquired a lease.
         let _ = call_main_service_set_by_name("adb_control_disconnect", Some(&conn.to_string()), Some(""));
         encoded::forget_state(conn);
     }
@@ -535,10 +591,14 @@ mod endpoint {
         // Permission loss revokes the helper and local consent immediately. Keep a
         // frozen rollback transaction until a fresh normal frame can be presented.
         if !allowed {
+            let pairing_authority = STATE.lock().unwrap().pairing_connections.remove(&conn);
+            if pairing_authority {
+                let _ = call_main_service_set_by_name("adb_control_revoke", Some(&conn.to_string()), Some(""));
+            }
             let owner = STATE.lock().unwrap().lease.as_ref().map_or(false, |l|
                 l.conn == conn && l.phase != Phase::Rollback);
             if owner {
-                let _ = call_main_service_set_by_name("adb_control_disconnect", Some(&conn.to_string()), Some(""));
+                let _ = call_main_service_set_by_name("adb_control_revoke", Some(&conn.to_string()), Some(""));
                 rollback(conn, "permission-revoked");
             }
         }
@@ -553,12 +613,15 @@ mod endpoint {
             })
         };
         if let Some((operation_id, already_rollback)) = timeout {
-            let _ = call_main_service_set_by_name("adb_control_disconnect", Some(&conn.to_string()), Some(""));
+            let _ = call_main_service_set_by_name("adb_control_revoke", Some(&conn.to_string()), Some(""));
             if !already_rollback { rollback(conn, &operation_id); }
             return Some(error(&operation_id, "LEASE_OR_TRANSITION_TIMEOUT"));
         }
         if let Some(raw) = encoded::pop_state(conn) {
             if let Ok(value) = serde_json::from_str::<Value>(&raw) {
+                if value.get("kind").and_then(Value::as_str) == Some("pairing") {
+                    return if allowed { Some(message(raw)) } else { None };
+                }
                 let mut state = STATE.lock().unwrap();
                 let mut should_rollback = false;
                 let mut reconfigure = None;
@@ -675,5 +738,46 @@ mod tests {
         value["payload"] = json!({"action":"open_url","url":"file:///private"});
         value["op"] = json!("side_action");
         assert!(parse(&value.to_string()).is_none());
+    }
+
+    #[test]
+    fn pairing_is_local_typed_and_independent_of_video_epoch() {
+        let mut value = json!({"v":1,"op":"pair","operationId":"pair-1",
+            "payload":{"port":"37123","code":"012345","connectPort":"38234"}});
+        assert!(parse(&value.to_string()).is_some());
+        value["payload"]["host"] = json!("example.org");
+        assert!(parse(&value.to_string()).is_none());
+        value["payload"].as_object_mut().unwrap().remove("host");
+        for port in ["0", "65536", "localhost:37123", "-1", "auto", ""] {
+            value["payload"]["port"] = json!(port);
+            assert!(parse(&value.to_string()).is_none());
+        }
+        value["payload"]["port"] = json!("37123");
+        for code in ["12345", "1234567", "123 45", "１２３４５６", "12345\n"] {
+            value["payload"]["code"] = json!(code);
+            assert!(parse(&value.to_string()).is_none());
+        }
+        value["op"] = json!("authorize"); value["payload"] = json!({});
+        assert!(parse(&value.to_string()).is_some());
+        value["payload"] = json!({"connectPort":"65535"});
+        assert!(parse(&value.to_string()).is_some());
+        value["op"] = json!("pair_cancel"); value["payload"] = json!({"pairOperationId":"pair-1"});
+        assert!(parse(&value.to_string()).is_some());
+        value["payload"]["pairOperationId"] = json!("bad/operation");
+        assert!(parse(&value.to_string()).is_none());
+        value["op"] = json!("revoke"); value["payload"] = json!({});
+        assert!(parse(&value.to_string()).is_some());
+        value["payload"]["connId"] = json!(17);
+        assert!(parse(&value.to_string()).is_none());
+    }
+
+    #[test]
+    fn rejected_pairing_errors_correlate_without_echoing_the_secret() {
+        let raw = r#"{"v":1,"op":"pair","operationId":"pair-1","payload":{"port":"0","code":"012345"}}"#;
+        let reply: Value = serde_json::from_str(&request_error(raw, "MALFORMED")).unwrap();
+        assert_eq!(reply["operationId"], "pair-1");
+        assert_eq!(reply["code"], "MALFORMED");
+        assert!(reply.get("payload").is_none());
+        assert!(!reply.to_string().contains("012345"));
     }
 }

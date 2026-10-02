@@ -1,5 +1,7 @@
 # ADR-0014: Controlled Remote ADB Mirroring over Tunnel Sessions
 
+> 2026-10-03 T004：[ADR-0016](0016-pc-owned-adb-pairing-and-session-consent.md)限定替代本文的 PC 不接触配对码 / phone-local consent 政策。当前入口为 PC 显式 pair/authorize、fresh 本机 probe 与 conn-bound 会话 scopes（期限由 ADR-0017 替代）；手机 ADB 页已移除。其余事务与安全不变量保持。下文原阶段叙述不作为新授权事实。
+
 - Status：`accepted`（2026-10-03用户改为先交付P0—P6源码，运行能力仍需本机同意和正式验收）
 - Record Type：`contemporaneous`
 - Decision / Recorded / Last Reviewed：2026-10-02；Next Review：P0开始前。

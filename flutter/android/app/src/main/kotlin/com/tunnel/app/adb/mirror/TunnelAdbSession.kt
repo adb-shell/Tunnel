@@ -127,7 +127,7 @@ internal class TunnelAdbSession(
             drain(child.inputStream); drain(child.errorStream)
             val secret = ByteArray(32).also(random::nextBytes)
             try {
-                AdbWire.Bootstrap(secret, epoch, videoListener.localPort, controlListener.localPort, 1280, 30, 4_000_000, 3600)
+                AdbWire.Bootstrap(secret, epoch, videoListener.localPort, controlListener.localPort, 1280, 30, 4_000_000, AdbWire.SESSION_DURATION)
                     .use { AdbWire.writeBootstrap(child.outputStream, it) }
                 val video = accept(videoListener, secret, AdbWire.CHANNEL_VIDEO)
                 val commands = accept(controlListener, secret, AdbWire.CHANNEL_CONTROL)
@@ -193,7 +193,7 @@ internal class TunnelAdbSession(
                 val remaining = joinDeadline - SystemClock.elapsedRealtime()
                 if (remaining > 0) try { it.join(remaining) } catch (_: InterruptedException) { Thread.interrupted() }
             }
-            // The helper has independent stdin EOF, control heartbeat and hard deadline guards.
+            // The helper has independent stdin EOF, control heartbeat and startup timeout guards.
             val processStopped = child == null || !child.isAlive
             // Retain the lease if an OEM process cannot terminate; do not start another privileged owner.
             val threadsStopped = children.none { it.isAlive }

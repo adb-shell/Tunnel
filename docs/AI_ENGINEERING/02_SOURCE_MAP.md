@@ -1,5 +1,9 @@
 # Tunnel 源码地图 / Source Map
 
+2026-10-03 T004当前地图：手机 AdbPage / adb_mirror_probe_card / adb_remote_consent_card 已移除；PC android_adb_pairing_dialog.dart → android_adb_pairing_model.dart → typed pair/authorize/revoke → JNI MainService → RemoteAdbPairing.kt → Manager/Runner/libadb。配对/视频事务隔离，状态在 TunnelStatusMonitor。下文旧手机UI地图为历史；[当前指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
+
+2026-10-03 Windows当前入口：new-build.cmd（环境）、build.cmd/pc-bulid.cmd（兼容转发）、scripts/windows-build.ps1（staging/log/流程）、scripts/windows_assets.py + windows-assets.lock.json（driver/注入供应）、build.py::windows_library/build_flutter_windows + flutter/windows/CMakeLists.txt（真实DLL）、libs/portable/generate.py/build.rs（嵌入载荷/独立manifest）。正式使用与源码合同测试地图见 [Windows指南](../plans/WINDOWS_BUILD_GUIDE.md)。
+
 > 2026-10-03 当前增量（T-2026-10-03-001 / V0）：新增 `android-adb/`、`adb/mirror/TunnelAdbSession.kt` / `TunnelAdbRuntime.kt`、`AccessibilityLifecycle.kt`、`src/server/android_control.rs`、`libs/scrap/src/android/encoded.rs`、Flutter `android_mode_model.dart` / `android_adb_menu.dart` / `adb_remote_consent_card.dart`。完整路径见指南第2节；原P0地图是历史阶段。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 最近关键路径复核：2026-10-02，`HEAD 5cee692` / V0。按功能和接口定位见 [12_FEATURE_MAP.md](12_FEATURE_MAP.md)，覆盖边界见 [本轮审计](audits/2026-10-02/README.md)。
@@ -144,7 +148,7 @@
 - `TunnelAdbRunner.kt`：`libadb.so` process、pair/connect/shell。
 - `TunnelAdbDnsDiscover.kt`：NSD discovery/fallback。
 - `TunnelAdbState.kt`：snapshot。
-- `flutter/lib/mobile/pages/adb_page.dart`：UI。
+- `flutter/lib/desktop/widgets/android_adb_pairing_dialog.dart`：当前 PC 配对/连接授权 UI；旧手机 adb_page.dart 已移除。
 - `jniLibs/*/libadb.so`：当前 MISSING；旧接管曾记为 LOCAL-ONLY，当前整个 `jniLibs/` 目录不存在。provenance 与获取方式见 External Asset Registry。
 
 ### Rust JNI
@@ -201,6 +205,6 @@
 | `android-helper/server/` | DORMANT / source only | 固定来源shell H264原型、NOTICE/provenance |
 | `android-helper/build_helper.py` | NOT_RUN | 显式Java/D8构建、hash manifest和首次stage |
 | Android `adb/probe/`、`adb/mirror/` | DORMANT / default off | 本机UID探测、artifact校验、有限时supervisor |
-| `flutter/lib/mobile/widgets/adb_mirror_probe_card.dart` | DORMANT / default off | 本机诊断计数、生命周期取消 |
+| `flutter/lib/mobile/widgets/adb_mirror_probe_card.dart` | REMOVED / T004 | 旧手机诊断卡；内部 probe/helper 保留 |
 
 本地MethodChannel位于FlutterActivity，不新增远程协议或JNI路径。源码变化来自T003；[验证交接](../plans/ADB_P0_VALIDATION_RUNBOOK.md)记录真实完成范围及未验证项。

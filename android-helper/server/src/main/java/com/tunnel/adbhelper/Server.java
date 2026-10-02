@@ -181,7 +181,9 @@ public final class Server {
         void captureStarted(int seconds) throws IOException {
             if (stop.get()) throw new IOException("STOPPED");
             if (!captureRunning) {
-                deadline = SystemClock.elapsedRealtime() + seconds * 1000L;
+                // Zero removes only the production usage deadline. Startup, heartbeat,
+                // I/O and operation watchdogs still cancel an unhealthy session.
+                deadline = seconds == AdbWire.SESSION_DURATION ? 0 : SystemClock.elapsedRealtime() + seconds * 1000L;
                 captureRunning = true;
             }
         }
@@ -335,7 +337,7 @@ public final class Server {
                             Process.killProcess(Process.myPid());
                             return;
                         }
-                    } else if (now >= deadline) {
+                    } else if (deadline != 0 && now >= deadline) {
                         stop(captureRunning ? (frames.get() > 0 ? "DURATION_COMPLETE" : "NO_FRAME_BEFORE_TIMEOUT") : "STARTUP_TIMEOUT");
                     } else if (lastControl != 0 && now - lastControl > 5000) {
                         stop("HEARTBEAT_TIMEOUT");

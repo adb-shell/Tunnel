@@ -70,9 +70,10 @@ object TunnelAdbManager {
     }
     fun isMirrorActive(): Boolean = LocalAdbAccess.isMirrorActive()
 
-    fun pair(context: Context, port: String, code: String): TunnelAdbState {
+    fun pair(context: Context, port: String, code: String, connectionPort: Int? = null,
+             progress: (String) -> Unit = {}): TunnelAdbState {
         val currentRunner = currentRunner(context)
-        currentRunner.pair(port, code)
+        currentRunner.pair(port, code, connectionPort, progress)
         val next = updateFromRunner(currentRunner)
         // A failed retry does not erase an existing key's historical pairing hint.
         if (next.paired) setPairedBefore(context, true)

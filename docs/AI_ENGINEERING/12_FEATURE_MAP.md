@@ -1,5 +1,7 @@
 # Tunnel 功能定位与跨层对接地图
 
+2026-10-03 T004配对入口：PC android_adb_menu/可拖动android_adb_pairing_dialog → 独立android_adb_pairing_model → android-control → RemoteAdbPairing。手机ADB页移除，内部suite保留；ADB状态在右上TunnelStatusMonitor；已配对重连需PC显式authorize。下文旧本机UI条目不代表当前导航。
+
 > 2026-10-03 当前增量（T-2026-10-03-001 / V0）：远程ADB已从计划转为源码链；顶栏android_adb_menu→android_mode_model→sessionPeerOption保留命令→AndroidControl→TunnelAdbRuntime→helper；返回视频走encoded.rs/decoder/barrier。侧按钮由InputModel按已提交owner分流。运行能力/限制与入口详见指南。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 复核日期：2026-10-02；Baseline：`CS-BL-2026-10-02-5cee692`；证据：V0。
@@ -42,7 +44,7 @@ flowchart TD
 | 文件管理/传输：active | Flutter FileModel → client/file_trait/io_loop → FileAction/FileResponse → endpoint → `hbb_common::fs::TransferJob` | 读写/覆盖/路径/摘要/压缩/中断、平台权限；没有独立session root sandbox | [03](03_MODULE_DESIGN.md)、[06](06_NETWORK_PROTOCOL.md)；RST-05、NET-06、E2E-04 |
 | 终端：active/platform gated | `terminal_connection_manager.dart` / `terminal_model.dart` → TerminalAction → `connection.rs` → `terminal_service.rs` / PTY | 已有进程内persistent registry与reattach；不是跨进程/重启持久化保证；service_id owner边界需验证 | [03](03_MODULE_DESIGN.md)、[06](06_NETWORK_PROTOCOL.md)；RST-05、NET-04/06 |
 | TCP tunnel / RDP：active/platform gated | Flutter port-forward UI → `src/port_forward.rs` → LoginRequest.PortForward → endpoint outbound TCP | 本地listener绑定、认证与connect执行顺序、目标host/port、凭据日志/关闭 | [06](06_NETWORK_PROTOCOL.md)、[10](10_SECURITY_MODEL.md)；NET-04/06 |
-| Android 本地 ADB：active UI / native asset missing | `adb_page.dart` → `common.dart::AndroidAdbManager` → mChannel → `TunnelAdbManager` → Runner/DNS → `libadb.so` | 本地pair/connect/shell、mDNS、取消/轮询/输出/旧API；PC remote ADB 尚未实现 | [04](04_ANDROID_PIPELINE.md)；AND-06/08 |
+| Android ADB：active native / PC typed UI，runtime未验 | PC `android_adb_pairing_dialog.dart` → `android_adb_pairing_model.dart` → AndroidControl → `RemoteAdbPairing` → `TunnelAdbManager` → Runner/DNS → `libadb.so` | PC pair/authorize/revoke，本机独立连接端口与fresh shell probe；内部shell/helper保留，手机UI已移除，native固定来源由构建供应 | [04](04_ANDROID_PIPELINE.md)；ADBP-01—12 / ADBM |
 | ZEGO 语音：active / external SDK+broker | `Data::NewVoiceCall` → token helper → VoiceCallRequest/Response → `ServerModel` / `ZegoVoiceCallModel` → SDK | invitation、token授权、麦克风同意三域；auto-accept、stale busy、token日志、room/first-audio | [04](04_ANDROID_PIPELINE.md)、[06](06_NETWORK_PROTOCOL.md)、[07](07_API_SYSTEM.md)；AND-07、NET-07、API-08、E2E-05 |
 | Windows capture/input：active/cfg | `video_service.rs` → portable/DXGI/GDI；`input_service.rs` → enigo/SendInput | GPU/fallback、secure desktop/UAC、installed/portable、shared-memory contract | [05](05_WINDOWS_PIPELINE.md)；WIN-01/02 |
 | Windows privacy：active/cfg | peer privacy request → `privacy_mode.rs` → topmost/exclude/Magnifier/virtual display | connection owner、DLL injection、hook、超时、guard与失败返回、显示/输入恢复 | [05](05_WINDOWS_PIPELINE.md)；WIN-03/04/06、E2E-02 |

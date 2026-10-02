@@ -229,12 +229,11 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                     val args = call.arguments as? Map<*, *>
                     val id = (args?.get("connId") as? Number)?.toInt() ?: -1
                     val scopes = (args?.get("scopes") as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet()
-                    val ttl = (args?.get("ttlSeconds") as? Number)?.toInt() ?: 600
                     val service = activeMainService()
                     if (service == null || !service.canGrantAdbConsent(id)) {
                         result.error("ADB_CONNECTION_EXPIRED", "The requested remote connection is no longer authorized", null)
                     } else {
-                        result.success(TunnelAdbRuntime.grantConsent(id, scopes, ttl))
+                        result.success(TunnelAdbRuntime.grantConsent(id, scopes))
                     }
                 }
                 "tunnel_adb_connect" -> {

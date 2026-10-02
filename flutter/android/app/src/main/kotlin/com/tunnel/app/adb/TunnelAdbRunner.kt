@@ -8,9 +8,11 @@ import com.tunnel.app.adb.probe.BoundedProcessRunner
 import com.tunnel.app.adb.probe.LocalAdbIdentityProbe
 import com.tunnel.app.adb.probe.LocalAdbTargetPolicy
 import java.io.File
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.concurrent.atomic.AtomicReference
 
-/** Local-user ADB actions. No ordinary sh, global server kill, hidden grants or settings writes. */
+/** Fixed local ADB operations. No ordinary sh, global server kill, hidden grants or settings writes. */
 class TunnelAdbRunner(context: Context) {
     private val app = context.applicationContext
     private val spec = LocalAdbProcessSpec(app)
@@ -53,10 +55,14 @@ class TunnelAdbRunner(context: Context) {
     }
 
     /** Port, exact local host:port, or 'auto' for _adb-tls-pairing (code still required). */
-    fun pair(port: String, pairingCode: String) = action {
+    fun pair(port: String, pairingCode: String, connectionPort: Int? = null,
+             progress: (String) -> Unit = {}) = action {
         paired = false
+        verified = false
+        selectedSerial = null
         requireReadyBinary()
         if (!Regex("[0-9]{6}").matches(pairingCode)) throw Failure("PAIR_CODE_INVALID")
+        if (connectionPort != null && connectionPort !in 1..65535) throw Failure("CONNECT_PORT_INVALID")
         val endpoints = if (port.isBlank() || port == "auto")
             TunnelAdbDnsDiscover(app).discoverEndpoints(TunnelAdbDnsDiscover.Kind.PAIR, cancelled = ::cancelled)
         else endpointCandidates(port)
@@ -64,21 +70,52 @@ class TunnelAdbRunner(context: Context) {
         pairing = true
         paired = false
         requireSuccess(run(listOf("start-server"), 8_000), "SERVER_START_FAILED")
+        progress("PAIRING")
         val input = (pairingCode + "\n").toByteArray(Charsets.US_ASCII)
+        var pairFailure = "PAIR_FAILED"
         try {
             for (endpoint in endpoints.take(4)) {
                 checkCancelled()
                 if (LocalAdbTargetPolicy.validate(endpoint) == null) continue
                 val result = run(listOf("pair", endpoint), 12_000, input)
-                val text = result.stdout.toString(Charsets.US_ASCII).lowercase()
+                val text = (result.stdout.toString(Charsets.US_ASCII) +
+                    result.stderr.toString(Charsets.US_ASCII)).lowercase()
                 if (result.succeeded && text.contains("successfully paired")) {
                     paired = true
-                    append("配对完成；请自动发现或手动输入独立的连接端口。")
-                    return@action
+                    break
+                }
+                if (text.contains("wrong password") || text.contains("incorrect pairing") ||
+                    text.contains("authentication failed")) throw Failure("PAIR_CODE_REJECTED")
+                pairFailure = when {
+                    result.failure != null -> "PAIR_PROCESS_" + result.failure.name
+                    text.contains("failed to read response") -> "PAIR_RESPONSE_REJECTED"
+                    text.contains("connection refused") || text.contains("failed to connect") -> "PAIR_PORT_UNREACHABLE"
+                    else -> "PAIR_FAILED"
                 }
             }
-            throw Failure("PAIR_FAILED")
+            if (!paired) throw Failure(pairFailure)
         } finally { input.fill(0); pairing = false }
+        // Pairing stores the RSA key; it does not create an adb transport. Never connect
+        // to the pairing port. The independent _adb-tls-connect port is required.
+        progress("CONNECTING")
+        if (connectionPort != null) {
+            for (endpoint in endpointCandidates(connectionPort.toString())) {
+                if (connectEndpoint(endpoint) { progress("VERIFYING") }) return@action
+            }
+            throw Failure("PAIRED_CONNECT_FAILED")
+        }
+        // An already authorized transport may have appeared before the NSD callback.
+        if (verifyExistingDevices { progress("VERIFYING") }) return@action
+        repeat(3) {
+            checkCancelled()
+            val found = TunnelAdbDnsDiscover(app).discoverEndpoints(
+                TunnelAdbDnsDiscover.Kind.CONNECT, remaining(4_000), ::cancelled)
+            for (endpoint in found.take(4)) {
+                if (connectEndpoint(endpoint) { progress("VERIFYING") }) return@action
+            }
+            if (verifyExistingDevices { progress("VERIFYING") }) return@action
+        }
+        throw Failure("PAIRED_CONNECT_REQUIRED")
     }
 
     /** Compatibility entry refuses to impersonate a shell-UID ADB connection. */
@@ -140,11 +177,12 @@ class TunnelAdbRunner(context: Context) {
     private fun run(args: List<String>, timeout: Long = 5_000, input: ByteArray? = null): BoundedProcessResult {
         checkCancelled()
         return BoundedProcessRunner.run(spec.baseCommand() + args, spec.workingDirectory, spec.environment,
-            timeout, 16 * 1024, stdin = input, cancelled = ::cancelled).also { checkCancelled() }
+            remaining(timeout), 16 * 1024, stdin = input, cancelled = ::cancelled).also { checkCancelled() }
     }
     private fun verify(serial: String): Boolean {
         checkCancelled()
-        val result = LocalAdbIdentityProbe(app).probe(serial)
+        val result = LocalAdbIdentityProbe(app).probe(serial, cancelled = ::cancelled,
+            timeoutMillis = remaining(5_000))
         checkCancelled()
         if (!result.shellIdentityVerified) return false
         selectedSerial = result.trustedTarget?.serial
@@ -152,10 +190,33 @@ class TunnelAdbRunner(context: Context) {
         if (verified) append("已核实本机 ADB shell 身份（uid 2000）。")
         return verified
     }
-    private fun connectEndpoint(endpoint: String): Boolean {
+    private fun connectEndpoint(endpoint: String, beforeVerify: () -> Unit = {}): Boolean {
         if (LocalAdbTargetPolicy.validate(endpoint) == null) return false
+        if (!endpointListening(endpoint)) return false
         if (!run(listOf("connect", endpoint), 5_000).succeeded) return false
+        beforeVerify()
         return verify(endpoint)
+    }
+    private fun endpointListening(endpoint: String): Boolean {
+        checkCancelled()
+        if (LocalAdbTargetPolicy.validate(endpoint) == null) return false
+        val host = endpoint.substringBeforeLast(':').removePrefix("[").removeSuffix("]")
+        val port = endpoint.substringAfterLast(':').toIntOrNull() ?: return false
+        return try {
+            Socket().use { it.connect(InetSocketAddress(host, port), remaining(400).toInt()) }
+            checkCancelled()
+            true
+        } catch (_: Exception) { checkCancelled(); false }
+    }
+    private fun verifyExistingDevices(beforeVerify: () -> Unit): Boolean {
+        val devices = run(listOf("devices"))
+        if (!devices.succeeded) return false
+        val candidates = devices.stdout.toString(Charsets.US_ASCII).lineSequence()
+            .map { it.trim().split(Regex("\\s+")) }
+            .filter { it.size >= 2 && it[1] == "device" }
+            .map { it[0] }.filter { LocalAdbTargetPolicy.validate(it) != null }.take(4)
+        for (serial in candidates) { beforeVerify(); if (verify(serial)) return true }
+        return false
     }
     private fun endpointCandidates(input: String): List<String> {
         if (Regex("[1-9][0-9]{0,4}").matches(input) && (input.toIntOrNull() ?: 0) in 1..65535) {
@@ -172,6 +233,10 @@ class TunnelAdbRunner(context: Context) {
         if (!result.succeeded) throw Failure(code)
     }
     private fun cancelled(): Boolean = Thread.currentThread().isInterrupted || SystemClock.elapsedRealtime() >= deadline
+    private fun remaining(limit: Long): Long {
+        checkCancelled()
+        return (deadline - SystemClock.elapsedRealtime()).coerceIn(1, limit)
+    }
     private fun checkCancelled() {
         if (Thread.currentThread().isInterrupted) throw Failure("CANCELLED")
         if (SystemClock.elapsedRealtime() >= deadline) throw Failure("OPERATION_TIMEOUT")

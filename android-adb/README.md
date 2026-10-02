@@ -1,5 +1,7 @@
 # Android 本地 ADB 二进制来源
 
+2026-10-03 T004：专用 Android ADB 页面已移除，PC 可拖动弹窗发送端口/码或复用已配对密钥；APK RemoteAdbPairing 后台 pair→独立connect→fresh shell probe，状态进入右上 Tunnel 检测。内部 runner/probe/helper/有限 shell 保留。`-H localhost` 修复初次 daemon 启动，ADB_MDNS_AUTO_CONNECT=0 配合应用显式本机 NSD/connect，不把配对成功冒充连接成功。当前授权政策与使用见 [指南](../docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md) / ADR-0016；下文分屏/页面退出的原手机 UI 操作描述属于旧阶段。
+
 状态：仅来源核查和供应脚本已完成；本次没有下载/执行二进制，没有运行服务器构建、协议测试或设备验证。标准名称始终为 `libadb.so`，不是 `libad.so`。
 
 官方来源为 [tytydraco/LADB](https://github.com/tytydraco/LADB)，固定提交 `60f48029cf9d8e0bc848ca41a7bd76694d4ab796`。四个 ABI 的路径、大小和 Git blob SHA-1 来自该提交的官方 Git tree，固定在 [ladb-prebuilt.lock.json](ladb-prebuilt.lock.json)。这里复现的是上游预编译文件的获取，不声称从 AOSP/上游构建源码重建出了相同文件。上游 ADB 源码提交、编译器配置、完整传递依赖 SBOM、16 KiB 页设备验证尚未得到证明。

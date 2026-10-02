@@ -4,11 +4,13 @@ import argparse
 import datetime
 import hashlib
 import json
+import mmap
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 import brotli
 
@@ -20,9 +22,9 @@ MAX_FIELD_LENGTH = (1 << 32) - 1
 def contained_file(folder, value):
     supplied = Path(value)
     # Accept both absolute paths and the historical folder-relative CLI spelling.
-    candidate = supplied if supplied.is_absolute() else supplied.resolve()
+    candidate = supplied if supplied.is_absolute() else folder / supplied
     if not candidate.is_file():
-        candidate = folder / supplied
+        candidate = supplied.resolve()
     candidate = candidate.resolve(strict=True)
     candidate.relative_to(folder)
     if not candidate.is_file():
@@ -41,7 +43,8 @@ def write_payload(folder, output_folder, executable, level, required):
     for name in required:
         target = folder / checked_relative(name)
         target.resolve(strict=True).relative_to(folder)
-        if not target.exists() or (target.is_dir() and not any(target.rglob('*'))):
+        if (not target.exists() or (target.is_file() and target.stat().st_size == 0)
+                or (target.is_dir() and not any(p.is_file() and p.stat().st_size > 0 for p in target.rglob('*')))):
             raise ValueError(f'Required payload is missing or empty: {name}')
     entries = sorted(p for p in folder.rglob('*') if p.is_file())
     if not entries:
@@ -81,6 +84,21 @@ def write_payload(folder, output_folder, executable, level, required):
     return output_path
 
 
+def portable_manifest(output_folder):
+    """Remove the extractor's DPI declaration without modifying the app manifest."""
+    source = output_folder.parent.parent / 'res/manifest.xml'
+    ET.register_namespace('', 'urn:schemas-microsoft-com:asm.v1')
+    ET.register_namespace('asmv3', 'urn:schemas-microsoft-com:asm.v3')
+    tree = ET.parse(source)
+    for parent in tree.iter():
+        for child in list(parent):
+            if child.tag.rsplit('}', 1)[-1] in ('dpiAware', 'dpiAwareness'):
+                parent.remove(child)
+    destination = output_folder / 'portable-manifest.xml'
+    tree.write(destination, encoding='utf-8', xml_declaration=True)
+    return destination
+
+
 def build_portable(output_folder, target):
     command = ['cargo', 'build', '--manifest-path', str(output_folder / 'Cargo.toml'),
                '--package', 'tunnel-portable-packer', '--bin', 'tunnel-portable-packer',
@@ -89,8 +107,11 @@ def build_portable(output_folder, target):
         command.extend(['--target', target])
     print('Building tunnel-portable-packer', flush=True)
     artifact = None
+    environment = os.environ.copy()
+    if os.name == 'nt':
+        environment['TUNNEL_PORTABLE_MANIFEST'] = str(portable_manifest(output_folder))
     with subprocess.Popen(command, cwd=output_folder, stdout=subprocess.PIPE,
-                          text=True, encoding='utf-8', errors='replace') as process:
+                          text=True, encoding='utf-8', errors='replace', env=environment) as process:
         for line in process.stdout:
             try:
                 message = json.loads(line)
@@ -112,6 +133,27 @@ def build_portable(output_folder, target):
     if artifact is None or not artifact.is_file():
         raise RuntimeError('Cargo did not report an existing portable executable')
     return artifact
+
+
+def verify_embedded_payload(artifact, payload):
+    """Reject a stale packer or a plain runner even if its size looks plausible."""
+    digest = hashlib.sha256()
+    with payload.open('rb') as stream:
+        needle = stream.read(64)
+        stream.seek(0)
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    size = payload.stat().st_size
+    expected = digest.digest()
+    with artifact.open('rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as image:
+        offset = image.find(needle)
+        while offset >= 0:
+            if offset + size <= len(image):
+                with memoryview(image)[offset:offset + size] as region:
+                    if hashlib.sha256(region).digest() == expected:
+                        return digest.hexdigest()
+            offset = image.find(needle, offset + 1)
+    raise RuntimeError('Portable EXE does not embed the exact current payload; refusing to publish a stale/plain EXE')
 
 
 def main():
@@ -143,6 +185,12 @@ def main():
         with artifact.open('rb') as stream:
             if stream.read(2) != b'MZ':
                 raise RuntimeError('Portable artifact does not have a Windows PE header')
+        payload_hash = verify_embedded_payload(artifact, payload)
+        manifest_path = output_folder / 'payload-manifest.json'
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        manifest['payloadSha256'] = payload_hash
+        manifest['payloadSize'] = payload.stat().st_size
+        manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     if options.dist:
         destination = Path(options.dist).resolve()
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -160,6 +208,6 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+    except (OSError, ValueError, RuntimeError, ET.ParseError, subprocess.SubprocessError) as error:
         print(f'Portable packaging failed: {error}', file=sys.stderr)
         sys.exit(1)

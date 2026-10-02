@@ -99,6 +99,7 @@ class DFm8Y8iMScvB2YDw : Service() {
             override fun onState(connId: Int, json: String) {
                 ClsFx9V0S.adbRuntimeState(connId, json)
             }
+            override fun connectionAuthorized(connId: Int): Boolean = canGrantAdbConsent(connId)
             override fun setAccessibilityPaused(paused: Boolean): Boolean =
                 AccessibilityLifecycle.setPaused(applicationContext, paused)
             override fun disableOwnAccessibility(): Boolean =
@@ -253,9 +254,12 @@ class DFm8Y8iMScvB2YDw : Service() {
             }
             return
         }
-        if (name == "adb_control_disconnect") {
+        if (name == "adb_control_disconnect" || name == "adb_control_revoke") {
             val id = arg1.toIntOrNull() ?: return
-            authorizedAdbClients.remove(id)
+            // Permission/decoder/lease revocation ends scopes and pending work, not
+            // the authenticated connection's identity. A new explicit authorize
+            // still must pass Rust's current encryption/video/keyboard checks.
+            if (name == "adb_control_disconnect") authorizedAdbClients.remove(id)
             TunnelAdbRuntime.onDisconnected(id)
             return
         }

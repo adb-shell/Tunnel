@@ -80,7 +80,7 @@ def stage(jar, manifest):
             if path.is_symlink() or not path.is_file():
                 raise ValueError("Helper stage contains a non-regular file")
         data = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
-        if (data.get("schema") != 1 or data.get("protocol") not in (1, 2)
+        if (data.get("schema") != 1 or data.get("protocol") not in (1, 2, 3)
                 or data.get("implementation") != "tunnel-local-adb-p0"
                 or data.get("entryPoint") != ENTRY_POINT
                 or data.get("sha256") != sha256(directory / "helper.jar")
@@ -211,7 +211,7 @@ def main():
             or any(sha256(path) != resource_hashes[path.relative_to(ROOT).as_posix()] for _, path in resources)):
         raise ValueError("Build input changed during build; output retained but cannot be staged")
     manifest = output / "manifest.json"
-    data = {"schema": 1, "protocol": 2, "sha256": sha256(jar), "size": jar.stat().st_size,
+    data = {"schema": 1, "protocol": 3, "sha256": sha256(jar), "size": jar.stat().st_size,
             "upstreamCommit": UPSTREAM_COMMIT, "entryPoint": ENTRY_POINT,
             "implementation": "tunnel-local-adb-p0", "sourceTreeSha256": tree_digest,
             "sourceFiles": source_hashes, "resourceFiles": resource_hashes, "toolInputs": tools,

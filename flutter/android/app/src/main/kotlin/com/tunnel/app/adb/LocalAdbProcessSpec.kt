@@ -18,7 +18,10 @@ internal class LocalAdbProcessSpec(context: Context) {
         // Do not let the adb daemon auto-connect to arbitrary mDNS peers on the LAN.
         "ADB_MDNS_AUTO_CONNECT" to "0",
     )
-    fun baseCommand(): List<String> = listOf(adbPath, "-H", "127.0.0.1", "-P", "5037")
+    // AOSP adb's tcp_host_is_local() recognizes only empty host / literal "localhost".
+    // -H 127.0.0.1 is considered a remote server and refuses daemon auto-start when
+    // port 5037 is closed. Keep the explicit local alias to permit initial start-server.
+    fun baseCommand(): List<String> = listOf(adbPath, "-H", "localhost", "-P", "5037")
     fun command(target: LocalAdbTarget, args: List<String>): List<String> {
         require(LocalAdbTargetPolicy.validate(target.serial) != null) { "TARGET_NOT_LOCAL" }
         return baseCommand() + listOf("-s", target.serial) + args

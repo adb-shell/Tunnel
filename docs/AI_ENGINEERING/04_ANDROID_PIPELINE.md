@@ -1,5 +1,9 @@
 # Tunnel Android 完整链路 / Android Pipeline
 
+2026-10-03 T005：[ADR-0017](../ADR/0017-adb-session-lifetime.md)将conn scopes改为会话生命周期；生产helper VERSION3/duration0取消一小时限制。断连/撤销/退出ADB/故障清理，暂停采集保留helper/control；Startup/control/写阻塞/操作守卫不变，P0仍有限诊断。
+
+2026-10-03 T004当前ADB：手机专用页面/两诊断与授权card移除，HomePage空列表有ConnectionPage fallback；Runner保持内部shell与helper。localhost修复首次daemon启动；pair成功后发现独立连接端口、connect、fresh nonce UID2000；RemoteAdbPairing异步进度/取消，权限撤销与实际连接身份注销分离。SDK30+；Android11—16/16KiB正式验收仍NOT_RUN。[指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
+
 > 2026-10-03 当前增量（T-2026-10-03-001 / V0）：无障碍服务保留framework ServiceInfo，移除硬编码JNI flags调用；enabled/bound/paused/inputAvailable分别报告。ADB helper用DONT_SUPPRESS独立UiAutomation，截图/节点进入H264；不写全局服务列表、不隐式请求MP。手机测试目标Android16两种ROM；全部修订运行验证未执行。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 最后源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，`T-2026-10-02-001`，V0 静态证据。旧 `77062b4` 为历史文档快照，不能据此推断当前 Git ancestry。
@@ -32,10 +36,10 @@ Android 不是“Flutter 应用加一个 Service”，而是四层共同组成�
 | Accessibility/Input | `nZW99cdXQ0COhB2o.kt` |
 | Bitmap/frame helper | `EqljohYazB0qrhnj.kt` |
 | Android JNI | `libs/scrap/src/android/pkg2230.rs` |
-| ADB/LADB | `flutter/lib/mobile/pages/adb_page.dart`，`flutter/android/app/src/main/kotlin/com/tunnel/app/adb/*.kt` |
+| ADB/LADB | `flutter/lib/desktop/widgets/android_adb_pairing_dialog.dart`；`flutter/android/app/src/main/kotlin/com/tunnel/app/adb/*.kt`；手机专用页面已移除 |
 | ZEGO | `flutter/lib/models/zego_voice_call_model.dart`，`flutter/lib/models/server_model.dart`，`src/client/helper.rs` |
 
-当前 `HomePageState.initPages()` 仅在 `isAndroid && !bind.isOutgoingOnly()` 时装载 `ServerPage` 与 `AdbPage`；底部导航代码被注释，页面由 `PageView` 承载。Remote、file、terminal、camera、settings 等移动页面仍有源码，但不是当前主页的直接导航入口。非 Android / outgoing-only 下 `_pages` 为空而 build 使用 `elementAt(_selectedIndex)`，需要单独验证，不能把 Android 主页结论推广到所有 mobile。
+当前 `HomePageState.initPages()` 在 `isAndroid && !bind.isOutgoingOnly()` 时装载 `ServerPage`；底部导航代码被注释，页面由 `PageView` 承载。手机 AdbPage 已移除。空列表用 `ConnectionPage` fallback，refresh时修正越界索引与PageController；此修改仍须正式UI回归。Remote、file、terminal、camera、settings 等移动页面仍有源码，不能把 Android 主页结论推广到所有 mobile。
 
 ## 2. 总体链路
 

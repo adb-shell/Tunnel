@@ -6,8 +6,11 @@ import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import android.os.Handler
+import android.os.Looper
 import com.tunnel.app.adb.probe.LocalAdbTargetPolicy
 import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.util.ArrayDeque
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -28,6 +31,8 @@ class TunnelAdbDnsDiscover(context: Context) {
         val endpoints = linkedSetOf<String>()
         val queue = ArrayDeque<NsdServiceInfo>()
         val seen = mutableSetOf<String>()
+        val retries = mutableMapOf<String, Int>()
+        val handler = Handler(Looper.getMainLooper())
         var resolving = false
         val multicast = try {
             (app.getSystemService(Context.WIFI_SERVICE) as? WifiManager)
@@ -42,16 +47,36 @@ class TunnelAdbDnsDiscover(context: Context) {
             fun finished() { synchronized(lock) { resolving = false }; resolveNext() }
             try {
                 manager.resolveService(service, object : NsdManager.ResolveListener {
-                    override fun onResolveFailed(info: NsdServiceInfo, error: Int) { finished() }
+                    override fun onResolveFailed(info: NsdServiceInfo, error: Int) {
+                        val retry = synchronized(lock) {
+                            resolving = false
+                            val count = retries[service.serviceName] ?: 0
+                            if (active.get() && error == NsdManager.FAILURE_ALREADY_ACTIVE && count < 3) {
+                                retries[service.serviceName] = count + 1
+                                queue.addLast(service)
+                                true
+                            } else false
+                        }
+                        // Other NSD users may own the platform's resolver on Android 11/12.
+                        // A bounded delayed retry avoids recursion and does not drop the service.
+                        if (retry) handler.postDelayed({ resolveNext() }, 350)
+                        else resolveNext()
+                    }
                     override fun onServiceResolved(info: NsdServiceInfo) {
                         if (active.get()) {
                             val host = info.host?.hostAddress
-                            if (host != null && info.port in 1..65535) {
+                            val local = try { info.host?.let {
+                                it.isLoopbackAddress || NetworkInterface.getByInetAddress(it) != null
+                            } == true } catch (_: Exception) { false }
+                            if (local && host != null && info.port in 1..65535) {
                                 val endpoint = (if (host.contains(':')) "[" + host + "]" else host) + ":" + info.port
-                                if (LocalAdbTargetPolicy.validate(endpoint) != null) {
-                                    synchronized(lock) { endpoints.add(endpoint) }
-                                    wake.countDown()
+                                // Scoped local IPv6 advertisements are not adb -s selectors.
+                                // A port from a verified local interface may use loopback instead.
+                                synchronized(lock) {
+                                    endpoints.add("127.0.0.1:" + info.port)
+                                    if (LocalAdbTargetPolicy.validate(endpoint) != null) endpoints.add(endpoint)
                                 }
+                                wake.countDown()
                             }
                         }
                         finished()
@@ -86,6 +111,7 @@ class TunnelAdbDnsDiscover(context: Context) {
         } catch (_: Exception) { emptyList() }
         finally {
             active.set(false)
+            handler.removeCallbacksAndMessages(null)
             synchronized(lock) { queue.clear() }
             try { manager.stopServiceDiscovery(listener) } catch (_: Exception) {}
             try { multicast?.release() } catch (_: Exception) {}

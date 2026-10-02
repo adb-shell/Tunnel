@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_hbb/mobile/pages/adb_page.dart';
 import 'package:flutter_hbb/mobile/pages/server_page.dart';
 import 'package:flutter_hbb/mobile/pages/settings_page.dart';
 import 'package:flutter_hbb/web/settings_page.dart';
@@ -69,9 +68,17 @@ class HomePageState extends State<HomePage> {
     // }
     if (isAndroid && !bind.isOutgoingOnly()) {
       _pages.add(ServerPage());
-      _pages.add(const AdbPage());
       // _chatPageTabIndex = _pages.length;
       //_pages.addAll([ChatPage(type: ChatPageType.mobileMain), ServerPage()]);
+    }
+    if (_pages.isEmpty) {
+      _pages.add(ConnectionPage(appBarActions: []));
+    }
+    if (_selectedIndex < 0 || _selectedIndex >= _pages.length) {
+      _selectedIndex = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pageController.hasClients) _pageController.jumpToPage(0);
+      });
     }
   //  _pages.add(SettingsPage());
   }

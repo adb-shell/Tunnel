@@ -1,5 +1,33 @@
 # Tunnel Task History
 
+## T-2026-10-03-005：ADB授权与生产投屏随会话持续
+
+- Authority：当前用户明确要求授权连接后保持，直到断连/手动撤销/切普通投屏；C2源码/文档，非Git/构建/测试执行授权。
+- Source：test/3c22a25 + T003/T004工作树保留；Baseline TUN-BL-2026-10-03-ADB。
+- Delta：移除600s scopes期限、PC授权timer，状态改consentActive/consentLifetime；stop/结束/失败清grant，重放不恢复；生产helper duration0，无一小时期限，protocol/HMAC/manifest/Gradle3，旧helper拒绝；关共享保留helper，P0有限诊断不变。
+- Verification：V0静态源码/词法/引用/版本/Python AST/文档/diff；新增协议边界测试源码NOT_RUN。正式服务器同批PC/APK/helper，健康超过10/30分钟及1小时、暂停/恢复、退出/撤销/断线/故障/旧operationId验ADBP-08/09/10。
+- Handoff/T6：docs/plans/ADB_SESSION_LIFETIME_TASK.md；ADR-0017/D-019；CE-20261003-T005-01；STATE-20261003-005 / WORK-20261003-009。Git/build/device/sign/release none。
+
+## T-2026-10-03-004：远程ADB配对与界面迁移
+
+- Request/authority：项目用户明确五项修改及PC输入无线调试码/端口立即发APK；C2代码/政策/文档，明确三项Android UI移除。无Git写入、构建/测试/codegen、依赖安装/二进制执行、设备、签名/发布。
+- Source：test/3c22a25f0151f0dea408c0c03c6e818cdf31fe98 + 保留T003 Windows未提交变更；Baseline TUN-BL-2026-10-03-ADB。
+- Delta：PC独立pairing model/dialog，typed pair/authorize/revoke/cancel，Root端权限/secret-safe errors/异步worker/scopes，localhost daemon启动与独立connect+nonce UID2000；取消确认、lategrant防护、权限恢复、home fallback；右上状态/授权倒计时。
+- Removed：flutter/lib/mobile/pages/adb_page.dart、mobile/widgets/adb_mirror_probe_card.dart、adb_remote_consent_card.dart；Dart引用0；native suite/prototype/helper保留，恢复点为HEAD。
+- Evidence：九个关键Dart/Kotlin/Rust文件词法闭合、引用/文档链接/diff V0与专项交叉review；不等于编译通过。新Rust负例测试源码NOT_RUN；Android11—16及16KiB device runtime NOT_RUN。
+- Decision：D-018 / ADR-0016限定替代phone-local consent。Formal handoff/T6；文档ADB_REMOTE_PAIRING_TASK/IMPLEMENTATION_GUIDE，ADBP-01—12服务器配套构建测试。
+- 《编译验证需求》：Android Linux源码根 ./build.sh 1（或2），Windows x64源码根 new-build.cmd；同批PC/APK/helper，按ADBP/ADBM验收，记录ROM/ABI/页大小与产物hash，不回传配对码/key。
+- Git/release：none。Event CE-20261003-T004-01；STATE-20261003-004 / WORK-20261003-007；回滚须UI/parser/授权政策一起恢复，不覆盖T003。
+
+## T-2026-10-03-003：Windows 构建链修复
+
+- 请求：用户报告产物整理/驱动下载/自解压失败，要求对照build.cmd与RustDesk官方流程完善源码。用户未提供本次Windows服务器错误日志；断点以源码审查记录。
+- Source：test/3c22a25f0151f0dea408c0c03c6e818cdf31fe98，起点干净；保留T002 Android helper编译修复。Baseline：TUN-BL-2026-10-03-WINDOWS-BUILD。
+- Delta：统一CMD→PS流程、.info默认值/日志/新staging/OS文件锁；Cargo实际DLL路径与CMake；官方driver供应锁/有限下载/安全解压/receipt/缺失WindowInjection源码构建；独立manifest与packer真实artifact+payload完整核验。
+- Evidence：V0源码、Python AST/JSON/PowerShell语法/diff；tests/windows_build_contract_test.py新增但未执行。完整构建/asset下载/解压运行/驱动及V1—V3仍NOT_RUN。
+- 状态：源码交付/服务器验证handoff；执行new-build.cmd，已有Release可-PackageOnly。Guide：docs/plans/WINDOWS_BUILD_GUIDE.md；Event：CE-20261003-T003-01；State：STATE-20261003-003。
+- 权限：本轮只代码/构建配方/文档/V0，没有Git写入、构建/测试、二进制获取、设备、签名、安装或发布。ADR评估无新增产品决定。
+
 ## T-2026-10-03-002：ADB helper Lambda 编译入口修复
 
 - 请求及授权：用户提供服务器 `javac` 日志，明确要求修复后提交GitHub，提交说明“修复编译脚本”；目标沿用当前 `origin/test`。本侧会话独立执行，不续做主线程ADB功能。

@@ -1,5 +1,9 @@
 # Tunnel 网络与协议 / Network Protocol
 
+2026-10-03 T005：外部AndroidControl JSON v1保持；状态consentActive/consentLifetime=session替代倒计时。端内helper wire升级VERSION3、HMAC域与manifest同步，production duration0；断线/退出/撤权撤销scopes。见 [ADR-0017](../ADR/0017-adb-session-lifetime.md)。
+
+2026-10-03 T004：AndroidControl JSON v1新增严格pair(port/code/optionalconnectPort)、authorize(optionalconnectPort)、pair_cancel(pairOperationId)、revoke({})；只有secured/authenticated keyboard+video permission可执行。配对无video lease/epoch，kind=pairing回包不触发视频回滚，operationId/error脱敏关联。断线/撤权cancel及撤销scopes，恢复权限须新显式请求。
+
 > 2026-10-03 当前增量（T-2026-10-03-001 / V0）：protobuf新增AndroidControl(JSON v1)、AndroidVideoMetadata与AndroidVideoBarrier；只经现有加密已认证remote会话。Rust保留名android-control复用sessionPeerOption且不持久化。generation/epoch/revision/sequence、单owner/订阅、心跳和同序呈现barrier防跨源输入；不向peer开放shell。PC/APK须配套重建。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 原始接管基线：2026-07-12（historical）

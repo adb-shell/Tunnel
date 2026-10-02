@@ -75,6 +75,10 @@ retrospective -> 只有 decision owner 重新批准才可 accepted
 
 ## 6. Responsibility Boundaries
 
+最新远程配对政策：[ADR-0016](0016-pc-owned-adb-pairing-and-session-consent.md)，accepted / D-018；PC typed pair/authorize 与当前连接 scopes；原10分钟期限已被 ADR-0017 替代，替代旧 phone-only 配对/授权入口；source/V0，runtime NOT_RUN。
+
+最新生命周期：[ADR-0017](0017-adb-session-lifetime.md)，accepted / D-019；授权和生产投屏无固定期限，断连/撤销/退出ADB结束；helper protocol3配套重建，故障守卫保持；source/V0，runtime NOT_RUN。
+
 最新身份决定：[ADR-0015：Tunnel 产品身份迁移](0015-tunnel-product-identity-migration.md)，accepted / D-016；source implemented / V0，runtime NOT_RUN。
 
 | Record | 职责 |
@@ -86,4 +90,3 @@ retrospective -> 只有 decision owner 重新批准才可 accepted
 | `TEST_MATRIX.md` | 验证覆盖、证据和 release gate |
 | Source | 当前实现真相 |
 | Roadmap | proposed 未来方向，不是 accepted decision |
-

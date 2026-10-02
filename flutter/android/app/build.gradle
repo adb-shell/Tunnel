@@ -180,7 +180,7 @@ tasks.register('verifyTunnelAdbHelper') {
         }
         def data = new groovy.json.JsonSlurper().parse(manifest)
         def digest = { File value -> java.security.MessageDigest.getInstance('SHA-256').digest(value.bytes).encodeHex().toString() }
-        if (data.schema != 1 || data.protocol != 2 || data.entryPoint != 'com.tunnel.adbhelper.Server' ||
+        if (data.schema != 1 || data.protocol != 3 || data.entryPoint != 'com.tunnel.adbhelper.Server' ||
             data.implementation != 'tunnel-local-adb-p0' || data.size != jar.length() || data.sha256 != digest(jar) ||
             data.build?.androidCompileApi != 34 || data.build?.minApi != 30) {
             throw new GradleException('ADB helper manifest, protocol or artifact hash mismatch')

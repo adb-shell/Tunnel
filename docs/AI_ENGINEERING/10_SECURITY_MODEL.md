@@ -1,5 +1,7 @@
 # Tunnel 安全模型 / Security Model
 
+2026-10-03 T004授权政策变化见[ADR-0016](../ADR/0016-pc-owned-adb-pairing-and-session-consent.md)：PC短暂输入配对码，当前已认证加密且有输入/视频权限的控制角色可显式pair/authorize，fresh本机probe后当前会话scopes；T005/ADR-0017取消600秒和生产helper一小时期限，断连/撤销/退出ADB/故障清理，保留心跳/超时守卫。已替代旧phone-local consent，不宣称endpoint可证明UI点击；不从pairedBefore自动grant，不开放remote shell。secret不入argv/log/prefs/通用replay signature；取消/断线/撤权阻止lategrant。
+
 > 2026-10-03 当前增量（T-2026-10-03-001 / V0）：本次新ADB入口要求secured/authenticated normal session、键盘权限/视频订阅、单owner、本机scope+TTL与撤销；helper限定本机uid2000、认证IPC、固定操作和owned资源清理。远程文本shell禁入，截图/节点不突破secure，A11y重新开启走本机settings；既有SEC项不因本次新增控制自动关闭。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 接管基线：2026-07-12  

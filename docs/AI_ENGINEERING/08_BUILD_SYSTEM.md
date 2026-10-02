@@ -1,5 +1,9 @@
 # Tunnel 构建系统 / Build System
 
+2026-10-03 T005：helper wire/manifest/Gradle检查统一protocol3，production Bootstrap duration0。build_helper安全替换已校验protocol1/2旧资产；运行时严格按AdbWire.VERSION拒绝旧helper。须正式PC/APK/helper同批重编，无本地构建证据。
+
+2026-10-03 T-2026-10-03-003：Windows三个CMD统一至new-build.cmd→scripts/windows-build.ps1；完整Release新staging、官方driver供应锁/receipt、Cargo DLL/packer实际artifact、CMake传入DLL、独立DPI manifest与EXE完整payload核验。服务器执行/输出/限制见 [Windows构建指南](../plans/WINDOWS_BUILD_GUIDE.md)。仅V0，正式编译/下载/解压与驱动NOT_RUN；替代下文旧“只预备cache/外部Driver.ps1”的入口判断。
+
 > 2026-10-03 当前增量（T-2026-10-03-001 / V0）：正式构建不在本机。build.sh准备固定LADB预编译件与protocol2 helper；Gradle preBuild检查ABI/blob/SHA receipt及helper源树/产物hash，P0诊断flag仍默认false且不影响正常remote helper打包。Windows portable按Cargo真实产物路径复制并检查驱动。原“native来源完全缺失”“无helper构建hook”描述仅属于此前快照。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 接管基线：2026-07-12  

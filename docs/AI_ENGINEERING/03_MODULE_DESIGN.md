@@ -1,5 +1,7 @@
 # Tunnel 模块设计 / Module Design
 
+2026-10-03 T004当前ADB：RemoteAdbPairing单后台worker与独立pairing状态；PC主动请求、端fresh probe后当前conn会话scopes（T005/ADR-0017无固定期限；helper protocol3 duration=0；断连/撤销/退出ADB清理）；旧手机页移除。本机consent旧设计由[ADR-0016](../ADR/0016-pc-owned-adb-pairing-and-session-consent.md)限定替代；视频epoch/帧事务保留。
+
 > 2026-10-03 当前增量（T-2026-10-03-001 / V0）：本地ADB Runner改为有限子进程与共享transport lease；Runtime持本机consent与唯一input/source所有权；Server endpoint再次验证加密、授权、键盘权限、订阅及owner；Dart状态按FFI窗口隔离。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 原始基线：2026-07-12，`HEAD 77062b4`（historical）

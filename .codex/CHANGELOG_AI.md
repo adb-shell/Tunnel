@@ -1,5 +1,26 @@
 # Tunnel AI Changelog
 
+## T-2026-10-03-005：ADB会话持续授权
+
+- 按当前用户指令取消600秒授权与生产helper一小时硬期限；conn scopes/status consentActive随连接持续，断连/撤销/退出ADB/故障清理。关共享只暂停采集。
+- Helper protocol3/duration0，HMAC/manifest/Gradle同步；旧helper拒绝，P0有限诊断和故障守卫保持；PC移除倒计时并更新提示/面板。
+- ADR-0017 / D-019限定替代ADR-0016期限；保留系统pair key及T003/T004源码补丁。
+- V0源码/词法/版本/Python AST/引用/文档/diff；协议测试源码NOT_RUN，正式构建/设备/Git/发布未执行。STATE-20261003-005 / WORK-20261003-009；CE-20261003-T005-01；T6 handoff。
+
+## T-2026-10-03-004：PC远程无线ADB配对与手机界面移除
+
+- Source/V0交付：手机AdbPage与两card移除，内部native/helper/shell保留；PC draggable配对/连接/撤销，独立pairing状态不改video事务，状态入右上TunnelStatusMonitor。
+- Root causes：-H 127.0.0.1不启动本机daemon；pair返回但未connect；localhost+独立连接发现/freshprobe修复。cancel/断线阻止lategrant，取消等待worker确认；临时撤权与身份注销分离，home空列表fallback。
+- Policy：ADR-0016 / D-018，已授权secure controller显式pair/authorize→当前conn600s scopes；不是旧phone-local consent，不从历史paired自动grant。
+- Verification：源码词法/引用/协议/秘密与交叉review/diff V0；新增Rust测试源码NOT_RUN；build/device/Android11—16/16KiB/Git/sign/release均未执行。保留T003 dirty patch。
+- Guide：docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md；Task：ADB_REMOTE_PAIRING_TASK.md；Event CE-20261003-T004-01；STATE-20261003-004 / WORK-20261003-007。
+
+## T-2026-10-03-003：Windows 构建/驱动/自解压修复
+
+- Source/V0交付：统一三个CMD入口与仓内PS流程，修复DLL真实路径/Release复制、官方driver准备、缺失注入DLL源码构建、独立manifest和精确payload核验；日志/来源/输出manifest保留。
+- Guide：docs/plans/WINDOWS_BUILD_GUIDE.md；Task：WINDOWS_BUILD_REPAIR_TASK；Baseline：TUN-BL-2026-10-03-WINDOWS-BUILD；Event：CE-20261003-T003-01。
+- 未运行：合同测试、正式Windows编译/下载/解压/驱动、Git/签名/发布。T001 ADB设备验证仍待执行，T002 helper修复未改。
+
 ## T-2026-10-03-001：ADB全链源码交付与验证交接
 
 - Result：受控remote视频/输入/模式/本机consent与PC顶栏源码接入；A11y授权返回/绑定处理、libadb供应缺口、portable打包链修复。

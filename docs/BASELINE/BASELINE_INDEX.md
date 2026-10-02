@@ -1,5 +1,7 @@
 # Tunnel Engineering Baseline Index
 
+2026-10-03 Windows构建修复：[TUN-BL-2026-10-03-WINDOWS-BUILD](2026-10-03_WINDOWS_BUILD_BASELINE.md)，Source 3c22a25 + T003工作树；入口、资产与验证见 [Windows指南](../plans/WINDOWS_BUILD_GUIDE.md)。
+
 当前ADB源码增量基线：[TUN-BL-2026-10-03-ADB](2026-10-03_ADB_IMPLEMENTATION_BASELINE.md)，HEAD bc50fe5 + T001未提交补丁；仅V0，正式构建与设备验收NOT_RUN。旧基线保留为历史快照。
 
 ## 当前与历史 Baseline

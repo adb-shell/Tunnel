@@ -1,12 +1,18 @@
 # Tunnel Project Start Here
 
-最后更新：2026-10-02
+2026-10-03 T005：ADB授权改为当前会话持续有效，取消10分钟授权和生产helper一小时停止；断连/撤销/退出ADB结束，关共享保留helper。helper protocol3、PC/APK配套重建；源码/V0，服务器/设备待验。见 [ADR-0017](docs/ADR/0017-adb-session-lifetime.md) 与 [当前指南](docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
+
+最后更新：2026-10-03
+
+T004 当前入口：PC 顶栏远程配对/连接授权与右上状态；手机 ADB 页面移除、内部 native suite 保留。使用见 [ADB指南](docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)，政策见 [ADR-0016](docs/ADR/0016-pc-owned-adb-pairing-and-session-consent.md)；后文旧本机 UI/consent 叙述以此增量为准，运行未验证。
 适用对象：所有 AI、sub-agent、人工开发者、审查者和发布负责人  
 定位：进入 Tunnel 仓库后的唯一第一入口
 
 > 本文件只负责启动、分流和权限提醒，不复制完整架构。当前源码始终是实现真相；AI 的强制行为规则以 `.codex/AI_RULES.md` 为准。
 
 ## 1. 五分钟启动顺序
+
+2026-10-03 当前增量：ADB全链源码与设备验证入口见 [ADB指南](docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)；Windows产物/官方driver供应/自解压修复见 [Windows指南](docs/plans/WINDOWS_BUILD_GUIDE.md)。三个CMD入口统一，正式环境验证待执行；下列旧P0-only描述属于2026-10-02阶段。
 
 2026-10-02 已完成 Tunnel / tunnel / 隧道的源码身份迁移，Android 包为 `com.tunnel.app`。见 [当前身份与编译验证需求](docs/BASELINE/2026-10-02_TUNNEL_IDENTITY_BASELINE.md)。历史文档专有名称已按用户要求规范化，不能据此推断旧日期的原始品牌；原文以 Git 对象为准。ADB P0 源码保留、默认关闭且尚未运行。
 

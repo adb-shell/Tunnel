@@ -1,5 +1,9 @@
 # Tunnel 调试与验证体系 / Debug System
 
+2026-10-03 T004《编译验证需求》：Linux正式源码根 ./build.sh 1（或2）、Windows x64正式源码根 new-build.cmd；PC/APK/helper同批重建。按 TEST_MATRIX ADBP-01—12/ADBM 验首次daemon、配对/独立connect、错误码、取消确认、lategrant、撤权恢复、授权健康运行超过10/30分钟及1小时、退出ADB撤销、MP/侧按钮/A11y；T005 helper protocol3与APK/PC同批重编。记录Android11—16与OnePlus/iQOO16的ROM/ABI/页大小、产物hash；16KiB native未证明。当前只有源码词法/引用/协议/交叉review/diff V0，Rust新增测试源码未执行。[指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
+
+2026-10-03 T003 Windows《编译验证需求》：正式x64服务器完整源码根运行new-build.cmd，已有完整Release可-PackageOnly；查看PC-Bulid/logs与EXE.payload/build/sha256记录，按WIN05/07/08验真实解压与驱动。合同测试源码tests/windows_build_contract_test.py尚未执行。完整环境、命令与oracle见 [Windows指南](../plans/WINDOWS_BUILD_GUIDE.md)；本轮只有V0。
+
 > 2026-10-03 当前增量（T-2026-10-03-001 / V0）：本轮只做V0。新增《编译验证需求》见指南第6节：服务器build.sh/new-build.cmd、OnePlus ACE6T与iQOO Neo9 Android16、ADBM01—30、无障碍返回/重绑、换源/旋转、断线/撤销/回滚、自解压载荷与驱动。不得把代码存在或语法静态检查记为设备PASS。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 接管基线：2026-07-12  

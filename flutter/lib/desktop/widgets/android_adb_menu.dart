@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../common.dart';
 import '../../models/model.dart';
+import 'android_adb_pairing_dialog.dart';
 
 class AndroidAdbMenu extends StatelessWidget {
   const AndroidAdbMenu({Key? key, required this.ffi}) : super(key: key);
@@ -7,39 +9,60 @@ class AndroidAdbMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: Listenable.merge([ffi.ffiModel, ffi.androidModeModel]),
+    animation: Listenable.merge([ffi.ffiModel, ffi.androidModeModel,
+      ffi.androidModeModel.pairing]),
     builder: (context, _) {
       if (!ffi.ffiModel.isPeerAndroid) return const SizedBox.shrink();
       final m = ffi.androidModeModel;
       m.ensureStatus();
-      return PopupMenuButton<String>(
-        tooltip: '远程 ADB · ${m.phase}${m.reason.isEmpty ? '' : '\n${m.reason}'}',
-        icon: Icon(Icons.usb, color: m.usingAdb ? Colors.green : null),
-        onOpened: () => m.request('status'),
-        onSelected: (op) => m.request(op),
-        itemBuilder: (_) => [
-          PopupMenuItem<String>(enabled: false, child: Text('ADB：${m.phase}')),
-          if (m.state['capturePaused'] == true) const PopupMenuItem<String>(enabled: false,
-            child: Text('ADB 共享已暂停，可用侧按钮开共享恢复')),
-          PopupMenuItem<String>(enabled: false, child: Text(
-            '本机 ADB：${m.state['localAdbReady'] == true ? '已验证' : '请在手机连接'} · ${m.state['actualFrameSource'] ?? 'NONE'}')),
-          if (m.reason.isNotEmpty) PopupMenuItem<String>(enabled: false,
-            child: SizedBox(width: 300, child: Text(m.reason))),
-          const PopupMenuItem(value: 'status', child: Text('刷新手机 ADB 能力')),
-          PopupMenuItem(value: 'start', enabled: !m.busy && !m.usingAdb && m.state['localAdbReady'] == true,
-            child: const Text('请求 ADB 投屏（手机本地同意）')),
-          PopupMenuItem(value: 'stop', enabled: m.usingAdb || m.inputFrozen,
-            child: const Text('退出 ADB 并恢复普通共享')),
-          const PopupMenuDivider(),
-          for (final item in const {
-            'accessibility_pause': '暂停无障碍运行',
-            'accessibility_resume': '恢复无障碍运行',
-            'accessibility_disable': '关闭本应用无障碍权限',
-            'accessibility_enable': '打开手机无障碍设置',
-          }.entries)
-            PopupMenuItem(value: item.key, enabled: m.usingAdb && !m.busy && !m.inputFrozen,
-              child: Text(item.value)),
-        ],
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+        child: PopupMenuButton<String>(
+          tooltip: '远程 ADB',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 240),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+          onOpened: () => m.request('status'),
+          onSelected: (op) {
+            if (op == 'pair_dialog') {
+              showAndroidAdbPairingDialog(ffi);
+            } else if (op == 'revoke') {
+              m.pairing.revoke();
+            } else {
+              m.request(op);
+            }
+          },
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'pair_dialog', enabled: !m.usingAdb && !m.busy && !m.inputFrozen,
+              child: const Text('远程 ADB 配对 / 连接授权')),
+            const PopupMenuItem(value: 'status', child: Text('刷新 ADB 能力')),
+            const PopupMenuDivider(),
+            PopupMenuItem(value: 'start', enabled: !m.busy && !m.pairing.busy &&
+                !m.usingAdb && !m.inputFrozen && m.state['localAdbReady'] == true &&
+                m.consentActive == true,
+              child: const Text('开始 ADB 投屏')),
+            PopupMenuItem(value: 'stop', enabled: m.usingAdb || m.inputFrozen,
+              child: const Text('退出 ADB 并恢复普通共享')),
+            const PopupMenuItem(value: 'revoke', child: Text('撤销本连接 ADB 授权')),
+            const PopupMenuDivider(),
+            for (final item in const {
+              'accessibility_pause': '暂停无障碍运行',
+              'accessibility_resume': '恢复无障碍运行',
+              'accessibility_disable': '关闭本应用无障碍权限',
+              'accessibility_enable': '打开手机无障碍设置',
+            }.entries)
+              PopupMenuItem(value: item.key, enabled: m.usingAdb && !m.busy && !m.inputFrozen,
+                child: Text(item.value)),
+          ],
+          child: Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+              color: m.usingAdb ? MyTheme.button : Colors.grey[800],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.developer_mode_rounded, color: Colors.white, size: 22),
+          ),
+        ),
       );
     },
   );

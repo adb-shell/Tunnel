@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "observed": "2026-10-03",
+  "usbmmidd": {
+    "name": "usbmmidd_v2.zip",
+    "url": "https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip",
+    "asset_id": 180784412,
+    "size": 199309,
+    "sha256": null,
+    "note": "Legacy release supplies no digest. Record acquired SHA256; optional owner pin TUNNEL_USBMMIDD_SHA256."
+  },
+  "printer": {
+    "name": "rustdesk_printer_driver_v4-1.4.zip",
+    "url": "https://github.com/rustdesk/hbb_common/releases/download/driver/rustdesk_printer_driver_v4-1.4.zip",
+    "asset_id": 276730335,
+    "size": 34789,
+    "sha256": "c4cf4d3b48c4d9079b243edc43bb1db03b076282bc259c9f49883e9db20fa8b5"
+  },
+  "adapter": {
+    "name": "printer_driver_adapter.zip",
+    "url": "https://github.com/rustdesk/hbb_common/releases/download/driver/printer_driver_adapter.zip",
+    "asset_id": 328545268,
+    "size": 534603,
+    "sha256": "e90e5d52c8807b4c6293c78a52479338715e0bf396b1b34802777b8c452e6781"
+  },
+  "checksums": {
+    "name": "sha256sums",
+    "url": "https://github.com/rustdesk/hbb_common/releases/download/driver/sha256sums",
+    "asset_id": 328545290,
+    "size": 291,
+    "sha256": "43e69883ce0e4db610b0eb4f0b3acd8397c8e2884bc53c7a2468fff03a88df6e"
+  },
+  "injection_source": {
+    "commit": "53b548a5398624f7149a382000397993542ad796",
+    "name": "RustDeskTempTopMostWindow-53b548a.zip",
+    "url": "https://codeload.github.com/rustdesk-org/RustDeskTempTopMostWindow/zip/53b548a5398624f7149a382000397993542ad796",
+    "sha256": null
+  }
+}

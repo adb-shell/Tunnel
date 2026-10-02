@@ -9,6 +9,8 @@ import shutil
 import hashlib
 import argparse
 import sys
+import json
+import subprocess
 from pathlib import Path
 
 windows = platform.platform().startswith('Windows')
@@ -440,35 +442,106 @@ def build_flutter_arch_manjaro(version, features):
     system2('HBB=`pwd`/.. FLUTTER=1 makepkg -f')
 
 
+def windows_library(root, package, features=None):
+    """Get the DLL emitted by this Cargo invocation, including custom target dirs."""
+    command = ['cargo', 'build', '--manifest-path', str(root / 'Cargo.toml'),
+               '--package', package, '--lib', '--release',
+               '--message-format=json-render-diagnostics', '--color', 'never']
+    if features:
+        command += ['--features', features]
+    artifact = None
+    with subprocess.Popen(command, cwd=root, stdout=subprocess.PIPE, text=True,
+                          encoding='utf-8', errors='replace') as process:
+        for line in process.stdout:
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                print(line, end='', flush=True)
+                continue
+            if message.get('reason') == 'compiler-message':
+                print(message.get('message', {}).get('rendered', ''), end='', file=sys.stderr, flush=True)
+            if (message.get('reason') == 'compiler-artifact'
+                    and message.get('target', {}).get('name') == package):
+                for filename in message.get('filenames', []):
+                    if Path(filename).name.lower() == package + '.dll':
+                        artifact = Path(filename).resolve()
+        code = process.wait()
+    if code != 0 or artifact is None or not artifact.is_file():
+        raise RuntimeError(f'{package} build failed or produced no DLL (exit {code})')
+    return artifact
+
+
+def cached_windows_library(root, name):
+    metadata = json.loads(subprocess.check_output(
+        ['cargo', 'metadata', '--manifest-path', str(root / 'Cargo.toml'),
+         '--no-deps', '--format-version', '1'], cwd=root, encoding='utf-8'))
+    target = Path(metadata['target_directory'])
+    triple = os.environ.get('CARGO_BUILD_TARGET')
+    if triple:
+        target /= triple
+    for candidate in (target / 'release' / (name + '.dll'), target / 'release/deps' / (name + '.dll')):
+        if candidate.is_file():
+            return candidate.resolve()
+    raise RuntimeError(f'--skip-cargo requested but {name}.dll is missing in {target}')
+
+
+def windows_release(root):
+    override = os.environ.get('TUNNEL_WINDOWS_RELEASE_DIR')
+    candidates = [Path(override).resolve()] if override else [
+        root / 'flutter/build/windows/x64/runner/Release',
+        root / 'flutter/build/windows/runner/Release']
+    available = [p for p in candidates if (p / 'tunnel.exe').is_file()]
+    if len(available) != 1:
+        raise RuntimeError('Expected one Flutter Windows Release; set TUNNEL_WINDOWS_RELEASE_DIR if layouts coexist')
+    return available[0]
+
+
 def build_flutter_windows(version, features, skip_portable_pack):
-    if not skip_cargo:
-        system2(f'cargo build --features {features} --lib --release')
-        if not os.path.exists("target/release/tunnel.dll"):
-            print("cargo build failed, please check rust source code.")
-            exit(-1)
-    os.chdir('flutter')
-    system2('flutter build windows --release')
-    os.chdir('..')
-    shutil.copy2('target/release/deps/dylib_virtual_display.dll',
-                 flutter_build_dir_2)
+    root = Path.cwd().resolve()
+    if os.environ.get('CARGO_TARGET_DIR'):
+        os.environ['CARGO_TARGET_DIR'] = str((root / os.environ['CARGO_TARGET_DIR']).resolve())
+    if os.environ.get('CARGO_BUILD_TARGET') not in (None, '', 'x86_64-pc-windows-msvc'):
+        raise RuntimeError('This Flutter Windows entry requires the x64 MSVC target')
+    if skip_cargo:
+        native = cached_windows_library(root, 'tunnel')
+        display = cached_windows_library(root, 'dylib_virtual_display')
+    else:
+        display = windows_library(root, 'dylib_virtual_display')
+        native = windows_library(root, 'tunnel', features)
+    # CMake receives the exact Cargo DLL, rather than a fixed target/release path.
+    os.environ['TUNNEL_RUST_LIBRARY'] = str(native)
+    os.chdir(root / 'flutter')
+    try:
+        system2('flutter build windows --release' + (' --no-pub' if os.environ.get('TUNNEL_BUILD_OFFLINE') == '1' else ''))
+    finally:
+        os.chdir(root)
+    release = windows_release(root)
+    if native != (release / 'tunnel.dll').resolve():
+        shutil.copy2(native, release / 'tunnel.dll')
+    if display != (release / 'dylib_virtual_display.dll').resolve():
+        shutil.copy2(display, release / 'dylib_virtual_display.dll')
     if skip_portable_pack:
         return
-    os.chdir('libs/portable')
-    system2('pip3 install -r requirements.txt')
-    system2(
-        f'python3 ./generate.py -f ../../{flutter_build_dir_2} -o . -e ../../{flutter_build_dir_2}/tunnel.exe')
-    os.chdir('../..')
-    if os.path.exists('./tunnel_portable.exe'):
-        os.replace('./target/release/tunnel-portable-packer.exe',
-                   './tunnel_portable.exe')
-    else:
-        os.rename('./target/release/tunnel-portable-packer.exe',
-                  './tunnel_portable.exe')
-    print(
-        f'output location: {os.path.abspath(os.curdir)}/tunnel_portable.exe')
-    os.rename('./tunnel_portable.exe', f'./tunnel-{version}-install.exe')
-    print(
-        f'output location: {os.path.abspath(os.curdir)}/tunnel-{version}-install.exe')
+    portable = root / 'libs/portable'
+    cache = Path(os.environ.get('TUNNEL_WINDOWS_ASSET_CACHE', str(
+        Path(os.environ.get('DEVENV', r'C:\DevEnv')) / 'downloads/rustdesk-drivers')))
+    asset_command = [sys.executable, str(root / 'scripts/windows_assets.py'), '--stage', str(release),
+                     '--cache', str(cache), '--root', str(root)]
+    if os.environ.get('TUNNEL_WINDOW_INJECTION_DLL'):
+        asset_command += ['--injection-dll', os.environ['TUNNEL_WINDOW_INJECTION_DLL']]
+    pip_command = [sys.executable, '-m', 'pip', 'install', '-r', str(portable / 'requirements.txt')]
+    if os.environ.get('TUNNEL_BUILD_OFFLINE') == '1':
+        asset_command += ['--offline']
+        pip_command += ['--no-index']
+    subprocess.run(asset_command, check=True)
+    subprocess.run(pip_command, check=True)
+    pack_command = [sys.executable, str(portable / 'generate.py'), '-f', str(release), '-o', str(portable),
+                    '-e', str(release / 'tunnel.exe'), '--dist', str(root / f'tunnel-{version}-install.exe')]
+    for required in ('tunnel.dll', 'flutter_windows.dll', 'data/app.so', 'dylib_virtual_display.dll',
+                     'WindowInjection.dll', 'usbmmidd_v2/usbmmIdd.inf',
+                     'drivers/RustDeskPrinterDriver/RustDeskPrinterDriver.inf', 'printer_driver_adapter.dll', 'windows-assets.json'):
+        pack_command += ['--require', required]
+    subprocess.run(pack_command, check=True)
 
 
 def main():
@@ -496,14 +569,14 @@ def main():
     res_dir = 'resources'
     external_resources(flutter, args, res_dir)
     if windows:
+        if flutter:
+            build_flutter_windows(version, features, args.skip_portable_pack)
+            return
         # build virtual display dynamic library
         os.chdir('libs/virtual_display/dylib')
         system2('cargo build --release')
         os.chdir('../../..')
 
-        if flutter:
-            build_flutter_windows(version, features, args.skip_portable_pack)
-            return
         system2('cargo build --release --features ' + features)
         # system2('upx.exe target/release/tunnel.exe')
         pa = os.environ.get('P')
@@ -514,15 +587,13 @@ def main():
                 'target\\release\\tunnel.exe')
         else:
             print('Not signed')
-        system2(
-            f'cp -rf target/release/tunnel.exe {res_dir}')
-        os.chdir('libs/portable')
-        system2('pip3 install -r requirements.txt')
-        system2(
-            f'python3 ./generate.py -f ../../{res_dir} -o . -e ../../{res_dir}/tunnel.exe')
-        os.chdir('../..')
-        os.replace('target/release/tunnel-portable-packer.exe',
-                   f'tunnel-{version}-win7-install.exe')
+        root = Path.cwd().resolve()
+        shutil.copy2(root / 'target/release/tunnel.exe', root / res_dir / 'tunnel.exe')
+        portable = root / 'libs/portable'
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', str(portable / 'requirements.txt')], check=True)
+        subprocess.run([sys.executable, str(portable / 'generate.py'), '-f', str(root / res_dir),
+                        '-o', str(portable), '-e', str(root / res_dir / 'tunnel.exe'),
+                        '--dist', str(root / f'tunnel-{version}-win7-install.exe')], check=True)
     elif os.path.isfile('/usr/bin/pacman'):
         # pacman -S -needed base-devel
         system2("sed -i 's/pkgver=.*/pkgver=%s/g' res/PKGBUILD" % version)

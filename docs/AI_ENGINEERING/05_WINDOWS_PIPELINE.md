@@ -1,5 +1,7 @@
 # Tunnel Windows 完整链路 / Windows Pipeline
 
+2026-10-03 Windows构建修复：new-build/build/pc-bulid统一入口；scripts/windows_assets.py准备官方usbmmidd/打印包/adapter并保留x64 installer，缺失WindowInjection可从固定源编译。tunnel/dylib DLL经Cargo artifact定位；打包前验PE x64，产物验证本次payload。代码/运行契约与正式验证见 [Windows指南](../plans/WINDOWS_BUILD_GUIDE.md)；只有来源API与源码/V0，driver publisher/signature/OS运行仍未验。
+
 > 2026-10-03 当前增量（T-2026-10-03-001 / V0）：`pc-bulid.cmd`为`new-build.cmd`兼容入口。portable用新staging，保留Release，传播Cargo失败并读取实际compiler-artifact executable；`--require`检查runtime/驱动，EXE旁生成SHA256载荷清单。PC decoder新增ADB候选/barrier，记录在切源前停止；真实Windows编译/解压/驱动验证未执行。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 原始基线：2026-07-12，`HEAD 77062b4`（historical）

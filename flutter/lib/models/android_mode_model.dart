@@ -4,11 +4,13 @@ import 'package:flutter/widgets.dart';
 import 'package:uuid/uuid.dart';
 import 'model.dart';
 import 'platform_model.dart';
+import 'android_adb_pairing_model.dart';
 
 /// Per-window remote ownership. No ADB privileges or approvals are persisted.
 class AndroidModeModel extends ChangeNotifier {
-  AndroidModeModel(this.parent);
+  AndroidModeModel(this.parent) : pairing = AndroidAdbPairingModel(parent);
   final WeakReference<FFI> parent;
+  final AndroidAdbPairingModel pairing;
   Map<String, dynamic> state = {};
   Map<String, dynamic>? _presentation;
   Timer? _heartbeat;
@@ -28,6 +30,13 @@ class AndroidModeModel extends ChangeNotifier {
   int _presentationToken = 0;
   bool _observingOtherWindow = false;
   bool _statusRequested = false;
+  /// Authorization belongs to this connection; no duration timer.
+  bool? consentActive;
+
+  void _updateConsent(Map<String, dynamic> update) {
+    final active = update['consentActive'];
+    if (active is bool) consentActive = active;
+  }
 
   void ensureStatus() {
     if (_statusRequested) return;
@@ -58,6 +67,11 @@ class AndroidModeModel extends ChangeNotifier {
 
   Future<void> request(String op, {Map<String, dynamic> payload = const {}}) async {
     final ffi = parent.target;
+    if (op == 'start' && consentActive != true) {
+      reason = '请先通过远程 ADB 配对窗口连接并授权本连接';
+      notifyListeners();
+      return;
+    }
     if (op == 'start' && ffi != null &&
         bind.peerGetSessionsCount(id: ffi.id, connType: ffi.connType.index) > 1) {
       reason = '请只保留此设备的一个远控窗口后请求 ADB';
@@ -84,6 +98,7 @@ class AndroidModeModel extends ChangeNotifier {
       _startOperation = operation;
       phase = 'REQUESTING';
     } else if (op == 'stop') {
+      consentActive = false;
       _freeze();
     }
     notifyListeners();
@@ -103,6 +118,17 @@ class AndroidModeModel extends ChangeNotifier {
       update = Map<String, dynamic>.from(raw is String ? jsonDecode(raw) : raw);
     } catch (_) { return; }
     if (update['v'] != 1) return;
+    final previousPairPhase = pairing.phase;
+    if (pairing.onEvent(update)) {
+      if (pairing.lastEventAccepted) {
+        if (pairing.localAdbReady != null) state['localAdbReady'] = pairing.localAdbReady;
+        _updateConsent(update);
+        if (pairing.phase == 'VERIFIED' && previousPairPhase != 'VERIFIED') _send('status');
+        if (pairing.errorCode == 'CONSENT_REVOKED') _send('status');
+        notifyListeners();
+      }
+      return;
+    }
     int? number(String key) {
       final value = update[key];
       return value is int && value >= 0 && value <= 9007199254740991 ? value : null;
@@ -141,6 +167,7 @@ class AndroidModeModel extends ChangeNotifier {
     }
     if (_observingOtherWindow) {
       if (next == 'NORMAL' && observedLease) {
+        consentActive = false;
         _observingOtherWindow = false;
         state = update;
         inputFrozen = false;
@@ -160,6 +187,7 @@ class AndroidModeModel extends ChangeNotifier {
       // never resurrect an old lease, heartbeat or presentation after reconnect.
       if (freshStatus && !usingAdb && !busy) {
         state = update;
+        _updateConsent(update);
         reason = update['code']?.toString() ?? '';
         phase = 'IDLE';
         notifyListeners();
@@ -182,6 +210,7 @@ class AndroidModeModel extends ChangeNotifier {
     _revision = number('revision') ?? _revision;
     _frameSequence = number('sequence') ?? _frameSequence;
     state.addAll(update);
+    _updateConsent(update);
     if (next == 'PREPARING' && _epoch > 0 && _heartbeat == null) {
       _heartbeat = Timer.periodic(const Duration(seconds: 3), (_) => _send('heartbeat'));
     }
@@ -196,6 +225,7 @@ class AndroidModeModel extends ChangeNotifier {
       _presentationToken++;
       phase = next;
     } else if (next == 'COMMITTED' || next == 'NORMAL') {
+      if (next == 'NORMAL') consentActive = false;
       phase = next;
       usingAdb = next == 'COMMITTED';
       inputFrozen = usingAdb && update['inputReady'] != true;
@@ -276,6 +306,8 @@ class AndroidModeModel extends ChangeNotifier {
   }
 
   void reset() {
+    pairing.reset();
+    consentActive = null;
     _heartbeat?.cancel();
     _heartbeat = null;
     _deadline?.cancel();
@@ -297,5 +329,13 @@ class AndroidModeModel extends ChangeNotifier {
     phase = 'UNKNOWN';
     reason = '';
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _heartbeat?.cancel();
+    _deadline?.cancel();
+    pairing.dispose();
+    super.dispose();
   }
 }

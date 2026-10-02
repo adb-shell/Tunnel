@@ -1739,6 +1739,64 @@ class TunnelStatusMonitor extends StatelessWidget {
   final TunnelStatusModel tunnelStatusModel;
   TunnelStatusMonitor(this.tunnelStatusModel);
 
+  Widget _textRow(String label, String value, {Color? color}) => Tooltip(
+    message: value,
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Expanded(flex: 10, child: Text(label,
+        style: const TextStyle(color: Color.fromARGB(255, 210, 210, 210)),
+        textAlign: TextAlign.right)),
+      const Spacer(flex: 1),
+      Expanded(flex: 6, child: Text(value, maxLines: 3,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: color ?? const Color.fromARGB(255, 210, 210, 210)))),
+    ]),
+  );
+
+  List<Widget> _adbRows() {
+    final ffi = tunnelStatusModel.parent.target;
+    if (ffi == null || !ffi.ffiModel.isPeerAndroid) return [];
+    final m = ffi.androidModeModel;
+    final pair = m.pairing;
+    const modes = <String, String>{
+      'UNKNOWN': '待检测', 'IDLE': '普通共享', 'NORMAL': '普通共享',
+      'REQUESTING': '请求中', 'PREPARING': '准备中', 'READY': '准备完成',
+      'CANDIDATE_READY': '切换中', 'PRESENT_FRAME': '确认画面',
+      'WAITING_PRESENTED': '确认画面', 'COMMITTED': 'ADB 投屏',
+      'ROLLING_BACK': '恢复普通共享', 'STOPPING': '停止中',
+      'RECONFIGURE': '调整画面', 'OTHER_WINDOW': '其他窗口控制',
+      'ERROR': '操作失败', 'FAILED': '操作失败',
+    };
+    const sources = <String, String>{
+      'NONE': '无', 'ADB_LIVE': '实时投屏', 'ADB_SNAPSHOT': '无视截图',
+      'ADB_HIERARCHY': '穿透节点', 'MEDIA_PROJECTION': '普通共享',
+    };
+    final source = m.state['actualFrameSource']?.toString() ?? 'NONE';
+    final adbReady = m.state['localAdbReady'];
+    final adbInput = m.state['inputReady'];
+    final consentActive = m.consentActive;
+    const pairingPhases = <String, String>{
+      'PAIR_STARTING': '准备中', 'PAIRING': '验证配对码', 'CONNECTING': '连接中',
+      'VERIFYING': '验证权限', 'VERIFIED': '已连接', 'PAIRED_CONNECT_REQUIRED': '待填连接端口',
+      'REVOKING': '撤销授权中', 'CANCELLING': '取消确认中',
+      'CANCEL_UNCONFIRMED': '取消未确认', 'CANCELLED': '已取消', 'DISCONNECTED': '已断线',
+      'TIMEOUT': '操作超时', 'PAIR_FAILED': '操作失败',
+    };
+    return [
+      const Divider(color: Colors.white24, height: 12),
+      _row('ADB 连接：', adbReady is bool ? adbReady : null,
+        positiveText: '已验证', negativeText: '未连接'),
+      _textRow('投屏模式：', modes[m.phase] ?? m.phase),
+      _textRow('ADB 画面：', m.state['capturePaused'] == true ? '已暂停' : (sources[source] ?? source)),
+      _row('ADB 输入：', m.usingAdb && adbInput is bool ? adbInput : null,
+        positiveText: '就绪', negativeText: '不可用'),
+      _textRow('ADB 授权：', consentActive == null ? '待检测' : consentActive ? '本次会话有效' : '未授权'),
+      if (pair.phase != 'IDLE') _textRow('ADB 配对：', pairingPhases[pair.phase] ?? pair.phase,
+        color: pair.phase == 'VERIFIED' ? Colors.green : null),
+      if (pair.errorText.isNotEmpty) _textRow('配对错误：', pair.errorText, color: Colors.redAccent),
+      if (m.reason.isNotEmpty) _textRow('ADB 提示：', m.reason, color: Colors.orangeAccent),
+    ];
+  }
+
   Widget _row(String label, bool? state,
       {String positiveText = '\u5f00', String negativeText = '\u5173'}) {
     final String text;
@@ -1781,10 +1839,14 @@ class TunnelStatusMonitor extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => ChangeNotifierProvider.value(
-      value: tunnelStatusModel,
-      child: Consumer<TunnelStatusModel>(
-        builder: (context, m, child) => m.show
+  Widget build(BuildContext context) => AnimatedBuilder(
+      animation: Listenable.merge([tunnelStatusModel,
+        if (tunnelStatusModel.parent.target != null) ...[
+          tunnelStatusModel.parent.target!.ffiModel,
+          tunnelStatusModel.parent.target!.androidModeModel,
+          tunnelStatusModel.parent.target!.androidModeModel.pairing,
+        ]]),
+        builder: (context, child) => tunnelStatusModel.show
             ? Container(
                 constraints: const BoxConstraints(maxWidth: 200),
                 padding: const EdgeInsets.all(8),
@@ -1792,21 +1854,22 @@ class TunnelStatusMonitor extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _row("视频状态：", m.data.video,
+                    _row("视频状态：", tunnelStatusModel.data.video,
                         positiveText: '存在', negativeText: '丢失'),
-                    _row("特殊状态：", m.data.screenshot,
+                    _row("特殊状态：", tunnelStatusModel.data.screenshot,
                         positiveText: '存在', negativeText: '丢失'),
-                    _row("共享状态：", m.data.share),
-                    _row("无视状态：", m.data.ignore),
-                    _row("黑屏状态：", m.data.blank),
-                    _row("穿透状态：", m.data.penetrate),
-                    _row("防触状态：", m.data.touchblock),
-                    _row("加密状态：", m.data.accessibility),
+                    _row("共享状态：", tunnelStatusModel.data.share),
+                    _row("无视状态：", tunnelStatusModel.data.ignore),
+                    _row("黑屏状态：", tunnelStatusModel.data.blank),
+                    _row("穿透状态：", tunnelStatusModel.data.penetrate),
+                    _row("防触状态：", tunnelStatusModel.data.touchblock),
+                    _row("加密状态：", tunnelStatusModel.data.accessibility),
+                    ..._adbRows(),
                   ],
                 ),
               )
             : const SizedBox.shrink(),
-      ));
+      );
 }
 
 class RemoteStatusMonitors extends StatelessWidget {
