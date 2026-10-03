@@ -29,6 +29,8 @@ final class ShellAutomation implements AutoCloseable {
     private final DisplayPower power = new DisplayPower();
     private final BlackOverlay overlay = new BlackOverlay();
     private final PhysicalTouchBlock touchBlock = new PhysicalTouchBlock();
+    private final InputInjector injector = new InputInjector();
+    private final HierarchyFrame.Provider hierarchy = new HierarchyFrame.Provider();
     private long touchDown;
     private float touchX, touchY;
     private final Map<Integer, Long> pressedKeys = new HashMap<>();
@@ -78,6 +80,8 @@ final class ShellAutomation implements AutoCloseable {
 
     int effectState() { return (overlay.isEnabled() ? 1 : 0) | (touchBlock.isEnabled() ? 2 : 0); }
 
+    void frameTaskChanged() { hierarchy.invalidate(); }
+
     /** Owned bitmap for the encoder; hierarchy is semantic layout, never protected pixels. */
     Bitmap frame(int mode) throws Exception {
         if (automation == null || display == null) throw new IllegalStateException("AUTOMATION_UNAVAILABLE");
@@ -109,7 +113,7 @@ final class ShellAutomation implements AutoCloseable {
                         Math.max(1, (int) (size.height * scale)), Bitmap.Config.ARGB_8888);
                 result.eraseColor(Color.BLACK);
             }
-            HierarchyFrame.collect(automation, size.width, size.height).draw(result, mode == 4, screenshotAvailable);
+            hierarchy.snapshot(automation, size).draw(result, mode == 4, screenshotAvailable);
             addCapabilities(AdbWire.CAP_TREE);
             transferred = true;
             return result;
@@ -189,7 +193,7 @@ final class ShellAutomation implements AutoCloseable {
         MotionEvent event = MotionEvent.obtain(touchDown, now, c.a, touchX, touchY, 0);
         event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
         try {
-            boolean accepted = automation.injectInputEvent(event, true);
+            boolean accepted = injector.inject(automation, event, true);
             // A window transition may reject one event without revoking shell
             // input authority. Cancel this gesture, but permit the next one.
             if (!accepted) releaseInput();
@@ -210,7 +214,7 @@ final class ShellAutomation implements AutoCloseable {
         if (down == null) down = now;
         KeyEvent event = new KeyEvent(down, now, action, code, 0, meta,
                 KeyEvent.KEYCODE_UNKNOWN, 0, KeyEvent.FLAG_FROM_SYSTEM, InputDevice.SOURCE_KEYBOARD);
-        boolean accepted = automation.injectInputEvent(event, true);
+        boolean accepted = injector.inject(automation, event, true);
         if (action == KeyEvent.ACTION_DOWN && accepted) pressedKeys.put(code, down);
         if (action == KeyEvent.ACTION_UP) pressedKeys.remove(code);
         if (!accepted) releaseInput();
@@ -227,10 +231,10 @@ final class ShellAutomation implements AutoCloseable {
         if (touchDown != 0) {
             MotionEvent event = MotionEvent.obtain(touchDown, SystemClock.uptimeMillis(), MotionEvent.ACTION_CANCEL, touchX, touchY, 0);
             event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
-            try { automation.injectInputEvent(event, false); } catch (RuntimeException ignored) { } finally { event.recycle(); touchDown = 0; }
+            try { injector.inject(automation, event, false); } catch (RuntimeException ignored) { } finally { event.recycle(); touchDown = 0; }
         }
         for (Map.Entry<Integer, Long> held : pressedKeys.entrySet()) {
-            try { automation.injectInputEvent(new KeyEvent(held.getValue(), SystemClock.uptimeMillis(), KeyEvent.ACTION_UP,
+            try { injector.inject(automation, new KeyEvent(held.getValue(), SystemClock.uptimeMillis(), KeyEvent.ACTION_UP,
                     held.getKey(), 0, 0, KeyEvent.KEYCODE_UNKNOWN, 0, KeyEvent.FLAG_FROM_SYSTEM, InputDevice.SOURCE_KEYBOARD), false); }
             catch (RuntimeException ignored) { }
         }
@@ -254,7 +258,7 @@ final class ShellAutomation implements AutoCloseable {
 
     private byte[] tree() throws Exception {
         DisplayCapture.Snapshot size = display.snapshot();
-        return HierarchyFrame.collect(automation, size.width, size.height).json();
+        return hierarchy.snapshot(automation, size).json();
     }
 
     private static AdbCommands.Result result(AdbCommands.Command c, int code) {
@@ -269,7 +273,8 @@ final class ShellAutomation implements AutoCloseable {
         try { touchBlock.close(); } catch (RuntimeException ignored) { }
         try { power.close(); } catch (RuntimeException ignored) { }
         capabilities.set(0);
-        if (automation != null) {
+        boolean collectorEnded = hierarchy.close();
+        if (automation != null && collectorEnded) {
             try { UiAutomation.class.getMethod("disconnect").invoke(automation); } catch (Exception ignored) { }
             automation = null;
         }

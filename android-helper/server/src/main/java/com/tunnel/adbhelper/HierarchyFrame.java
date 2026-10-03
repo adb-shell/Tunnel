@@ -29,6 +29,71 @@ final class HierarchyFrame {
     private boolean hasContent;
     private boolean truncated;
 
+    /** A single coalescing collector. Slow accessibility Binder calls must never
+     * block the encoder, input worker, or create replacement collector threads. */
+    static final class Provider {
+        private Thread worker;
+        private UiAutomation automation;
+        private boolean closed, pending;
+        private long revision, completedAt;
+        private int width, height, rotation = -1;
+        private HierarchyFrame latest;
+
+        synchronized void invalidate() {
+            revision++; pending = false; latest = null; completedAt = 0;
+        }
+
+        synchronized HierarchyFrame snapshot(UiAutomation source, DisplayCapture.Snapshot size) {
+            if (width != size.width || height != size.height || rotation != size.rotation) {
+                invalidate(); width = size.width; height = size.height; rotation = size.rotation;
+            }
+            if (!closed) {
+                automation = source;
+                pending = true;
+                if (worker == null) {
+                    worker = new Thread(this::collectLoop, "tunnel-adb-hierarchy");
+                    worker.setDaemon(true); worker.start();
+                }
+                notifyAll();
+            }
+            // Do not keep displaying previous application text indefinitely when
+            // an OEM stops answering accessibility requests.
+            if (latest != null && SystemClock.uptimeMillis() - completedAt <= 1500) return latest;
+            return new HierarchyFrame(width, height);
+        }
+
+        private void collectLoop() {
+            try {
+                while (true) {
+                    long expected;
+                    int w, h;
+                    UiAutomation source;
+                    synchronized (this) {
+                        while (!closed && !pending) wait();
+                        if (closed) return;
+                        pending = false; expected = revision;
+                        w = width; h = height; source = automation;
+                    }
+                    HierarchyFrame frame;
+                    try { frame = collect(source, w, h); }
+                    catch (RuntimeException unavailable) { frame = new HierarchyFrame(w, h); }
+                    synchronized (this) {
+                        if (closed) return;
+                        if (revision == expected) { latest = frame; completedAt = SystemClock.uptimeMillis(); }
+                    }
+                }
+            } catch (InterruptedException shutdown) { Thread.currentThread().interrupt(); }
+        }
+
+        synchronized boolean close() {
+            closed = true; invalidate(); notifyAll();
+            if (worker != null) worker.interrupt();
+            // Never disconnect a shared UiAutomation while a vendor Binder call
+            // still uses it. The helper process owns its final OS cleanup.
+            return worker == null || !worker.isAlive();
+        }
+    }
+
     private static final class View {
         final Rect bounds, parent;
         final String text;
@@ -55,32 +120,43 @@ final class HierarchyFrame {
     static HierarchyFrame collect(UiAutomation automation, int width, int height) {
         HierarchyFrame frame = new HierarchyFrame(width, height);
         ArrayDeque<Entry> pending = new ArrayDeque<>();
-        long deadline = SystemClock.uptimeMillis() + COLLECT_BUDGET_MS;
+        long deadline;
         List<AccessibilityWindowInfo> windows = null;
         try {
-            try { windows = automation.getWindows(); } catch (RuntimeException unavailable) { /* Active-root fallback below. */ }
+            // Prioritize the same active root as the accessibility renderer. Do
+            // not wait for every background window's app to answer before drawing
+            // the focused application's first node.
+            try {
+                AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+                if (root != null) pending.add(new Entry(root, 0, 0, null, false));
+            } catch (RuntimeException staleWindow) { /* Interactive-window fallback below. */ }
+            // A usable active root is enough to render. In particular, do not
+            // delay it behind a second Binder query into the window manager.
+            if (pending.isEmpty()) {
+                try { windows = automation.getWindows(); }
+                catch (RuntimeException unavailable) { /* Empty snapshot remains retryable. */ }
+            }
             if (windows != null) {
                 // UiAutomation returns highest-layer windows first: prioritize dialogs/IME
                 // during collection, then render ascending layers so they remain on top.
                 int count = 0;
                 for (AccessibilityWindowInfo window : windows) {
                     if (window == null) continue;
-                    if (count++ >= MAX_WINDOWS || SystemClock.uptimeMillis() >= deadline) { frame.truncated = true; break; }
+                    if (count++ >= MAX_WINDOWS) { frame.truncated = true; break; }
                     try {
                         Rect bounds = new Rect(); window.getBoundsInScreen(bounds);
                         int layer = window.getLayer();
                         if (!bounds.isEmpty()) frame.views.add(new View(bounds, null, "", 0, layer, false, false, true));
-                        AccessibilityNodeInfo root = window.getRoot();
-                        if (root != null) pending.add(new Entry(root, 0, layer, null, false));
+                        if (pending.isEmpty()) {
+                            AccessibilityNodeInfo root = window.getRoot();
+                            if (root != null) pending.add(new Entry(root, 0, layer, null, false));
+                        }
                     } catch (RuntimeException staleWindow) { /* Window disappeared between enumeration and root access. */ }
                 }
             }
-            if (pending.isEmpty()) {
-                try {
-                    AccessibilityNodeInfo root = automation.getRootInActiveWindow();
-                    if (root != null) pending.add(new Entry(root, 0, 0, null, false));
-                } catch (RuntimeException staleWindow) { /* Empty frame is valid while windows transition. */ }
-            }
+            // getWindows/getRoot may spend the whole former 250 ms budget in
+            // Binder. Give returned roots a traversal budget of their own.
+            deadline = SystemClock.uptimeMillis() + COLLECT_BUDGET_MS;
             int visited = 0;
             while (!pending.isEmpty() && visited < MAX_NODES && SystemClock.uptimeMillis() < deadline) {
                 Entry entry = pending.removeFirst();
@@ -100,7 +176,10 @@ final class HierarchyFrame {
                             frame.textBudget -= length;
                         }
                     }
-                    if (!bounds.isEmpty() && node.isVisibleToUser()) {
+                    // Like the existing accessibility hierarchy renderer, draw
+                    // returned nodes with screen bounds. isVisibleToUser can be
+                    // false for content beneath a local overlay or another window.
+                    if (!bounds.isEmpty() && Rect.intersects(bounds, new Rect(0, 0, width, height))) {
                         frame.views.add(new View(bounds, entry.parent, text, entry.depth, entry.layer,
                                 node.isClickable() || node.isLongClickable() || node.isEditable(), password, false));
                         frame.hasContent = true;

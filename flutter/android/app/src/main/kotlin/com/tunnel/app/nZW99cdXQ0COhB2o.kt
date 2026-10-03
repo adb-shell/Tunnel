@@ -500,6 +500,17 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
         }.start()
     }
 
+    /** Refresh an already enabled source after the controller releases ADB video.
+     * Never enables capture, requests a permission or starts another screenshot loop.
+     */
+    fun refreshActiveCaptureFrame() {
+        handler.post {
+            if (AccessibilityLifecycle.paused) return@post
+            if (SKL) requestPenetrateFrame("adb-video-closed", true)
+            else if (shouldRun && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) d("adb-video-closed")
+        }
+    }
+
     /** The existing protection overlay needs a pass-through window for shell input too. */
     fun prepareAdbTouch(action: Int, ready: () -> Unit) {
         handler.post {

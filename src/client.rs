@@ -1586,7 +1586,10 @@ impl VideoHandler {
                     pixelbuffer,
                     chroma,
                 );
-                let adb = vf.android_video.as_ref().map_or(false, |metadata| matches!(metadata.phase, 1 | 2));
+                // The return-to-normal decoder is new too. Its first valid
+                // keyframe may be buffered before yielding a picture; do not
+                // disable that codec while phase 3 is awaiting presentation.
+                let adb = vf.android_video.as_ref().map_or(false, |metadata| matches!(metadata.phase, 1..=3));
                 let previous = self.fail_counter;
                 self.fail_counter = next_video_failure_count(adb, self.first_frame, previous,
                     res.as_ref().map(|decoded| *decoded).map_err(|_| ()));
@@ -2754,6 +2757,7 @@ pub fn start_video_thread<F, T>(
         let mut adb_active = false;
         let mut adb_frozen = false;
         let mut rollback_waiting = false;
+        let mut normal_decoder_needs_key = false;
         // Presentation/ownership ACKs describe a transaction, not continuing
         // frame delivery. Report only decoded, displayed frames to the UI.
         let mut last_frame_notice: Option<(bool, u64, u64, std::time::Instant)> = None;
@@ -2796,6 +2800,7 @@ pub fn start_video_thread<F, T>(
                             adb_active = true;
                             adb_frozen = false;
                             rollback_waiting = false;
+                            normal_decoder_needs_key = false;
                             session.handle_peer_switch_display(&SwitchDisplay {
                                 display: display as i32, width: metadata.width as i32,
                                 height: metadata.height as i32, ..Default::default()
@@ -2818,6 +2823,7 @@ pub fn start_video_thread<F, T>(
                             adb_epoch = metadata.epoch;
                             adb_active = false;
                             rollback_waiting = true;
+                            normal_decoder_needs_key = true;
                             // The last visible image stays until a fresh normal frame.
                             session.update_android_control(crate::server::android_control::video_event(&metadata, "ROLLING_BACK"));
                         } else if barrier.action == 3 {
@@ -2827,6 +2833,7 @@ pub fn start_video_thread<F, T>(
                             adb_frozen = false;
                             adb_active = false;
                             rollback_waiting = false;
+                            normal_decoder_needs_key = false;
                             session.update_android_control(crate::server::android_control::video_event(&metadata, "NORMAL"));
                         } else if barrier.action == 4 {
                             adb_candidate = None;
@@ -2956,6 +2963,19 @@ pub fn start_video_thread<F, T>(
                         } else if adb_active || rollback_waiting {
                             continue;
                         }
+                        if rollback_waiting && normal_decoder_needs_key {
+                            // The ordinary encoder continued while ADB was
+                            // visible. Its inter frames cannot initialize this
+                            // newly created decoder after the return barrier.
+                            let key = match &vf.union {
+                                Some(video_frame::Union::H264s(frames) | video_frame::Union::H265s(frames)
+                                    | video_frame::Union::Vp8s(frames) | video_frame::Union::Vp9s(frames)
+                                    | video_frame::Union::Av1s(frames)) => frames.frames.iter().any(|frame| frame.key),
+                                _ => false,
+                            };
+                            if !key { continue; }
+                            normal_decoder_needs_key = false;
+                        }
                         if video_handler.is_none() {
                             let mut handler = VideoHandler::new(format, display);
                             let record_state = session.lc.read().unwrap().record_state;
@@ -3059,6 +3079,10 @@ pub fn start_video_thread<F, T>(
                                             request_android_keyframe(&session, metadata);
                                         }
                                     } else {
+                                        if rollback_waiting && handler.decoder.valid() {
+                                            handler.reset(None);
+                                            normal_decoder_needs_key = true;
+                                        }
                                         session.refresh_video(display as _);
                                     }
                                 }

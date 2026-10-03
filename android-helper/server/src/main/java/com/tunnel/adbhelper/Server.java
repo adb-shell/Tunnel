@@ -357,7 +357,10 @@ public final class Server {
                 try {
                     while (!stop.get()) {
                         VideoTask current = task;
-                        if (current != previous) { previous = current; nextFrame = 0; consecutiveFailures = 0; }
+                        if (current != previous) {
+                            previous = current; nextFrame = 0; consecutiveFailures = 0;
+                            automation.frameTaskChanged();
+                        }
                         if ((current.mode != 1 && current.mode != 2 && current.mode != 4)
                                 || SystemClock.elapsedRealtime() < nextFrame) {
                             Thread.sleep(40);

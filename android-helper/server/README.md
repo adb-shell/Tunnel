@@ -31,7 +31,7 @@ APK listener 只能绑定 `127.0.0.1`。helper 依次连接 VIDEO、CONTROL，�
 - live：non-secure display mirror → hardware H264。
 - snapshot：UiAutomation screenshot → bounded bitmap → EGL → 同一 H264 wire。
 - hierarchy：UiAutomation 独立节点 → 有界 semantic Canvas → EGL → 同一 H264 wire。它是结构图，不是受保护像素捕获；password 文本不输出。
-- snapshot 与 hierarchy 开关独立；同时开启时生成截图底图+布局线条的组合帧。窗口暂时无节点时继续输出等待帧，截图暂不可用时组合源保留布局并标明缺少截图。再次开启 live 不清除已有覆盖源选择。关闭 live 只停止该源，截图/节点仍开启时继续输出，最后一个源关闭后回到已有普通画面；codec 故障不撤销控制权限。
+- snapshot 与 hierarchy 开关独立；同时开启时生成截图底图+布局线条的组合帧。窗口暂时无节点时继续输出等待帧，截图暂不可用时组合源保留布局并标明缺少截图。再次开启 live 不清除已有覆盖源选择。PC 菜单关闭 ADB 投屏会停止全部 ADB 画面源，回到已有普通画面；各侧栏关闭按钮只移除对应来源；codec 故障不撤销控制权限。
 - 侧栏开/关共享只操作普通 MediaProjection。授权后单个 helper 持续拥有 UiAutomation、输入和黑罩，Bootstrap initialMode=3 启动；VIDEO_TASK 以 taskId 替换内部 encoder。关闭视频不关闭控制连接，禁止另外启动 UiAutomation 争抢同一服务。VIDEO read 由独立 control 心跳取消，静态画面先请求关键帧；视频无帧只报告暂失并请求关键帧；截图同任务重试，编码器释放后退避重建，不隐式关闭用户请求。
 - VIDEO_CONFIG flags 标识实际 helper source；源/尺寸/rotation 变化重建 codec、增加 revision、释放按住输入。Runtime 先暂停新源提交并通知 RECONFIGURE，Rust 给新 network epoch，然后发送 CONFIG/IDR。只有 PC decode ready → Activate → 真实 Presented ACK 后才确认视频源；输入使用独立控制与当前显示几何。收到 config、socket 通或服务活着均不算首帧。
 - 不请求 secure display/buffer，不承诺 FLAG_SECURE、DRM 或 OEM 安全层可见。截图和树可用性按实际 API 结果变化。

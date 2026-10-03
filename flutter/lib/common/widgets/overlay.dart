@@ -1775,10 +1775,6 @@ class TunnelStatusMonitor extends StatelessWidget {
     final debugging = flag('localAdbReady');
     return [
       const Divider(color: Colors.white24, height: 12),
-      const Padding(padding: EdgeInsets.only(bottom: 3),
-        child: Center(child: Text('ADB', style: TextStyle(color: Colors.white70, fontSize: 12)))),
-      _row('视频状态：', m.adbVideoPresent, positiveText: '存在', negativeText: '丢失'),
-      _row('特殊状态：', m.adbSpecialPresent, positiveText: '存在', negativeText: '丢失'),
       _row('投屏状态：', flag('baseLiveRequested')),
       _row('无视状态：', flag('snapshotEnabled')),
       _row('黑屏状态：', flag('overlayBlack')),

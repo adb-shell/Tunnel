@@ -221,6 +221,11 @@ object TunnelAdbRuntime {
                     if ((owner != 0 && owner != connId) ||
                         (owner == 0 && lastVideoOwner != connId && consentOwner != connId))
                         return@synchronized snapshot("NOT_OWNER")
+                    // Stop is its own video transaction. Its acknowledgement
+                    // must match the PC's newer generation, not the old stream.
+                    generation = number(request, "generation")
+                    epoch = number(request, "epoch")
+                    operationId = id
                     stopLocked("STOPPED")
                     return@synchronized JSONObject(snapshot()).put("videoStopped", true).toString()
                 }
@@ -620,7 +625,9 @@ object TunnelAdbRuntime {
         lastEncodedFrameAt = 0
         phase = "IDLE"; error = reason; videoReady = false; stopping = false
         pendingConfig = null; pendingKey = null; freezeFrames = false; lastConfig = null; configSent = false
-        // Explicit stop suspends output, but does not reset independent source choices.
+        // The menu closes all ADB picture providers. Overlay, touch protection
+        // and shell/input authority remain independently enabled.
+        snapshotEnabled = false; hierarchyEnabled = false
         frameOverride = 0; baseLive = false
         requestedMode = 3; videoTaskId = nextTaskId(); issuedTaskId = 0
         dispatchVideoTaskLocked()

@@ -768,7 +768,7 @@ mod endpoint {
         lease.phase = Phase::Rollback;
         lease.revision = 1;
         lease.sequence = 0;
-        lease.deadline = Instant::now() + Duration::from_secs(10);
+        lease.deadline = Instant::now() + Duration::from_secs(3);
         lease.normal_ready = false;
         lease.failure_code.clear();
         lease.touch_down = false;
@@ -828,6 +828,7 @@ mod endpoint {
                 fail_video(conn, access.control_error().unwrap_or("ADB_VIDEO_SUBSCRIPTION_REQUIRED"));
             }
         }
+        let mut refresh_normal = false;
         let refresh = {
             let mut state = STATE.lock().unwrap();
             state.lease.as_mut().filter(|lease| lease.conn == conn).and_then(|lease| {
@@ -836,6 +837,14 @@ mod endpoint {
                 // the phone may grant/start MediaProjection later. Disconnect
                 // still cleans this state; a newer explicit start may replace it.
                 let awaiting_normal = lease.explicitly_stopped && lease.phase == Phase::Rollback;
+                if awaiting_normal && Instant::now() > lease.deadline {
+                    // A static ordinary/screenshot source or a dropped first
+                    // keyframe must not leave the PC showing the stopped ADB
+                    // image indefinitely. This refresh never starts capture or
+                    // requests new Android permissions.
+                    lease.deadline = Instant::now() + Duration::from_secs(3);
+                    refresh_normal = true;
+                }
                 if !awaiting_normal && !matches!(lease.phase, Phase::Frozen | Phase::Active)
                     && Instant::now() > lease.deadline {
                     // Probe the same transaction instead of stopping Android
@@ -848,6 +857,7 @@ mod endpoint {
                 } else { None }
             })
         };
+        if refresh_normal { STATE.lock().unwrap().normal_refresh.insert(conn); }
         if let Some(request) = refresh {
             let _ = forward(conn, &request);
         }

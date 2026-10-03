@@ -1,6 +1,7 @@
 package com.tunnel.adbhelper;
 
 import android.graphics.Rect;
+import android.os.Build;
 import android.view.SurfaceControl;
 import java.lang.reflect.Method;
 
@@ -15,7 +16,7 @@ final class BlackOverlay implements AutoCloseable {
     private boolean requestedEnabled;
     private boolean visibleApplied;
     private SurfaceControl layer;
-    private Method skipScreenshot, layerStack, color, crop, remove;
+    private Method skipScreenshot, trustedOverlay, layerStack, color, crop, remove;
     private static final Rect COVERAGE = new Rect(0, 0, 16384, 16384);
 
     /** Probe/create a hidden layer. Capability discovery must never black a phone. */
@@ -25,6 +26,21 @@ final class BlackOverlay implements AutoCloseable {
         try {
             Class<?> transaction = SurfaceControl.Transaction.class;
             skipScreenshot = transaction.getMethod("setSkipScreenshot", SurfaceControl.class, boolean.class);
+            trustedOverlay = null;
+            try {
+                // Android 12+ treats even a layer without an input channel as
+                // an occluder. SKIP_SCREENSHOT only affects capture, not input:
+                // an opaque, untrusted color layer can therefore reject touch
+                // injection into every window below it. This shell-owned layer
+                // must be trusted before it becomes visible. The boolean API
+                // is retained by AOSP Android 12 through 16 (including 16's
+                // newer int overload) and requires ACCESS_SURFACE_FLINGER.
+                trustedOverlay = transaction.getMethod("setTrustedOverlay", SurfaceControl.class, boolean.class);
+            } catch (NoSuchMethodException unavailable) {
+                // AOSP 11 predates input-occlusion blocking. On newer vendor
+                // frameworks, fail instead of showing a touch-blocking cover.
+                if (Build.VERSION.SDK_INT >= 31) throw unavailable;
+            }
             layerStack = transaction.getMethod("setLayerStack", SurfaceControl.class, int.class);
             color = transaction.getMethod("setColor", SurfaceControl.class, float[].class);
             remove = transaction.getMethod("remove", SurfaceControl.class);
@@ -93,6 +109,9 @@ final class BlackOverlay implements AutoCloseable {
         // Exclusion and black fill are in the same transaction as visibility.
         // No transient unexcluded frame is exposed during creation/recreation.
         skipScreenshot.invoke(t, layer, true);
+        // Only this owned visual layer is exempt from occlusion checks. Never
+        // disable the system's untrusted-touch protection or change app flags.
+        if (trustedOverlay != null) trustedOverlay.invoke(t, layer, true);
         color.invoke(t, layer, new float[]{0f, 0f, 0f});
         crop.invoke(t, layer, COVERAGE);
         t.setPosition(layer, 0f, 0f).setLayer(layer, Integer.MAX_VALUE - 1).setAlpha(layer, 1f);

@@ -1363,7 +1363,8 @@ impl<T: InvokeUiSession> Remote<T> {
                     if let Some(metadata) = vf.android_video.as_ref() {
                         if !peer.is_secured() || metadata.epoch == 0 || metadata.revision == 0
                             || metadata.generation == 0 || metadata.sequence == 0
-                            || metadata.width == 0 || metadata.height == 0 || metadata.width > 4096 || metadata.height > 4096
+                            || (metadata.phase != 3 && (metadata.width == 0 || metadata.height == 0
+                                || metadata.width > 4096 || metadata.height > 4096))
                             || metadata.operation_id.is_empty() || metadata.operation_id.len() > 64
                             || metadata.phase == 0 || metadata.phase > 3 {
                             return true;
@@ -1378,22 +1379,27 @@ impl<T: InvokeUiSession> Remote<T> {
                         if frames.frames.is_empty() || frames.frames.len() > 8 { return true; }
                         let bytes = frames.frames.iter().try_fold(0usize, |sum, frame| sum.checked_add(frame.data.len()));
                         if bytes.map_or(true, |bytes| bytes > 8 * 1024 * 1024) { return true; }
-                        let key = Self::contains_key_frame(&vf);
-                        if thread.adb_needs_key && !key { return true; }
-                        let refresh = serde_json::json!({"v":1,"op":"keyframe",
-                            "operationId":format!("frame-{}-{}", metadata.epoch, metadata.sequence),"generation":metadata.generation,
-                            "epoch":metadata.epoch,"revision":metadata.revision,"payload":{}}).to_string();
-                        match thread.adb_sender.try_send(MediaData::VideoFrame(Box::new(vf))) {
-                            Ok(()) => {
-                                thread.adb_needs_key = false;
-                                thread.video_sender.send(MediaData::AdbWake).ok();
+                        if metadata.phase != 3 {
+                            let key = Self::contains_key_frame(&vf);
+                            if thread.adb_needs_key && !key { return true; }
+                            let refresh = serde_json::json!({"v":1,"op":"keyframe",
+                                "operationId":format!("frame-{}-{}", metadata.epoch, metadata.sequence),"generation":metadata.generation,
+                                "epoch":metadata.epoch,"revision":metadata.revision,"payload":{}}).to_string();
+                            match thread.adb_sender.try_send(MediaData::VideoFrame(Box::new(vf))) {
+                                Ok(()) => {
+                                    thread.adb_needs_key = false;
+                                    thread.video_sender.send(MediaData::AdbWake).ok();
+                                }
+                                Err(_) => {
+                                    thread.adb_needs_key = true;
+                                    self.handler.send(Data::Message(crate::server::android_control::message(refresh)));
+                                }
                             }
-                            Err(_) => {
-                                thread.adb_needs_key = true;
-                                self.handler.send(Data::Message(crate::server::android_control::message(refresh)));
-                            }
+                            return true;
                         }
-                        return true;
+                        // Returning ordinary frames keep the barrier metadata,
+                        // but use their own queue/keyframes. Old ADB congestion
+                        // must not discard the first normal-source keyframe.
                     }
                     if Self::contains_key_frame(&vf) {
                         thread
@@ -1977,7 +1983,7 @@ impl<T: InvokeUiSession> Remote<T> {
                         if !peer.is_secured() { return true; }
                         if !self.video_threads.contains_key(&0) { self.new_video_thread(0); }
                         if let Some(thread) = self.video_threads.get_mut(&0) {
-                            if barrier.action == 2 { thread.adb_needs_key = true; }
+                            if matches!(barrier.action, 2 | 3) { thread.adb_needs_key = false; }
                             thread.video_sender.send(MediaData::AndroidVideoBarrier(barrier)).ok();
                         }
                     }

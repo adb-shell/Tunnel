@@ -614,7 +614,9 @@ impl Connection {
                         if let Some(message::Union::Misc(misc)) = &message.union {
                             if let Some(misc::Union::AndroidVideoBarrier(barrier)) = &misc.union {
                                 // Discard old source frames before this ordered source barrier.
-                                while rx_video.try_recv().is_ok() {}
+                                while let Ok((instant, _)) = rx_video.try_recv() {
+                                    video_service::notify_video_frame_fetched(id, Some(instant.into()));
+                                }
                                 if barrier.action == 2 { conn.refresh_video_display(None); }
                             }
                         }

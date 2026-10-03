@@ -137,9 +137,14 @@ class DFm8Y8iMScvB2YDw : Service() {
                 AccessibilityLifecycle.adbOwnsInput = false // Rust selects the backend per gesture.
                 mainHandler.post {
                     updateAdbScreenWakeLock(committed)
-                    if (!committed && normalCaptureReady()) {
-                        ClsFx9V0S.VaiKIoQu("video", true)
-                        forceVideoFrameRefresh("adb-return-normal")
+                    if (!committed) {
+                        if (normalCaptureReady() || SKL || shouldRun) {
+                            ClsFx9V0S.VaiKIoQu("video", true)
+                            // Refresh the existing Rust encoder even when the
+                            // selected ordinary source is accessibility frames.
+                            ClsFx9V0S.qR9Ofa6G()
+                        }
+                        nZW99cdXQ0COhB2o.ctx?.refreshActiveCaptureFrame()
                     }
                     AccessibilityLifecycle.publish(applicationContext)
                 }
