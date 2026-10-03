@@ -1,6 +1,6 @@
 # Tunnel External Asset Registry
 
-2026-10-03 T008：`EXT-REF-ADB-003` 新增已取得的仓外研究副本 `../ladb-reference`，官方LADB commit `60f48029cf9d8e0bc848ca41a7bd76694d4ab796`，55个文本源码/配置/许可证，SOURCE_PROVENANCE.json记录每个文件SHA256/固定URL，SOURCE_COMMIT.txt标识版本。用户本轮授权获取；未下载binary、未整体vendor进产品。下方2026-10-02 MISSING为旧路径快照。`EXT-BIN-ADB-001` prebuilt锁未变；源码研究不证明native可复现/16KiB兼容。重点源码与许可范围见[任务](docs/plans/ADB_RELIABILITY_REPAIR_TASK.md)。
+2026-10-03 T008：`EXT-REF-ADB-003` 新增已取得的仓外研究副本 `../ladb-reference`，官方LADB commit `60f48029cf9d8e0bc848ca41a7bd76694d4ab796`，55个文本源码/配置/许可证，SOURCE_PROVENANCE.json记录每个文件SHA256/固定URL，SOURCE_COMMIT.txt标识版本。用户本轮授权获取；未下载binary、未整体vendor进产品。下方2026-10-02 MISSING为旧路径快照。`EXT-BIN-ADB-001` prebuilt锁未变；源码研究不证明native可复现/16KiB兼容。重点源码与许可范围见[ADB 指南](docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
 
 2026-10-03 T004：ADB native供应仍为固定LADB prebuilt（未变更版本/blob），手机界面移除不移除libadb/helper准入。RemoteAdbPairing使用其本机TLS配对与独立connect。APK内所有所选ABI/native/helper缺失仍构建失败；未在本地取得/执行binary。Android11—16及16KiB运行证据仍external/verification-required，不能以供应脚本或API30门槛当全设备PASS。
 
@@ -65,7 +65,7 @@ Owner 为空时统一写 `OWNER-REQUIRED`，不能由 AI 推断个人或组织�
 | ID | 资产 | 当前存在性 | 仓内消费/证据锚点 | Owner | 主要缺口 | 影响 |
 |---|---|---|---|---|---|---|
 | `EXT-BIN-ADB-001` | `libadb.so` for arm64-v8a / armeabi-v7a / x86 / x86_64 | `PARTIAL / NOT_ACQUIRED`：官方 LADB 固定 commit 与四 ABI Git blob hash/size/ELF 属性已登记；本机未取得 binary | `android-adb/ladb-prebuilt.lock.json`, `android-adb/prepare_adb.py`, `LocalAdbProcessSpec.kt`, Gradle `verifyTunnelAdbArtifacts` | Android/Release/Security owner required | upstream 内部 AOSP source commit/toolchain、实际 SHA-256 receipt、SBOM、signature、16 KiB/ROM 运行证据 | 服务器可获取并逐字节复核固定 prebuilt，不等于从源构建复现或发布验收；运行与 release evidence 仍 `BLOCKING` |
-| `EXT-REF-ADB-002` | `ADB-CODE/` research/decompiled materials | `MISSING`：2026-10-02 当前目录不存在，ignore 规则仍在；historical local-only | `docs/ADB_LADB_INTEGRATION_MEMORY.md` 的研究背景 | `OWNER-REQUIRED` | origin、revision、legal/provenance、是否仅研究使用、保留策略 | 旧研究结论目前不可独立重证；不得直接进入 release source |
+| `EXT-REF-ADB-002` | `ADB-CODE/` research/decompiled materials | `MISSING`：2026-10-02 当前目录不存在，ignore 规则仍在；historical local-only | 旧 ADB 研究背景（历史见 Git） | `OWNER-REQUIRED` | origin、revision、legal/provenance、是否仅研究使用、保留策略 | 旧研究结论目前不可独立重证；不得直接进入 release source |
 | `EXT-REF-ADB-003` | `LADB/` reference source | `MISSING`：2026-10-02 当前目录不存在，ignore 规则仍在；historical local-only | ADB integration memory 与实现设计背景 | `OWNER-REQUIRED` | upstream URL/commit、license obligations、旧文档所述分发限制的原始证据、修改清单 | license/distribution 需资产到位后复核；不得等同 bundled binary source |
 
 **历史快照，不能作为本机验收：** 2026-07-12 文档记录当时存在三个 `libadb.so` 和一份 license 文件且均未 tracked。2026-10-02 当前 worktree 未找到这些文件，因此下列 SHA-256 只保留为历史交接线索，没有重新计算或核验：
@@ -176,7 +176,7 @@ Status and review date：
 - `EXT-SIGN-001` / `002`：未轮换实际签名资产。App/bundle 改名不等于证书指纹变化；hash 和 fingerprint 以重建签名产物实测登记。Apple provisioning、Firebase 等外部注册必须对应新 bundle，旧资产不构成兼容证据。
 - `EXT-BIN-ADB-HELPER-001`：helper Java package、HMAC 域、magic 已迁移；binary 仍 NOT_BUILT，配套 manifest/hash 待正式配方生成。不可复用旧 helper、旧 bridge/native 或 portable data.bin。
 - `EXT-WIN-*`：第三方驱动、证书、硬件 GUID、ABI 名称保留真实值，没有通过改品牌伪造 vendor/source。安装元数据与本产品启动路径使用 Tunnel。
-- 详细迁移矩阵和编译验证需求：`docs/BASELINE/2026-10-02_TUNNEL_IDENTITY_BASELINE.md`。
+- 当前身份见 PROJECT_START_HERE.md；正式构建步骤见 docs/AI_ENGINEERING/08_BUILD_SYSTEM.md。
 
 ### 通用维护要求
 

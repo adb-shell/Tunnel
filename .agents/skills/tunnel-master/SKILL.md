@@ -7,26 +7,12 @@ description: Coordinate Tunnel work that crosses two or more Rust, Flutter, Andr
 
 ## Purpose
 
-Act as the coordinating Principal Engineer. Establish authority and evidence first, route domain work to the narrowest Tunnel skill, preserve compatibility, and finish with an explicit validation and documentation handoff.
+Act as the coordinating Principal Engineer. Establish authority and evidence first, route domain work to the narrowest Tunnel skill, preserve compatibility, and finish with an concise explanation of changes and actual verification.
 
 ## Read First
 
-Resolve all paths from the Tunnel repository root.
-
-Read these files before taking task actions:
-
-1. `PROJECT_START_HERE.md`
-2. `.codex/AI_RULES.md`
-3. `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`
-4. `.codex/PROJECT_MEMORY.md`
-5. `docs/AI_ENGINEERING/00_PROJECT_OVERVIEW.md`
-6. `docs/AI_ENGINEERING/01_ARCHITECTURE.md`
-7. `docs/AI_ENGINEERING/02_SOURCE_MAP.md`
-8. All domain documents and Skills relevant to the request.
-
-Treat current source, manifests, protocol definitions, and build scripts as the final source of truth.
-Follow protocol states T0—T8 and stop at the applicable confirmation gate before any mutation.
-For every development task, use `TASK_TEMPLATE.md`, record a `docs/BASELINE/` Baseline ID, check related `docs/ADR/`, and select `TEST_MATRIX.md` cases.
+Read `PROJECT_START_HERE.md` and `.codex/AI_RULES.md`, then only relevant source and `docs/AI_ENGINEERING/01_ARCHITECTURE.md`, `docs/AI_ENGINEERING/02_SOURCE_MAP.md`.
+Current source is authoritative. Follow existing user authorization without repeated confirmation. Do not create per-task reports, task ledgers, or duplicate memories. Update one relevant guide only when its facts change.
 
 ## Routing Boundaries
 
@@ -37,10 +23,9 @@ For every development task, use `TASK_TEMPLATE.md`, record a `docs/BASELINE/` Ba
 
 ## Responsibilities
 
-- Own Task Brief, cross-domain Impact Map, confirmation level, sequencing, and final acceptance.
+- Own cross-domain scope, sequencing, and final acceptance; keep routine coordination in the conversation.
 - Select primary domain owners and required Security/Release reviewers.
 - Reconcile conflicts between source, documents, Skills, compatibility paths, and external assets.
-- Ensure verification evidence, documentation delta, Decision Log, Task History, and External Asset Registry are handled within authorization.
 - Stop scope expansion and return to design/confirmation instead of silently broadening the task.
 
 ## Workflow
@@ -77,7 +62,6 @@ Keep one owner for cross-domain invariants and final acceptance.
 - Prefer the smallest reversible change that addresses the evidence.
 - Do not modify generated files without their generator path.
 - Do not silently change compatibility behavior, persisted keys, protocol fields, package names, artifacts, endpoints, or platform permissions.
-- When an authorized task changes facts or decisions, update `docs/AI_ENGINEERING/`, `.codex/DECISION_LOG.md`, and `.codex/TASK_HISTORY.md` within that authorization.
 
 ### 5. Verify proportionally
 
@@ -89,7 +73,7 @@ Keep one owner for cross-domain invariants and final acceptance.
 ## Forbidden Actions
 
 - Do not commit, push, merge, rebase, stage, branch, or create a PR without explicit authority.
-- Do not delete source, documentation, generated assets, or historical material.
+- Preserve unrelated files; delete only within the user's authorized cleanup scope.
 - Do not build, test, sign, package, upload, deploy, release, or change a version unless explicitly authorized in a valid environment.
 - Do not reveal or test secrets, credentials, production addresses, device identifiers, or PII.
 - Do not treat UI visibility as authorization or a running service as proof of a first frame.
@@ -104,7 +88,6 @@ Keep one owner for cross-domain invariants and final acceptance.
 - [ ] Every affected domain and trust boundary has an owner.
 - [ ] Cross-layer call paths and persisted/protocol compatibility are checked.
 - [ ] Security, privacy, license, and release effects are assessed.
-- [ ] If authorized facts or decisions changed, documentation, decision log, task history, and external registry are synchronized.
 - [ ] Executed and unexecuted validation are both stated.
 - [ ] No secret, production identifier, or PII is present in output.
 - [ ] No unauthorized Git/build/delete/release action occurred.

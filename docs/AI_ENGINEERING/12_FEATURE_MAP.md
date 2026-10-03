@@ -90,5 +90,3 @@ flowchart TD
 2. 选最窄领域 Skill，列调用两端、状态owner、权限/兼容与外部依赖。
 3. 在 Task artifact 写验收、方案、rollback、TEST_MATRIX cases；确认产品取舍后改实现。
 4. 静态检查与正式验证分开；实现事实同步对应00—10/地图行，历史任务追加、memory更新指针。
-
-本轮覆盖细节及尚未深入验证的 retained 平台见 [接管报告](audits/2026-10-02/README.md)。

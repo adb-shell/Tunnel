@@ -6,8 +6,8 @@
     "url": "https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip",
     "asset_id": 180784412,
     "size": 199309,
-    "sha256": null,
-    "note": "Legacy release supplies no digest. Record acquired SHA256; optional owner pin TUNNEL_USBMMIDD_SHA256."
+    "sha256": "629b51e9944762bae73948171c65d09a79595cf4c771a82ebc003fbba5b24f51",
+    "note": "Digest pinned from the official release ZIP inspected 2026-10-03. UMDF x64 DLL/INF/CAT package; WUDFRd.sys is an OS component, not a bundled file."
   },
   "printer": {
     "name": "rustdesk_printer_driver_v4-1.4.zip",

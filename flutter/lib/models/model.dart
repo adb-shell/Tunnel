@@ -396,6 +396,7 @@ class FfiModel with ChangeNotifier {
   }
 
   setConnectionType(String peerId, bool secure, bool direct) {
+    final changed = _secure != secure || _direct != direct;
     cachedPeerData.secure = secure;
     cachedPeerData.direct = direct;
     _secure = secure;
@@ -407,6 +408,7 @@ class FfiModel with ChangeNotifier {
     } catch (e) {
       //
     }
+    if (changed) notifyListeners();
   }
 
   Widget? getConnectionImage() {

@@ -21,7 +21,83 @@ assets = load('windows_assets', 'scripts/windows_assets.py')
 portable = load('tunnel_portable', 'libs/portable/generate.py')
 
 
+def synthetic_pe(path, machine=0x8664, dll=False):
+    image = bytearray(88)
+    image[:2] = b'MZ'
+    struct.pack_into('<I', image, 60, 64)
+    image[64:68] = b'PE\0\0'
+    struct.pack_into('<H', image, 68, machine)
+    struct.pack_into('<H', image, 86, 0x2002 if dll else 0x0002)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(image)
+
+
+def synthetic_amyuni(folder):
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / 'usbmmIdd.inf').write_text('[Version]\nCatalogFile=usbmmidd.cat\n')
+    (folder / 'usbmmidd.cat').write_bytes(b'synthetic-catalog')
+    (folder / 'License.txt').write_text('synthetic license')
+    synthetic_pe(folder / 'x64/usbmmIdd.dll', dll=True)
+    synthetic_pe(folder / 'Win32/usbmmIdd.dll', machine=0x014c, dll=True)
+    synthetic_pe(folder / 'deviceinstaller64.exe')
+    synthetic_pe(folder / 'deviceinstaller.exe', machine=0x014c)
+    (folder / 'usbmmidd.bat').write_text('synthetic legacy installer')
+
+
 class WindowsBuildContracts(unittest.TestCase):
+    def test_amyuni_umdf_package_requires_no_vendor_sys_and_keeps_x64_layout(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); source = root / 'source'; stage = root / 'stage'
+            synthetic_amyuni(source)
+            self.assertEqual(list(source.rglob('*.sys')), [])
+            assets.require_amyuni_x64(source)
+            assets.copy_tree(source, stage, exclude_32bit=True)
+            assets.require_amyuni_x64(stage)
+            self.assertTrue((stage / 'x64/usbmmIdd.dll').is_file())
+            self.assertTrue((stage / 'License.txt').is_file())
+            self.assertFalse((stage / 'Win32').exists())
+            self.assertFalse((stage / 'deviceinstaller.exe').exists())
+            self.assertFalse((stage / 'usbmmidd.bat').exists())
+
+    def test_amyuni_rejects_missing_empty_or_wrong_architecture_payload(self):
+        required = ('usbmmIdd.inf', 'usbmmidd.cat', 'x64/usbmmIdd.dll',
+                    'deviceinstaller64.exe', 'License.txt')
+        for name in required:
+            for empty in (False, True):
+                with self.subTest(name=name, empty=empty), tempfile.TemporaryDirectory() as folder:
+                    source = Path(folder); synthetic_amyuni(source)
+                    if empty:
+                        (source / name).write_bytes(b'')
+                    else:
+                        (source / name).unlink()
+                    with self.assertRaises(ValueError):
+                        assets.require_amyuni_x64(source)
+        for name, dll in (('x64/usbmmIdd.dll', True), ('deviceinstaller64.exe', False)):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as folder:
+                source = Path(folder); synthetic_amyuni(source)
+                synthetic_pe(source / name, machine=0x014c, dll=dll)
+                with self.assertRaisesRegex(ValueError, 'Windows x64'):
+                    assets.require_amyuni_x64(source)
+
+    def test_new_digest_pin_reuses_only_matching_legacy_cache_offline(self):
+        for matching in (True, False):
+            with self.subTest(matching=matching), tempfile.TemporaryDirectory() as folder:
+                cache = Path(folder); old = cache / '42-driver.zip'
+                with zipfile.ZipFile(old, 'w') as archive:
+                    archive.writestr('driver.inf', 'synthetic')
+                digest = assets.sha256(old) if matching else '0' * 64
+                spec = {'name': 'driver.zip', 'asset_id': 42, 'sha256': digest,
+                        'size': old.stat().st_size, 'url': 'https://invalid.example/driver.zip'}
+                if matching:
+                    acquired, receipt = assets.acquired(spec, cache, True)
+                    self.assertEqual(acquired.name, digest + '-driver.zip')
+                    self.assertEqual(receipt['sha256'], digest)
+                    self.assertTrue(old.is_file())
+                else:
+                    with self.assertRaisesRegex(ValueError, 'Offline cache is missing'):
+                        assets.acquired(spec, cache, True)
+                    self.assertFalse((cache / (digest + '-driver.zip')).exists())
+
     def test_portable_rejects_wrong_architecture_and_dll_artifacts(self):
         with tempfile.TemporaryDirectory() as folder:
             artifact = Path(folder) / 'synthetic.exe'

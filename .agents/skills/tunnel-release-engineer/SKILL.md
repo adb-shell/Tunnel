@@ -11,9 +11,8 @@ Prepare auditable build and release plans while treating build, signing, upload,
 
 ## Read First
 
-Resolve all paths from the Tunnel repository root. Complete the mandatory baseline in `PROJECT_START_HERE.md`, then read `.codex/AI_RULES.md`, `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`, `DEVELOPMENT_WORKFLOW.md`, `docs/AI_ENGINEERING/08_BUILD_SYSTEM.md`, `docs/AI_ENGINEERING/09_DEBUG_SYSTEM.md`, `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`, `docs/AI_ENGINEERING/11_ROADMAP.md`, and `EXTERNAL_ASSET_REGISTRY.md`. Inspect current scripts/workflows rather than copying commands from historical setup documents. Follow protocol T0—T8; planning never passes the build, Git or release confirmation gates.
-
-Use `TASK_TEMPLATE.md`, `docs/BASELINE/`, related `docs/ADR/` and `TEST_MATRIX.md` as mandatory release-readiness inputs.
+Read `PROJECT_START_HERE.md` and `.codex/AI_RULES.md`, then only relevant source and `docs/AI_ENGINEERING/08_BUILD_SYSTEM.md`, `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`.
+Current source is authoritative. Follow existing user authorization without repeated confirmation. Do not create per-task reports, task ledgers, or duplicate memories. Update one relevant guide only when its facts change.
 
 ## Routing Boundaries
 
@@ -98,7 +97,6 @@ Before any command, state the exact authorized stage and stop boundary. Preserve
 - [ ] Dependencies, Git refs, licenses, SBOM, secrets, and CI permissions are reviewed.
 - [ ] Platform matrix, negative tests, install/upgrade/uninstall, and rollback are defined.
 - [ ] Artifact hashes/signatures map to source and toolchain.
-- [ ] If authorized build/release facts changed, build docs, task/decision memory, and external registry are updated.
 - [ ] Release notes, known issues, owners, and monitoring are ready.
 - [ ] No unauthorized Git/version/build/sign/upload/release action occurred.
 

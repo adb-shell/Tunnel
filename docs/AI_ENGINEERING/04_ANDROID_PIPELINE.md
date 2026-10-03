@@ -1,8 +1,8 @@
 # Tunnel Android 完整链路 / Android Pipeline
 
-2026-10-03 T008：ADB统一私有 `-L localfilesystem:<filesDir>/adb-server.sock`（同一HOME/key），取消不再使进程执行器永久失效；NSD收集多个本机记录，连接后有界等待真实uid2000。Rust权限门后私有JNI刷新MainService连接资格，解决服务重建丢CM身份；helper按固定阶段报错。未运行修订版真机；[源码修复与LADB对照](../plans/ADB_RELIABILITY_REPAIR_TASK.md)。
+2026-10-03 T008：ADB统一私有 `-L localfilesystem:<filesDir>/adb-server.sock`（同一HOME/key），取消不再使进程执行器永久失效；NSD收集多个本机记录，连接后有界等待真实uid2000。Rust权限门后私有JNI刷新MainService连接资格，解决服务重建丢CM身份；helper按固定阶段报错。未运行修订版真机；[ADB 指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
 
-2026-10-03 T005：[ADR-0017](../ADR/0017-adb-session-lifetime.md)将conn scopes改为会话生命周期；生产helper VERSION3/duration0取消一小时限制。断连/撤销/退出ADB/故障清理，暂停采集保留helper/control；Startup/control/写阻塞/操作守卫不变，P0仍有限诊断。
+2026-10-03 T005：[ADB 指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)将conn scopes改为会话生命周期；生产helper VERSION3/duration0取消一小时限制。断连/撤销/退出ADB/故障清理，暂停采集保留helper/control；Startup/control/写阻塞/操作守卫不变，P0仍有限诊断。
 
 2026-10-03 T004当前ADB：手机专用页面/两诊断与授权card移除，HomePage空列表有ConnectionPage fallback；Runner保持内部shell与helper。localhost修复首次daemon启动；pair成功后发现独立连接端口、connect、fresh nonce UID2000；RemoteAdbPairing异步进度/取消，权限撤销与实际连接身份注销分离。SDK30+；Android11—16/16KiB正式验收仍NOT_RUN。[指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
 
@@ -10,7 +10,7 @@
 
 最后源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，`T-2026-10-02-001`，V0 静态证据。旧 `77062b4` 为历史文档快照，不能据此推断当前 Git ancestry。
 
-本次复核的逐符号证据、状态 owner、发现及后续定位见 [Android / Flutter Audit](audits/2026-10-02/ANDROID_FLUTTER_AUDIT.md)。本文的“必须/不得”是维护目标，不表示所有实现已满足，更不表示真机验证通过。
+本文的“必须/不得”是维护目标，不表示所有实现已满足，更不表示真机验证通过。
 
 > 本文只记录当前仓库可证明的 Android 运行时事实。标签含义：`verified` 为源码直接证实；`inferred` 为跨文件静态推断；`external` 为 Android/第三方平台行为；`verification-required` 为必须在正式构建机或真机确认的事项。源码高于本文。
 
@@ -557,7 +557,7 @@ Rust 只承担邀请、接受/关闭和状态控制；Flutter ZEGO SDK 负责 mi
 
 ## 17. Local ADB capture P0 source（2026-10-02）
 
-T-2026-10-02-003新增默认关闭的本机诊断，不是生产远程provider。`AdbMirrorProbeCard` → 本地`tunnel_adb_p0_*` MethodChannel → `TunnelAdbPrototype` → `LocalAdbIdentityProbe` → APK内固定manifest/helper → shell `app_process` → `AdbWire` → 仅编码计数。源码位于Android `adb/probe/`、`adb/mirror/` 和仓库 `android-helper/`；详见[P0交接](../plans/ADB_P0_VALIDATION_RUNBOOK.md)。
+T-2026-10-02-003新增默认关闭的本机诊断，不是生产远程provider。`AdbMirrorProbeCard` → 本地`tunnel_adb_p0_*` MethodChannel → `TunnelAdbPrototype` → `LocalAdbIdentityProbe` → APK内固定manifest/helper → shell `app_process` → `AdbWire` → 仅编码计数。源码位于Android `adb/probe/`、`adb/mirror/` 和仓库 `android-helper/`；详见[ADB 指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
 
 native和UI同时依赖默认false的`BuildConfig.ADB_MIRROR_P0`。shell UID2000、本机selector、artifact SHA-256、stdin bootstrap、双路loopback认证和有界帧协议分别校验；配对历史不当作helper就绪。新诊断没有JNI/VIDEO_RAW写入、PC消息入口、输入注入或无障碍设置操作；`decoded`/`rendered`恒false。
 

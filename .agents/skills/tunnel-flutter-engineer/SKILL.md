@@ -11,9 +11,8 @@ Maintain Flutter UI and session behavior with explicit state ownership, window/s
 
 ## Read First
 
-Resolve all paths from the Tunnel repository root. Complete the mandatory baseline in `PROJECT_START_HERE.md`, then read `.codex/AI_RULES.md`, `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`, `docs/AI_ENGINEERING/01_ARCHITECTURE.md`, `docs/AI_ENGINEERING/02_SOURCE_MAP.md`, `docs/AI_ENGINEERING/03_MODULE_DESIGN.md`, and the affected full-path platform/API document. Inspect `flutter/lib/main.dart`, the relevant model, and the Rust or MethodChannel declaration before changing a widget. Follow protocol T0—T8 and stop at the confirmation gate before mutation.
-
-For development, record the Baseline ID and related ADRs in `TASK_TEMPLATE.md`, then select FLT and affected cross-domain cases from `TEST_MATRIX.md`.
+Read `PROJECT_START_HERE.md` and `.codex/AI_RULES.md`, then only relevant source and `docs/AI_ENGINEERING/01_ARCHITECTURE.md`, `docs/AI_ENGINEERING/02_SOURCE_MAP.md`, `docs/AI_ENGINEERING/03_MODULE_DESIGN.md`.
+Current source is authoritative. Follow existing user authorization without repeated confirmation. Do not create per-task reports, task ledgers, or duplicate memories. Update one relevant guide only when its facts change.
 
 ## Routing Boundaries
 
@@ -106,7 +105,6 @@ The native bridges are:
 - [ ] HTTP/account auth boundaries are preserved.
 - [ ] UI is not used as a security boundary.
 - [ ] Generated bridge plan and formal verification are documented.
-- [ ] If authorized UI/runtime facts changed, domain docs and task/decision memory are updated.
 
 ## Verification
 

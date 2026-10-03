@@ -544,8 +544,10 @@ impl<T: InvokeUiSession> Remote<T> {
                 if let Some(message::Union::Misc(misc)) = &msg.union {
                     if let Some(misc::Union::AndroidControl(control)) = &misc.union {
                         if !peer.is_secured() {
+                            let code = self.handler.lc.read().unwrap().security_failure
+                                .unwrap_or("SECURE_CHANNEL_REQUIRED");
                             self.handler.update_android_control(crate::server::android_control::request_error(
-                                &control.json, "SECURE_CHANNEL_REQUIRED"));
+                                &control.json, code));
                             return true;
                         }
                     }

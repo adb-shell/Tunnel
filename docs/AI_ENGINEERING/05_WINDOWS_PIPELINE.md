@@ -1,8 +1,8 @@
 # Tunnel Windows 完整链路 / Windows Pipeline
 
-2026-10-03 T008：WindowInjection按当前VS工具集编译，x64 target/PE EXE检查，Release拷贝逐文件SHA256；自解压运行时传播解压/写入/metadata/启动失败并显示错误，不启动不完整产物。详见[指南](../plans/WINDOWS_BUILD_GUIDE.md)和[修复记录](../plans/ADB_RELIABILITY_REPAIR_TASK.md)。只V0，完整打包/启动待服务器验收。
+2026-10-03 T008：WindowInjection按当前VS工具集编译，x64 target/PE EXE检查，Release拷贝逐文件SHA256；自解压运行时传播解压/写入/metadata/启动失败并显示错误，不启动不完整产物。详见[指南](../plans/WINDOWS_BUILD_GUIDE.md)和[ADB 指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。只V0，完整打包/启动待服务器验收。
 
-2026-10-03 T007：CMD父入口默认保留窗口并在VS初始化前建launcher日志；NoPause/CI用于自动化。PS追加transcript、原生stdout/stderr消息、阶段/失败行、source commit/tracked changes/关键Dart SHA256，初始化/清理及退出码受保护；不能从“窗口不关闭”推断编译通过。后续日志定位Rust release后Flutter旧ADB弹窗类型失败，未到驱动/打包；test/0720e49有T006修复，服务器实际源码和重编待核对。[任务](../plans/WINDOWS_BUILD_EXIT_FIX_TASK.md)/[指南](../plans/WINDOWS_BUILD_GUIDE.md)。
+2026-10-03 T007：CMD父入口默认保留窗口并在VS初始化前建launcher日志；NoPause/CI用于自动化。PS追加transcript、原生stdout/stderr消息、阶段/失败行、source commit/tracked changes/关键Dart SHA256，初始化/清理及退出码受保护；不能从“窗口不关闭”推断编译通过。后续日志定位Rust release后Flutter旧ADB弹窗类型失败，未到驱动/打包；test/0720e49有T006修复，服务器实际源码和重编待核对。[Windows 指南](../plans/WINDOWS_BUILD_GUIDE.md)/[指南](../plans/WINDOWS_BUILD_GUIDE.md)。
 
 2026-10-03 Windows构建修复：new-build/build/pc-bulid统一入口；scripts/windows_assets.py准备官方usbmmidd/打印包/adapter并保留x64 installer，缺失WindowInjection可从固定源编译。tunnel/dylib DLL经Cargo artifact定位；打包前验PE x64，产物验证本次payload。代码/运行契约与正式验证见 [Windows指南](../plans/WINDOWS_BUILD_GUIDE.md)；只有来源API与源码/V0，driver publisher/signature/OS运行仍未验。
 
@@ -12,7 +12,6 @@
 
 源码复核：2026-10-02，`HEAD 5cee692`，V0
 
-详细证据：[RUST_NETWORK_WINDOWS_AUDIT.md](audits/2026-10-02/RUST_NETWORK_WINDOWS_AUDIT.md)
 
 > 本文只记录本仓库源码可证明的 Windows capture、input、privacy、Amyuni virtual display 和 printing 路径。`verified` 表示源码直接证实；`inferred` 表示跨文件静态推断；`external` 表示实现位于仓外 DLL/driver；`verification-required` 表示必须在正式 Windows 环境确认。本文不把第三方二进制的预期行为冒充源码事实。
 

@@ -11,9 +11,8 @@ Maintain client-side API contracts without inventing missing backend or database
 
 ## Read First
 
-Resolve all paths from the Tunnel repository root. Complete the mandatory baseline in `PROJECT_START_HERE.md`, then read `.codex/AI_RULES.md`, `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`, `docs/AI_ENGINEERING/07_API_SYSTEM.md`, `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`, `docs/AI_ENGINEERING/11_ROADMAP.md`, and `EXTERNAL_ASSET_REGISTRY.md`. Inspect the exact Dart/Rust client and configuration source. Do not infer server behavior from client models. Follow protocol T0—T8 and stop at the confirmation gate before mutation.
-
-For development, record the Baseline ID、related ADRs and external asset IDs in `TASK_TEMPLATE.md`, then select API and affected E2E cases from `TEST_MATRIX.md`.
+Read `PROJECT_START_HERE.md` and `.codex/AI_RULES.md`, then only relevant source and `docs/AI_ENGINEERING/07_API_SYSTEM.md`, `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`.
+Current source is authoritative. Follow existing user authorization without repeated confirmation. Do not create per-task reports, task ledgers, or duplicate memories. Update one relevant guide only when its facts change.
 
 ## Routing Boundaries
 
@@ -95,7 +94,6 @@ Exercise 2xx/4xx/5xx, timeout, token expiry/revoke, malformed/oversize JSON, dup
 - [ ] Concurrent request correlation and cache lifecycle are safe.
 - [ ] Download/upload path, size, integrity, consent, and cleanup are bounded.
 - [ ] Database/schema/backup gaps are listed rather than invented.
-- [ ] If authorized contract facts changed, documentation, task/decision memory, and external registry are updated.
 - [ ] Formal test/build/deployment status is explicit.
 
 ## Verification

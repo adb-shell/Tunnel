@@ -39,16 +39,24 @@ def acquired(spec, cache, offline):
     key = expected or str(spec.get('asset_id') or spec.get('commit'))
     path = cache / (key + '-' + spec['name'])
 
-    def verify():
-        if not path.is_file() or path.stat().st_size == 0:
+    def verify(candidate):
+        if not candidate.is_file() or candidate.stat().st_size == 0:
             return False
-        if spec.get('size') and path.stat().st_size != spec['size']:
+        if spec.get('size') and candidate.stat().st_size != spec['size']:
             return False
-        if spec['name'].endswith('.zip') and not zipfile.is_zipfile(path):
+        if spec['name'].endswith('.zip') and not zipfile.is_zipfile(candidate):
             return False
-        return not expected or sha256(path).lower() == expected.lower()
+        return not expected or sha256(candidate).lower() == expected.lower()
 
-    if path.exists() and not verify():
+    # Older builds cached usbmmidd under its release asset ID before its digest
+    # was pinned. Reuse those bytes only after the new full digest check, so a
+    # repaired PackageOnly/Offline run need not download the same package again.
+    legacy_key = spec.get('asset_id') or spec.get('commit')
+    if expected and legacy_key and not path.exists():
+        legacy = cache / (str(legacy_key) + '-' + spec['name'])
+        if verify(legacy):
+            shutil.copy2(legacy, path)
+    if path.exists() and not verify(path):
         raise ValueError(f'Cached asset is invalid; preserve/rename it before retry: {path}')
     if not path.exists():
         if offline:
@@ -145,6 +153,21 @@ def require_x64_pe(path, dll=False):
 
 def require_x64_dll(path):
     require_x64_pe(path, dll=True)
+
+
+def require_amyuni_x64(folder):
+    # usbmmidd_v2 is a UMDF driver. WUDFRd.sys in its INF is supplied by
+    # Windows; the vendor payload is x64/usbmmIdd.dll, not a vendor .sys.
+    # Keep the INF's x64 source directory intact and validate every file used
+    # by our runtime installer, rather than accepting any DLL/CAT in the ZIP.
+    required = ('usbmmIdd.inf', 'usbmmidd.cat', 'x64/usbmmIdd.dll',
+                'deviceinstaller64.exe', 'License.txt')
+    for name in required:
+        path = folder / name
+        if not path.is_file() or path.stat().st_size == 0:
+            raise ValueError(f'Amyuni x64 package lacks required file: {name}')
+    require_x64_dll(folder / 'x64/usbmmIdd.dll')
+    require_x64_pe(folder / 'deviceinstaller64.exe')
 
 
 def copy_tree(source, destination, exclude_32bit=False):
@@ -245,8 +268,9 @@ def main():
         if len(matches) != 1 or matches[0].lower() != sources[kind]['sha256']:
             raise ValueError(f'Upstream checksum table disagrees for {kind}')
     usb = unique_file(extract(archives['usbmmidd'], cache), 'usbmmIdd.inf', exclude_32bit=True).parent
-    require_suffix(usb, '.sys'); require_suffix(usb, '.cat')
+    require_amyuni_x64(usb)
     copy_tree(usb, options.stage / 'usbmmidd_v2', exclude_32bit=True)
+    require_amyuni_x64(options.stage / 'usbmmidd_v2')
     printer = unique_file(extract(archives['printer'], cache), 'RustDeskPrinterDriver.inf').parent
     require_suffix(printer, '.cat')
     copy_tree(printer, options.stage / 'drivers/RustDeskPrinterDriver')

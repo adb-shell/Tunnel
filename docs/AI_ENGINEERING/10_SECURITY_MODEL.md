@@ -1,14 +1,14 @@
 # Tunnel 安全模型 / Security Model
 
-2026-10-03 T004授权政策变化见[ADR-0016](../ADR/0016-pc-owned-adb-pairing-and-session-consent.md)：PC短暂输入配对码，当前已认证加密且有输入/视频权限的控制角色可显式pair/authorize，fresh本机probe后当前会话scopes；T005/ADR-0017取消600秒和生产helper一小时期限，断连/撤销/退出ADB/故障清理，保留心跳/超时守卫。已替代旧phone-local consent，不宣称endpoint可证明UI点击；不从pairedBefore自动grant，不开放remote shell。secret不入argv/log/prefs/通用replay signature；取消/断线/撤权阻止lategrant。
+2026-10-03 T004授权政策变化见[ADB 指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)：PC短暂输入配对码，当前已认证加密且有输入/视频权限的控制角色可显式pair/authorize，fresh本机probe后当前会话scopes；当前实现取消600秒和生产helper一小时期限，断连/撤销/退出ADB/故障清理，保留心跳/超时守卫。已替代旧phone-local consent，不宣称endpoint可证明UI点击；不从pairedBefore自动grant，不开放remote shell。secret不入argv/log/prefs/通用replay signature；取消/断线/撤权阻止lategrant。
 
-> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：本次新ADB入口要求secured/authenticated normal session、键盘权限/视频订阅、单owner、本机scope+TTL与撤销；helper限定本机uid2000、认证IPC、固定操作和owned资源清理。远程文本shell禁入，截图/节点不突破secure，A11y重新开启走本机settings；既有SEC项不因本次新增控制自动关闭。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
+> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：本次新ADB入口要求secured/authenticated normal session、键盘权限/视频订阅、单owner、会话scope与撤销；helper限定本机uid2000、认证IPC、固定操作和owned资源清理。远程文本shell禁入，截图/节点不突破secure，A11y重新开启走本机settings；既有SEC项不因本次新增控制自动关闭。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 接管基线：2026-07-12  
-最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
+最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`
 状态：`verified` + `inferred` + `external` + `verification-required`
 
-> 本文是本地 tracked source 的静态安全接管，不是渗透测试。未测试任何 credential，有关值均不复述。2026-07-12 关于公开远端/历史传播的结论是历史记录；本轮没有联网核查，也没有完整旧 Git history，不能把它写成当前远端事实。当前源码暴露和正式验证缺口仍未关闭，不能据此批准发布。逐项证据见 [API / Security / Release Audit](audits/2026-10-02/API_SECURITY_RELEASE_AUDIT.md) 及同目录领域报告。
+> 本文是本地 tracked source 的静态安全接管，不是渗透测试。未测试任何 credential，有关值均不复述。2026-07-12 关于公开远端/历史传播的结论是历史记录；本轮没有联网核查，也没有完整旧 Git history，不能把它写成当前远端事实。当前源码暴露和正式验证缺口仍未关闭，不能据此批准发布。具体风险见下文源码锚点。
 
 ## 1. 总体判断
 
@@ -273,7 +273,7 @@ Severity reflects static path and potential impact. 本轮没有动态证明任�
 - `SEC-018`：`client/helper.rs::payload_json()` 包含 RTC token，经 `flutter.rs` / Kotlin `dispatchFlutterEvent()` 到 `mobile/pages/server_page.dart::androidChannelInit()`；该函数在 switch 前打印全部 arguments。`port_forward.rs::run_rdp()` 同样打印含 password 的参数列表；`account.rs::auth_task()` 输出 OIDC code/URL 结果。前置条件是相应功能运行且日志被保存/读取；未采集真实日志。修复应在输出源做字段 allowlist/redaction，验证 debug/release、错误与诊断导出都不含测试 secret。
 - `SEC-019`：terminal LoginRequest 在权限启用且登录成功后才初始化 terminal，已有这些控制。风险在后续 session ownership：`terminal.service_id` 来自 client，`get_or_create_service()` 仅按 ID 查全局 map，`PersistentTerminalService` 无 owner 字段。需要已知有效 ID、旧 persistent service 仍活着和合法 terminal 登录能力，才存在跨 peer 复用假设；不是未登录 shell bypass。修复设计需要 owner/session 绑定和 reconnect capability，覆盖原用户恢复与异用户拒绝，避免破坏 persistence。
 
-上述实现修订需独立 C2 设计/授权；V1—V4 测试、设备、签名/部署、credential 处置保持各自 C3 门。Domain/Security owner 尚需指定，不由本报告代替 owner 接受风险。
+修复在用户授权范围内执行；设备测试、签名部署和凭据处置按实际环境与授权进行。源码审查不代替运行验收。
 
 ## 12. Positive Controls
 
@@ -314,7 +314,7 @@ Formal isolated verification must cover:
 - Windows DLL search/signature/driver/privacy failure recovery。
 - CI permissions, immutable actions, secret boundaries, SBOM and artifact signing。
 
-具体项目构建命令、环境、目录和矩阵见 `09_DEBUG_SYSTEM.md`《编译验证需求》。本轮未执行上述动态验证。
+构建命令见 [构建系统](08_BUILD_SYSTEM.md)，设备验证见 [测试清单](../../TEST_MATRIX.md)。本轮未执行上述动态验证。
 
 ## 15. 外部与合规缺口
 

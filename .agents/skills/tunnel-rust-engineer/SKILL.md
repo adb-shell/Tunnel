@@ -11,9 +11,8 @@ Maintain Rust behavior without losing platform, ABI, protocol, lifetime, or comp
 
 ## Read First
 
-Resolve all paths from the Tunnel repository root. Complete the mandatory baseline in `PROJECT_START_HERE.md`, then read `.codex/AI_RULES.md`, `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`, `docs/AI_ENGINEERING/01_ARCHITECTURE.md`, `docs/AI_ENGINEERING/02_SOURCE_MAP.md`, `docs/AI_ENGINEERING/03_MODULE_DESIGN.md`, and the relevant full-path platform, network, or security document. Inspect root `Cargo.toml` and the target crate manifest before changing Rust. Follow protocol T0—T8 and stop at the confirmation gate before mutation.
-
-For development, record the Baseline ID and related ADRs in `TASK_TEMPLATE.md`, then select Rust and cross-domain cases from `TEST_MATRIX.md`.
+Read `PROJECT_START_HERE.md` and `.codex/AI_RULES.md`, then only relevant source and `docs/AI_ENGINEERING/01_ARCHITECTURE.md`, `docs/AI_ENGINEERING/02_SOURCE_MAP.md`, `docs/AI_ENGINEERING/03_MODULE_DESIGN.md`.
+Current source is authoritative. Follow existing user authorization without repeated confirmation. Do not create per-task reports, task ledgers, or duplicate memories. Update one relevant guide only when its facts change.
 
 ## Routing Boundaries
 
@@ -100,7 +99,6 @@ For development, record the Baseline ID and related ADRs in `TASK_TEMPLATE.md`, 
 - [ ] Rust 1.75/edition 2021 compatibility preserved.
 - [ ] Error paths release resources and remain fail-closed.
 - [ ] No secret or PII enters logs/output.
-- [ ] If authorized implementation facts changed, domain docs and decision/task memory are updated.
 - [ ] Formal verification request or results provided.
 
 ## Verification

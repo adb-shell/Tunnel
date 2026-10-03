@@ -11,9 +11,8 @@ Maintain the Android endpoint without collapsing service, projection, frame-sour
 
 ## Read First
 
-Resolve all paths from the Tunnel repository root. Complete the mandatory baseline in `PROJECT_START_HERE.md`, then read `.codex/AI_RULES.md`, `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`, `docs/AI_ENGINEERING/04_ANDROID_PIPELINE.md`, `docs/AI_ENGINEERING/09_DEBUG_SYSTEM.md`, and `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`. Consult `docs/ENGINEERING_ANDROID_RUNTIME.md` only as historical/no-regression evidence; current source and the new AI engineering documents win on normal-refresh and `mediaReady` drift. Inspect active Kotlin/JNI sources instead of trusting obfuscated names or old comments. Follow protocol T0—T8 and stop at the confirmation gate before mutation.
-
-For development, record the Baseline ID and related ADRs in `TASK_TEMPLATE.md`, then select AND/FLT/RST/NET cases from `TEST_MATRIX.md`.
+Read `PROJECT_START_HERE.md` and `.codex/AI_RULES.md`, then only relevant source and `docs/AI_ENGINEERING/04_ANDROID_PIPELINE.md`, `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`.
+Current source is authoritative. Follow existing user authorization without repeated confirmation. Do not create per-task reports, task ledgers, or duplicate memories. Update one relevant guide only when its facts change.
 
 ## Routing Boundaries
 
@@ -27,7 +26,7 @@ For development, record the Baseline ID and related ADRs in `TASK_TEMPLATE.md`, 
 - Preserve the four-layer runtime model and explicit user permission authority.
 - Trace Android calls across Flutter, Rust/JNI and Kotlin without taking ownership away from the other implementation owners.
 - Define lifecycle, buffer ownership, thread safety, failure cleanup and device/ROM compatibility.
-- Produce the Android verification matrix and document unexecuted formal-device requirements.
+- Select relevant checks from `TEST_MATRIX.md` and state unexecuted device checks in the response.
 - Keep ADB, ZEGO, normal/SKL/ignore and core/share behavior as distinct subsystems.
 
 ## Mandatory State Model
@@ -109,7 +108,6 @@ For frames, trace buffer ownership from ImageReader/Accessibility screenshot thr
 - [ ] ADB and ZEGO boundaries are handled independently.
 - [ ] targetSdk/manifest/Accessibility/store-policy effects are recorded.
 - [ ] Android 10/13/14/15 and ROM/device matrix is requested.
-- [ ] If authorized runtime facts changed, documentation and task/decision memory are updated.
 
 ## Verification
 

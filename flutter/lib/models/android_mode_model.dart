@@ -25,6 +25,8 @@ class AndroidModeModel extends ChangeNotifier {
   String phase = 'UNKNOWN';
   String reason = '';
   String get reasonText {
+    final channelMessage = AndroidAdbPairingModel.channelErrorText(reason);
+    if (channelMessage != null) return '$channelMessage ($reason)';
     const messages = <String, String>{
       'HELPER_ASSET_INVALID': '手机投屏组件缺失或版本不匹配，请更新 APK。',
       'HELPER_DIRECTORY_FAILED': '无法创建手机投屏组件目录。',

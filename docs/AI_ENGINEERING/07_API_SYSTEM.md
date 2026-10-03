@@ -1,14 +1,14 @@
 # Tunnel API 系统 / API System
 
 接管基线：2026-07-12  
-最近源码复核：2026-10-02，`5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
+最近源码复核：2026-10-02，`5cee6921ec10971bb4654bc010f9328d7f70d02b`
 状态：`verified` + `external` + `verification-required`
 
-本轮证据、契约矩阵和未执行项见 [API / Security / Release Audit](audits/2026-10-02/API_SECURITY_RELEASE_AUDIT.md)。`verified` 仅表示本地源码支持，不表示服务端或运行验证通过。
+`verified` 仅表示本地源码支持，不表示服务端或运行验证通过。
 
 ## 1. 结论先行
 
-2026-10-02 T004：ZEGO token request 与仓内服务示例改为 `tunnelSessionId`，版本 API typ 使用 `tunnel-client` / `tunnel-server`；现有远端服务没有随仓库文件自动升级。生产地址和 credentials 未变，部署契约与验证要求见当前身份基线及 `EXTERNAL_ASSET_REGISTRY.md`。
+2026-10-02 T004：ZEGO token request 与仓内服务示例改为 `tunnelSessionId`，版本 API typ 使用 `tunnel-client` / `tunnel-server`；现有远端服务没有随仓库文件自动升级。生产地址和 credentials 未变，部署契约与验证要求见`EXTERNAL_ASSET_REGISTRY.md`。
 
 本仓库不是 Tunnel 后台仓库。它包含：
 
@@ -219,7 +219,7 @@ broker 必须校验当前 Tunnel 用户、peer、room、用途、TTL 与 replay�
 - audit log。
 - disaster recovery owner。
 
-这些必须由后端/运维资产补充后单独出具 API/数据接管报告。
+这些事实必须由后端与运维提供实际接口、配置和验证结果后确认。
 
 ## 12. HTTP Proxy Bridge 风险
 

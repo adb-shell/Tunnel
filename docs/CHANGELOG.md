@@ -135,7 +135,6 @@
 ## [v5.2.1-adb-code-research-15] ADB-CODE automation research memory - 2026-05-21
 
 ### ADB-CODE Review
-- Expanded `docs/ADB_LADB_INTEGRATION_MEMORY.md` with a deeper source-level review of the local `ADB-CODE/` project.
 - Documented the useful reference areas: accessibility state machine, OEM Settings keyword strategy, node-tree extraction, click fallbacks, pairing-code/port parsing, progress logging, timeout handling, and manual fallback.
 - Documented the high-risk areas that must not be copied into Tunnel by default: `/data/local/tmp` daemon deployment, boot helper, HTTP `/exec`, watchdog permission recovery, notification listener, overlay fallback, silent accessibility re-enable, broad port scanning, and Java libadb fallback.
 - Defined the recommended future Tunnel automation boundary: reuse the existing Tunnel accessibility service, add a short-lived ADB automation controller, report progress into the ADB terminal card, and keep screen-share/side-button/monitor-panel logic isolated.
@@ -176,8 +175,6 @@
 
 ### Documentation Guardrails
 - `README.md` and `PC-Build.md` keep inherited upstream/environment background, but their top notes now state the current project source truth.
-- Added `docs/SOURCE_TRUTH_AUDIT_2026_05_18.md` as the clean full-Markdown/source-anchor audit record.
-- Updated `terminal.md` to describe the subsystem as Tunnel terminal service while noting its upstream RustDesk inheritance.
 - Do not treat old `RustDesk`, `rustdesk-1.4.6`, `librustdesk.dll`, `libdaxian.so`, or `PC.cmd` references in historical/background sections as current project facts.
 - No build, clean, or git commit was executed by Codex.
 

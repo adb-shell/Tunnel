@@ -1,18 +1,17 @@
 # Tunnel 模块设计 / Module Design
 
-2026-10-03 T008：配对弹窗首次配对/已配对连接分离，手动连接端口折叠；InputModel本地dialog引用计数释放并阻止远控键盘抓取，关闭后由画布焦点恢复。按钮与mode/pairing可用性同源且显示原因，12秒无手机ACK与90秒执行超时分别报告并等待取消确认。状态面板仅ADB/投屏模式，错误放tooltip。见[修复记录](../plans/ADB_RELIABILITY_REPAIR_TASK.md)，构建/交互待验。
+2026-10-03 T008：配对弹窗首次配对/已配对连接分离，手动连接端口折叠；InputModel本地dialog引用计数释放并阻止远控键盘抓取，关闭后由画布焦点恢复。按钮与mode/pairing可用性同源且显示原因，12秒无手机ACK与90秒执行超时分别报告并等待取消确认。状态面板仅ADB/投屏模式，错误放tooltip。见[ADB 指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)，构建/交互待验。
 
-2026-10-03 T006：common.dart::DialogBuilder要求返回CustomAlertDialog；配对窗使用私有_AndroidAdbPairingOverlay子类override build承载原StatefulWidget，保留OverlayDialogManager生命周期和全窗口拖动约束。不能将含LayoutBuilder的完整窗口直接嵌入AlertDialog intrinsic content。修复用户Flutter3.24.5返回类型编译错误；源码/V0，重编待验。[任务](../plans/ADB_PAIRING_DIALOG_BUILD_FIX_TASK.md)。
+2026-10-03 T006：common.dart::DialogBuilder要求返回CustomAlertDialog；配对窗使用私有_AndroidAdbPairingOverlay子类override build承载原StatefulWidget，保留OverlayDialogManager生命周期和全窗口拖动约束。不能将含LayoutBuilder的完整窗口直接嵌入AlertDialog intrinsic content。修复用户Flutter3.24.5返回类型编译错误；源码/V0，重编待验。[ADB 指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
 
-2026-10-03 T004当前ADB：RemoteAdbPairing单后台worker与独立pairing状态；PC主动请求、端fresh probe后当前conn会话scopes（T005/ADR-0017无固定期限；helper protocol3 duration=0；断连/撤销/退出ADB清理）；旧手机页移除。本机consent旧设计由[ADR-0016](../ADR/0016-pc-owned-adb-pairing-and-session-consent.md)限定替代；视频epoch/帧事务保留。
+2026-10-03 T004当前ADB：RemoteAdbPairing单后台worker与独立pairing状态；PC主动请求、端fresh probe后当前conn会话scopes（当前实现无固定期限；helper protocol3 duration=0；断连/撤销/退出ADB清理）；旧手机页移除。本机consent旧设计由[ADB 指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)限定替代；视频epoch/帧事务保留。
 
-> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：本地ADB Runner改为有限子进程与共享transport lease；Runtime持本机consent与唯一input/source所有权；Server endpoint再次验证加密、授权、键盘权限、订阅及owner；Dart状态按FFI窗口隔离。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
+> 2026-10-03 当前增量（T-2026-10-03-001 / V0）：本地ADB Runner使用有限子进程与共享transport lease；Runtime持会话授权与唯一input/source所有权；Server endpoint再次验证加密、授权、键盘权限、订阅及owner；Dart状态按FFI窗口隔离。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 原始基线：2026-07-12，`HEAD 77062b4`（historical）
 
 Rust / Network / Windows 复核：2026-10-02，`HEAD 5cee692`，V0 静态源码审计
 
-本轮证据：[RUST_NETWORK_WINDOWS_AUDIT.md](audits/2026-10-02/RUST_NETWORK_WINDOWS_AUDIT.md)。未执行 build/test 或运行验证；未复核段落需结合对应领域报告使用。
 
 ## 1. 启动与进程模型
 
@@ -79,7 +78,7 @@ Tunnel 自定义 Android 命令复用 mouse mask/url 通道，包括 blank、bro
 
 当前确实有 persistent terminal：`LoginRequest.Terminal.service_id` 与 `OptionMessage.terminal_persistent` 进入 `Connection::init_terminal_service()`，使用进程内 `TERMINAL_SERVICES` registry；空 ID 才生成 `ts_<uuid>`。`TerminalServiceProxy::handle_open()` 可复用已有 terminal，controller 将返回的 service ID 存入 peer option `terminal-service-id`。这是同一 endpoint 进程内的断连保留，未实现跨进程重启恢复。
 
-`terminal_service::run()` 退出会删除非 persistent service；cleanup 每约 5 分钟检查，非 persistent 空闲阈值为 1 小时，persistent 且无 terminal 的阈值为 2 小时。已有 output buffer / channel 上限不等于所有服务、terminal 数或输入都有完整限额。`terminal.md` 中 `tmp_` / `persist_` 的 ID 与按前缀判断属于历史漂移；不能因此否认现有 persistence 功能。
+`terminal_service::run()` 退出会删除非 persistent service；cleanup 每约 5 分钟检查，非 persistent 空闲阈值为 1 小时，persistent 且无 terminal 的阈值为 2 小时。已有 output buffer / channel 上限不等于所有服务、terminal 数或输入都有完整限额。不要按历史 `tmp_` / `persist_` 前缀判断当前 persistence 功能。
 
 Port forward 由 `src/port_forward.rs::{listen, connect_and_login, run_forward}` 管理。当前 controller listener 绑定 `0.0.0.0`；endpoint 在 `LoginRequest::PortForward` 中先做 tunnel option gate，再连接目标，后续才验证 username/password/click/2FA。认证前 outbound connect、persistent service ID 缺 peer-owner 绑定、RDP credential 参数日志是待整改的静态路径，见 Network 文档。
 

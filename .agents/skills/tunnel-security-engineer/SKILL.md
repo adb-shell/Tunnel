@@ -11,9 +11,8 @@ Identify exploitable paths and unsafe defaults without exposing or testing live 
 
 ## Read First
 
-Resolve all paths from the Tunnel repository root. Complete the mandatory baseline in `PROJECT_START_HERE.md`, then read `.codex/AI_RULES.md`, `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`, `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`, `docs/AI_ENGINEERING/06_NETWORK_PROTOCOL.md`, `docs/AI_ENGINEERING/07_API_SYSTEM.md`, `docs/AI_ENGINEERING/08_BUILD_SYSTEM.md`, `EXTERNAL_ASSET_REGISTRY.md`, and the affected full-path platform document. Use source evidence; do not validate a suspected live credential. Follow protocol T0—T8 and stop at the confirmation gate before mutation or active testing.
-
-For remediation planning, record the Baseline ID、related ADR/external assets and security cases in `TASK_TEMPLATE.md` and `TEST_MATRIX.md`.
+Read `PROJECT_START_HERE.md` and `.codex/AI_RULES.md`, then only relevant source and `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`, `docs/AI_ENGINEERING/06_NETWORK_PROTOCOL.md`, `docs/AI_ENGINEERING/07_API_SYSTEM.md`.
+Current source is authoritative. Follow existing user authorization without repeated confirmation. Do not create per-task reports, task ledgers, or duplicate memories. Update one relevant guide only when its facts change.
 
 ## Routing Boundaries
 
@@ -108,7 +107,6 @@ Prefer fail-closed checks, owned memory, explicit consent, scoped short-lived to
 - [ ] Secret values and PII are absent from notes and output.
 - [ ] Evidence level and unverified exploitability are explicit.
 - [ ] Remediation includes compatibility, rollback, owner, and verification.
-- [ ] If authorized security facts changed, the security model, decision/task memory, and external registry are updated.
 - [ ] No unauthorized security or remote action occurred.
 
 ## Verification

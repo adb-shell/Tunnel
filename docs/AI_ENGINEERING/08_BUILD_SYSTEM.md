@@ -1,5 +1,7 @@
 # Tunnel 构建系统 / Build System
 
+2026-10-03 T009：9429640服务器日志确认Cargo在DLL构建前因锁文件不一致退出101；已补根锁文件`tunnel`→`whoami`依赖边，沿用已有1.6.0，不升级依赖。DLL/portable继续共用根锁文件并保留`--locked`；9个workspace package依赖名称关系静态核对通过，Cargo解析与正式构建尚未验证。见[Windows 指南](../plans/WINDOWS_BUILD_GUIDE.md)。
+
 2026-10-03 T008：Windows Cargo DLL/portable明确x64与--locked，PS/Python统一Release override与UTF-8，Release→stage核验SHA256；WindowInjection缺件按初始化VS工具集从固定源码构建。保留T007启动日志/单次pause。源码/AST通过不代表EXE可运行；[验证入口](../plans/WINDOWS_BUILD_GUIDE.md)。
 
 2026-10-03 T007：三个Windows入口默认CMD收尾pause覆盖VS/PS启动失败，-NoPause或CI禁等待；launcher日志由PS追加transcript。root解析/清理受保护，原生输出与global退出码核对，仍按robocopy0—7。PS5.1/PS7 AST V0，正式build NOT_RUN，用户真实失败待日志；见[指南](../plans/WINDOWS_BUILD_GUIDE.md)。
@@ -11,18 +13,17 @@
 > 2026-10-03 当前增量（T-2026-10-03-001 / V0）：正式构建不在本机。build.sh准备固定LADB预编译件与protocol2 helper；Gradle preBuild检查ABI/blob/SHA receipt及helper源树/产物hash，P0诊断flag仍默认false且不影响正常remote helper打包。Windows portable按Cargo真实产物路径复制并检查驱动。原“native来源完全缺失”“无helper构建hook”描述仅属于此前快照。 [实现、构建与验收](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。以下2026-10-02及更早的阶段描述以本增量和当前源码为准。
 
 接管基线：2026-07-12  
-最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`，Task `T-2026-10-02-001`
+最近源码复核：2026-10-02，`HEAD 5cee6921ec10971bb4654bc010f9328d7f70d02b`
 状态：`verified` + `verification-required`
 
 > 本轮只完成静态接管，没有运行任何 Rust、Flutter、Gradle、Android、Windows 或 Docker 构建/测试命令。下列命令是正式环境入口和待验证说明，不代表已通过。
 
-版本、依赖、lock hashes 与正式 host contract 的当前冻结值见 `docs/BASELINE/`；正式验证 case 和 evidence schema 见根目录 `TEST_MATRIX.md`。本文解释构建链路，不替代 baseline snapshot。
+版本与依赖以 manifest、lockfile 和供应清单为准。正式环境与执行步骤见本文及 Windows 指南，验证见根目录 TEST_MATRIX.md。
 
-本轮核验记录见 [API / Security / Release Audit](audits/2026-10-02/API_SECURITY_RELEASE_AUDIT.md)。旧 Git 演进与本机二进制盘点不能直接继承到当前 worktree。
 
 ## 1. 版本与工具链锚点
 
-T004 身份链已按 [新基线](../BASELINE/2026-10-02_TUNNEL_IDENTITY_BASELINE.md) 对齐。FRB 1.80.1 生成入口显式 `--class-name Tunnel`，现有绑定仅机械同步；正式环境需重新生成并重建全部 native/helper/portable 数据。旧 artifact/hash 不可沿用；本轮未执行构建或 codegen。
+T004 身份链已按 [项目身份](../../PROJECT_START_HERE.md) 对齐。FRB 1.80.1 生成入口显式 `--class-name Tunnel`，现有绑定仅机械同步；正式环境需重新生成并重建全部 native/helper/portable 数据。旧 artifact/hash 不可沿用；本轮未执行构建或 codegen。
 
 | 项目 | 当前源码值 |
 |---|---|
@@ -215,4 +216,4 @@ cargo build --release --features flutter
 
 `android-helper/build_helper.py`新增显式离线Java8/SDK34/D8 minAPI30配方；每次输出唯一目录，记录源码/工具/许可/产物hash，携带Apache LICENSE/NOTICE/PROVENANCE。`--stage`仅首次写入Android native assets；不触发APK构建或下载。源码已落地，实际构建NOT_RUN。
 
-Android app直接编译共享`AdbWire.java`，test sourceSet加入protocol tests并声明JUnit4.13.2。`tunnelAdbMirrorP0`项目属性须精确为`true`才开启本地诊断，默认false。没有新增Gradle自动helper构建hook，也没有改版本或签名。正式命令、前置native资产与设备验收见[P0交接](../plans/ADB_P0_VALIDATION_RUNBOOK.md)和[helper README](../../android-helper/README.md)。
+Android app直接编译共享`AdbWire.java`，test sourceSet加入protocol tests并声明JUnit4.13.2。`tunnelAdbMirrorP0`项目属性须精确为`true`才开启本地诊断，默认false。没有新增Gradle自动helper构建hook，也没有改版本或签名。正式命令、前置native资产与设备验收见[ADB 指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)和[helper README](../../android-helper/README.md)。

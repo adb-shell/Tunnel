@@ -2,7 +2,7 @@
 
 状态：源码原型；本次未编译、未运行协议测试、未安装 APK、未执行设备探针。
 
-2026-10-03 本目录扩展为受控远程投屏的手机本地 helper；原 P0 10 秒诊断入口保留，正常远程入口由 APK `TunnelAdbRuntime` 管理本机同意、scope 和控制者租约。helper 不直接开放公网，不提供任意 shell。入口是 `com.tunnel.adbhelper.Server`，源码见 [server](server/src/main/java/com/tunnel/adbhelper/Server.java)、[server README](server/README.md) 和 [provenance](server/PROVENANCE.md)。完整产品方案见 [ADB_REMOTE_MIRRORING_PLAN.md](../docs/plans/ADB_REMOTE_MIRRORING_PLAN.md)。
+2026-10-03 本目录扩展为受控远程投屏的手机本地 helper；原 P0 10 秒诊断入口保留，正常远程入口由 APK `TunnelAdbRuntime` 管理会话授权、scope 和控制者租约。helper 不直接开放公网，不提供任意 shell。入口是 `com.tunnel.adbhelper.Server`，源码见 [server](server/src/main/java/com/tunnel/adbhelper/Server.java)、[server README](server/README.md) 和 [provenance](server/PROVENANCE.md)。完整产品方案见 [ADB 指南](../docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
 
 ## 源码与协议
 

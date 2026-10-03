@@ -28,6 +28,17 @@ class AndroidAdbPairingModel extends ChangeNotifier {
   bool _disposed = false;
   bool get cancelling => _cancelling;
 
+  // These failures originate on the PC before any pairing code reaches Android.
+  static String? channelErrorText(String code) => const <String, String>{
+    'SECURE_CHANNEL_REQUIRED': '电脑与手机尚未建立加密通道，配对请求未发送。请核对服务器密钥与客户端 Key，重新连接后再试。',
+    'SECURE_CHANNEL_SERVER_KEY_MISSING': '服务器未返回手机的签名公钥，配对请求未发送。请检查 hbbs 的密钥加载方式及手机公钥注册，再重新连接。',
+    'SECURE_CHANNEL_PUBLIC_KEY_INVALID': '客户端配置的服务器 Key 格式无效。请填写服务器 id_ed25519.pub 公钥后重新连接。',
+    'SECURE_CHANNEL_SERVER_SIGNATURE_INVALID': '服务器签名校验失败。请核对当前客户端 Key 与实际 hbbs 公钥是否一致，再重新连接。',
+    'SECURE_CHANNEL_PEER_ID_MISMATCH': '握手中的设备身份不匹配，配对请求未发送。请核对服务器与目标设备后重新连接。',
+    'SECURE_CHANNEL_PEER_SIGNATURE_INVALID': '手机握手签名与服务器登记不一致。请让手机重新注册，再重新连接；无需反复更换配对码。',
+    'SECURE_CHANNEL_HANDSHAKE_INVALID': '远程加密握手消息异常，配对请求未发送。请核对电脑、手机和服务器版本后重新连接。',
+  }[code];
+
   static bool validPort(String value) {
     if (!RegExp(r'^\d{1,5}$').hasMatch(value)) return false;
     final port = int.tryParse(value);
@@ -59,6 +70,8 @@ class AndroidAdbPairingModel extends ChangeNotifier {
 
   String get errorText {
     if (errorCode.isEmpty || errorCode == 'CONSENT_REVOKED' || errorCode == 'CANCELLED') return '';
+    final channelMessage = channelErrorText(errorCode);
+    if (channelMessage != null) return '$channelMessage ($errorCode)';
     const messages = <String, String>{
       'ADB_PAIR_CODE_INVALID': '配对码必须是当前手机配对窗口显示的 6 位数字。',
       'ADB_PAIR_PORT_INVALID': '配对端口应为 1–65535，不能使用连接端口代替。',
@@ -89,7 +102,7 @@ class AndroidAdbPairingModel extends ChangeNotifier {
       'NO_RESPONSE': '12 秒内未收到手机接收确认。请确认电脑和手机均已更新到同一版本；这不代表配对码错误。',
     };
     // Endpoint codes are identifiers, never native command output or the code.
-    return '${messages[errorCode] ?? '手机返回错误，请检查无线调试设置并重试。'} ($errorCode)';
+    return '${messages[errorCode] ?? '操作未完成，请根据错误码排查对应步骤。'} ($errorCode)';
   }
 
   Future<void> _send(String op, String id, Map<String, dynamic> payload) async {
@@ -126,6 +139,19 @@ class AndroidAdbPairingModel extends ChangeNotifier {
 
   Future<bool> _begin(String op, Map<String, dynamic> payload) async {
     if (_disposed) return false;
+    final ffi = parent.target;
+    if (ffi == null || ffi.closed || ffi.ffiModel.secure != true) {
+      _deadline?.cancel();
+      _ackDeadline?.cancel();
+      busy = false;
+      _cancelling = false;
+      final channelCode = ffi?.androidModeModel.reason ?? '';
+      errorCode = ffi == null || ffi.closed ? 'SEND_FAILED'
+          : channelErrorText(channelCode) != null ? channelCode : 'SECURE_CHANNEL_REQUIRED';
+      phase = 'PAIR_FAILED';
+      notifyListeners();
+      return false;
+    }
     operationId = Uuid().v4();
     final id = operationId;
     _revision = -1;

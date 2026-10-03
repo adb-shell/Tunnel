@@ -11,9 +11,8 @@ Maintain wire behavior with explicit trust boundaries, compatibility, authorizat
 
 ## Read First
 
-Resolve all paths from the Tunnel repository root. Complete the mandatory baseline in `PROJECT_START_HERE.md`, then read `.codex/AI_RULES.md`, `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`, `docs/AI_ENGINEERING/06_NETWORK_PROTOCOL.md`, `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`, and the relevant full-path platform/API document. Inspect `libs/hbb_common/protos/`, `src/client.rs`, `src/client/io_loop.rs`, `src/server/connection.rs`, and `src/rendezvous_mediator.rs` for the requested path. Follow protocol T0—T8 and stop at the confirmation gate before mutation.
-
-For development, record the Baseline ID and related ADRs in `TASK_TEMPLATE.md`, then select NET and affected E2E cases from `TEST_MATRIX.md`.
+Read `PROJECT_START_HERE.md` and `.codex/AI_RULES.md`, then only relevant source and `docs/AI_ENGINEERING/06_NETWORK_PROTOCOL.md`, `docs/AI_ENGINEERING/10_SECURITY_MODEL.md`.
+Current source is authoritative. Follow existing user authorization without repeated confirmation. Do not create per-task reports, task ledgers, or duplicate memories. Update one relevant guide only when its facts change.
 
 ## Routing Boundaries
 
@@ -90,7 +89,6 @@ Request or execute only authorized tests for relay resolution, handshake, authen
 - [ ] Untrusted payload size/path/command bounds are explicit.
 - [ ] Timeout, cancellation, reconnect, and cleanup are covered.
 - [ ] External hbbs/hbbr assumptions are labeled.
-- [ ] If authorized wire behavior changed, documentation and task/decision memory are updated.
 
 ## Verification
 

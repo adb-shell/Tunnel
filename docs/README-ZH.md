@@ -1,7 +1,7 @@
 > [!IMPORTANT]
 > 当前仓库的工程真相不是本 README 正文中的上游 RustDesk 语境。当前产品/runtime 名为 `Tunnel`，Android 显示名为 `隧道`，Android package 为 `com.tunnel.app`，Rust crate/library 为 `tunnel`，Android SO 为 `libtunnel.so`，Windows DLL 为 `tunnel.dll`。
 >
-> 新工程师或 AI 必须从根目录 `PROJECT_START_HERE.md` 进入，再读 `.codex/AI_RULES.md` 与 `docs/AI_ENGINEERING/AI_TASK_EXECUTION_PROTOCOL.md`。本 README-ZH 保留为上游/社区背景参考，不高于当前源码和 AI Engineering 真相层。
+> 新工程师或 AI 必须从根目录 `PROJECT_START_HERE.md` 进入，再读 `.codex/AI_RULES.md` 与 `.codex/PROJECT_MEMORY.md`。本 README-ZH 保留为上游/社区背景参考，不高于当前源码和 AI Engineering 真相层。
 
 <p align="center">
   <img src="../res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>

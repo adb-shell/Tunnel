@@ -2,7 +2,7 @@
 
 2026-10-03 T008：外部AndroidControl/protobuf不变。Rust仅在pair/authorize通过当前secure/authenticated/video/keyboard门后发送私有JNI `adb_control_authorized`，恢复服务重建后丢失的连接资格；该名称不在peer操作白名单。native回调仍检查连接，断线/撤权清job/grant。PC区分本地提交与手机ACK，不再假报已开始配对。
 
-2026-10-03 T005：外部AndroidControl JSON v1保持；状态consentActive/consentLifetime=session替代倒计时。端内helper wire升级VERSION3、HMAC域与manifest同步，production duration0；断线/退出/撤权撤销scopes。见 [ADR-0017](../ADR/0017-adb-session-lifetime.md)。
+2026-10-03 T005：外部AndroidControl JSON v1保持；状态consentActive/consentLifetime=session替代倒计时。端内helper wire升级VERSION3、HMAC域与manifest同步，production duration0；断线/退出/撤权撤销scopes。见 [ADB 指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
 
 2026-10-03 T004：AndroidControl JSON v1新增严格pair(port/code/optionalconnectPort)、authorize(optionalconnectPort)、pair_cancel(pairOperationId)、revoke({})；只有secured/authenticated keyboard+video permission可执行。配对无video lease/epoch，kind=pairing回包不触发视频回滚，operationId/error脱敏关联。断线/撤权cancel及撤销scopes，恢复权限须新显式请求。
 
@@ -14,13 +14,12 @@
 
 状态：`verified` 指 V0 源码路径；运行/互操作为 `verification-required`
 
-详细证据：[RUST_NETWORK_WINDOWS_AUDIT.md](audits/2026-10-02/RUST_NETWORK_WINDOWS_AUDIT.md)
 
 > 本文描述仓库内的端点协议实现。`hbbs`、`hbbr` 服务端源码不在本仓库，因此服务端部署、数据库和运营策略只能作为外部依赖记录，不能由本文推断。
 
 ## 1. 网络角色与边界
 
-2026-10-02 T004：品牌状态字段为 `tunnel_status`，protobuf field tag 39 保持；端内事件为 `update_tunnel_status`。独立身份部署采用成套新 PC/APK/native，不以 tag 保持推断所有应用层字段与旧端互通。参见 ADR-0015 和当前身份基线。
+2026-10-02 T004：品牌状态字段为 `tunnel_status`，protobuf field tag 39 保持；端内事件为 `update_tunnel_status`。独立身份部署采用成套新 PC/APK/native，不以 tag 保持推断所有应用层字段与旧端互通。当前身份见项目入口，版本兼容需实际验证。
 
 Tunnel 同一二进制同时包含两类角色：
 
@@ -159,7 +158,7 @@ Tunnel 在 `MouseEvent.url = 5` 上复用了若干 Android command 字符串，`
 ## 7. 文件、终端与隧道
 
 - 文件传输：`src/client/io_loop.rs`、`src/server/connection.rs`、`libs/hbb_common/src/fs.rs` 与 Flutter `FileModel` 协作。
-- Terminal：`src/server/terminal_service.rs` 生成 `ts_<uuid>`，临时/持久行为由 `is_persistent` 独立决定；当前支持同一进程内断连保留和 service ID 重连，未实现跨进程恢复。旧 `terminal.md` 的 `tmp_`/`persist_` 前缀规则不是当前实现。
+- Terminal：`src/server/terminal_service.rs` 生成 `ts_<uuid>`，临时/持久行为由 `is_persistent` 独立决定；当前支持同一进程内断连保留和 service ID 重连，未实现跨进程恢复。不要按旧 `tmp_`/`persist_` 前缀推断持久性。
 - Tunnel/port forwarding：使用会话协议协商后转发字节流；controller `port_forward::listen()` 当前监听 `0.0.0.0`，并非仅 localhost。endpoint 目标 host/port 来自 `LoginRequest::PortForward`，含 `RDP`→localhost:3389 特殊映射。
 - Remote printer：Windows 专属能力，需显式 option 和平台依赖。
 
@@ -236,4 +235,4 @@ Token 由外部 HTTP service 获取，音频经 ZEGO SDK 传输。原 RustDesk `
 - Android input permission 关闭后的 server enforcement。
 - 文件、terminal、tunnel 在恶意路径和中断条件下的边界。
 
-所需命令、环境和验收目标统一记录在 `09_DEBUG_SYSTEM.md` 的《编译验证需求》中。
+构建入口见 [构建系统](08_BUILD_SYSTEM.md)，验收见 [测试清单](../../TEST_MATRIX.md)。

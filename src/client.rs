@@ -198,6 +198,7 @@ impl Client {
         debug_assert!(peer == interface.get_id());
         interface.update_direct(None);
         interface.update_received(false);
+        interface.get_lch().write().unwrap().security_failure = None;
         match Self::_start(peer, key, token, conn_type, interface).await {
             Err(err) => {
                 let err_str = err.to_string();
@@ -498,7 +499,7 @@ impl Client {
                         feedback = rr.feedback;
                         log::info!("{:?} used to establish {typ} connection", start.elapsed());
                         let pk =
-                            Self::secure_connection(peer, signed_id_pk, key, &mut conn).await?;
+                            Self::secure_connection(peer, signed_id_pk, key, &mut conn, interface.clone()).await?;
                         return Ok(((conn, false, pk, kcp), (feedback, rendezvous_server)));
                     }
                     _ => {
@@ -594,7 +595,7 @@ impl Client {
             };
             interface.update_direct(Some(false));
             log::info!("{:?} used to establish Relay connection", start.elapsed());
-            let pk = Self::secure_connection(peer_id, signed_id_pk, key, &mut conn).await?;
+            let pk = Self::secure_connection(peer_id, signed_id_pk, key, &mut conn, interface.clone()).await?;
             return Ok((conn, false, pk, None));
         }
         let direct_failures = interface.get_lch().read().unwrap().direct_failures;
@@ -691,8 +692,14 @@ impl Client {
         }
         let mut conn = conn?;
         log::info!("{:?} used to establish {typ} connection", start.elapsed());
-        let pk = Self::secure_connection(peer_id, signed_id_pk, key, &mut conn).await?;
+        let pk = Self::secure_connection(peer_id, signed_id_pk, key, &mut conn, interface.clone()).await?;
         Ok((conn, direct, pk, kcp))
+    }
+
+    fn record_security_failure(interface: &impl Interface, code: &'static str) {
+        // Fixed local diagnostics only: never include keys, IDs or wire payloads.
+        interface.get_lch().write().unwrap().security_failure = Some(code);
+        log::warn!("Peer encryption unavailable: {}", code);
     }
 
     /// Establish secure connection with the server.
@@ -701,6 +708,7 @@ impl Client {
         signed_id_pk: Vec<u8>,
         key: &str,
         conn: &mut Stream,
+        interface: impl Interface,
     ) -> ResultType<Option<Vec<u8>>> {
         let rs_pk = get_rs_pk(if key.is_empty() {
             config::RS_PUB_KEY
@@ -709,18 +717,22 @@ impl Client {
         });
         let mut sign_pk = None;
         let mut option_pk = None;
-        if !signed_id_pk.is_empty() {
-            if let Some(rs_pk) = rs_pk {
-                if let Ok((id, pk)) = decode_id_pk(&signed_id_pk, &rs_pk) {
+        if signed_id_pk.is_empty() {
+            Self::record_security_failure(&interface, "SECURE_CHANNEL_SERVER_KEY_MISSING");
+        } else if let Some(rs_pk) = rs_pk {
+            match decode_id_pk(&signed_id_pk, &rs_pk) {
+                Ok((id, pk)) => {
                     if id == peer_id {
                         sign_pk = Some(sign::PublicKey(pk));
                         option_pk = Some(pk.to_vec());
+                    } else {
+                        Self::record_security_failure(&interface, "SECURE_CHANNEL_PEER_ID_MISMATCH");
                     }
                 }
+                Err(_) => Self::record_security_failure(&interface, "SECURE_CHANNEL_SERVER_SIGNATURE_INVALID"),
             }
-            if sign_pk.is_none() {
-                log::error!("Handshake failed: invalid public key from rendezvous server");
-            }
+        } else {
+            Self::record_security_failure(&interface, "SECURE_CHANNEL_PUBLIC_KEY_INVALID");
         }
         let sign_pk = match sign_pk {
             Some(v) => v,
@@ -747,23 +759,24 @@ impl Client {
                                 });
                                 timeout(CONNECT_TIMEOUT, conn.send(&msg_out)).await??;
                                 conn.set_key(key);
+                                interface.get_lch().write().unwrap().security_failure = None;
                             } else {
-                                log::error!("Handshake failed: sign failure");
+                                Self::record_security_failure(&interface, "SECURE_CHANNEL_PEER_ID_MISMATCH");
                                 conn.send(&Message::new()).await?;
                             }
                         } else {
                             // fall back to non-secure connection in case pk mismatch
-                            log::info!("pk mismatch, fall back to non-secure");
+                            Self::record_security_failure(&interface, "SECURE_CHANNEL_PEER_SIGNATURE_INVALID");
                             let mut msg_out = Message::new();
                             msg_out.set_public_key(PublicKey::new());
                             conn.send(&msg_out).await?;
                         }
                     } else {
-                        log::error!("Handshake failed: invalid message type");
+                        Self::record_security_failure(&interface, "SECURE_CHANNEL_HANDSHAKE_INVALID");
                         conn.send(&Message::new()).await?;
                     }
                 } else {
-                    log::error!("Handshake failed: invalid message format");
+                    Self::record_security_failure(&interface, "SECURE_CHANNEL_HANDSHAKE_INVALID");
                     conn.send(&Message::new()).await?;
                 }
             }
@@ -1684,6 +1697,8 @@ pub struct LoginConfigHandler {
     pub force_relay: bool,
     pub direct: Option<bool>,
     pub received: bool,
+    // Per-connection diagnosis, never persisted as a peer option or credential.
+    pub security_failure: Option<&'static str>,
     switch_uuid: Option<String>,
     pub save_ab_password_to_recent: bool, // true: connected with ab password
     pub other_server: Option<(String, String, String)>,
