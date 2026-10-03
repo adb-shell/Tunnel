@@ -51,3 +51,7 @@ Tunnel自有AdbWire升级VERSION3并同步HMAC域：Bootstrap durationSeconds=0�
 ## 协议 4 与黑屏遮罩
 
 Tunnel 自有 Bootstrap 增加 initialMode，记录从 70 扩为 74 字节；新增 OVERLAY_BLACK 固定操作和 CAP_OVERLAY，APK/helper/Gradle/供应清单同步为协议 4。黑屏侧按钮不再调用物理 power 操作。BlackOverlay 使用独立 shell SurfaceControl 色层及 setSkipScreenshot；依据 [AOSP Android 12 SurfaceControl](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android12-release/core/java/android/view/SurfaceControl.java) 和 [Android 16 固定 tag](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/java/android/view/SurfaceControl.java) 的截图、镜像与录制排除语义自行实现，未复制上游文件。隐藏 API 运行时反射探测；不支持则返回失败，不使用 secure layer 或物理关屏替代。源码核对不代表 OEM 真机验证。
+
+## 当前协议 5：控制与视频任务分离
+
+本次为 Tunnel 自有协议修改：Bootstrap 保持 74 字节，视频包头增加 taskId 后为 56 字节；VIDEO_TASK 替换或停止视频任务，VIDEO_STATE 单独报告任务结果。控制 helper 持续存活，同模式再次开启也会重建视频任务；编码、截图失败不撤销远程授权。只有进程或认证通道故障才回收该 helper，APK 保留独立授权并有界重建。仍仅有一个 UiAutomation 所有者，不新增上游代码；新增协议回归测试源码，正式编译及真机验证尚未执行。

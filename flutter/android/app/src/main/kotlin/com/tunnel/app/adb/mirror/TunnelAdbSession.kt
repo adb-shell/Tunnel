@@ -34,12 +34,14 @@ internal class TunnelAdbSession(
     interface Events {
         fun packet(packet: AdbWire.Packet): Boolean
         fun capabilities(mask: Int)
+        fun videoState(taskId: Int, state: Int)
         fun ended(reason: String, cleanupComplete: Boolean)
     }
 
     private val random = SecureRandom()
     private val closed = AtomicBoolean()
     private val finished = AtomicBoolean()
+    private val channelsClosedAt = AtomicLong()
     private val resources = mutableListOf<Closeable>()
     private val threads = mutableListOf<Thread>()
     private val writeLock = Any()
@@ -50,6 +52,7 @@ internal class TunnelAdbSession(
     @Volatile private var process: Process? = null
     @Volatile private var authenticated = false
     @Volatile private var capturePaused = initialMode == 3
+    @Volatile private var videoTaskId = 0
     @Volatile private var lastVideoAt = 0L
     @Volatile private var writeSince = 0L
     @Volatile private var failure = "STOPPED"
@@ -61,6 +64,13 @@ internal class TunnelAdbSession(
 
     fun start() { launch("supervisor") { execute() } }
     fun setCapturePaused(paused: Boolean) { if (!paused) lastVideoAt = SystemClock.elapsedRealtime(); capturePaused = paused }
+
+    fun videoTask(mode: Int, taskId: Int): CompletableFuture<AdbCommands.Result> {
+        require(mode in 0..3 && taskId > 0)
+        videoTaskId = taskId
+        setCapturePaused(mode == 3)
+        return operation(AdbCommands.VIDEO_TASK, mode, taskId)
+    }
 
     fun keyframe() { try { write(AdbWire.REQUEST_KEYFRAME) } catch (_: Exception) { fail("CONTROL_FAILED") } }
 
@@ -93,8 +103,16 @@ internal class TunnelAdbSession(
                 val now = SystemClock.elapsedRealtime()
                 if (!authenticated && now - startedAt > 45_000) fail("HELPER_START_TIMEOUT")
                 if (writeSince != 0L && now - writeSince > 2_000) fail("HELPER_WRITE_TIMEOUT")
-                if (authenticated && !capturePaused && now - lastVideoAt > 10_000) fail("VIDEO_STALLED")
-                if (pending.values.any { now - it.since > 10_000 }) fail("HELPER_OPERATION_TIMEOUT")
+                if (authenticated && !capturePaused && now - lastVideoAt > 15_000) {
+                    val task = videoTaskId
+                    capturePaused = true
+                    // A stalled encoder owns no authority over the control channel.
+                    events.videoState(task, 2)
+                }
+                pending.entries.filter { now - it.value.since > 10_000 }.forEach { entry ->
+                    if (pending.remove(entry.key, entry.value))
+                        entry.value.result.completeExceptionally(IOException("HELPER_OPERATION_TIMEOUT"))
+                }
                 Thread.sleep(100)
             }
         }
@@ -160,6 +178,12 @@ internal class TunnelAdbSession(
                                 val reply = AdbCommands.Result.decode(packet.payloadCopy())
                                 pending.remove(reply.id)?.result?.complete(reply)
                             }
+                            AdbWire.VIDEO_STATE -> {
+                                val state = ByteBuffer.wrap(packet.payloadCopy())
+                                val task = state.int; val status = state.int
+                                if (task == videoTaskId && status != 1) capturePaused = true
+                                events.videoState(task, status)
+                            }
                             AdbWire.PONG -> Unit
                             else -> throw IOException("CONTROL_INVALID")
                         }
@@ -210,11 +234,38 @@ internal class TunnelAdbSession(
             }
             // The helper has independent stdin EOF, control heartbeat and startup timeout guards.
             val processStopped = child == null || !child.isAlive
-            // Retain the lease if an OEM process cannot terminate; do not start another privileged owner.
             val threadsStopped = children.none { it.isAlive }
-            if (processStopped && threadsStopped) lease.close()
+            if (processStopped) releaseLeaseAfterRemoteGrace()
+            else {
+                // Do not overlap two UiAutomation owners. A slow OEM process may
+                // exit after our teardown budget; release its lease when it does,
+                // rather than poisoning all future starts for this app lifetime.
+                Thread({
+                    while (child?.isAlive == true) {
+                        try { child?.waitFor(1, java.util.concurrent.TimeUnit.SECONDS) }
+                        catch (_: InterruptedException) { Thread.interrupted() }
+                    }
+                    releaseLeaseAfterRemoteGrace()
+                }, "tunnel-adb-process-reaper").apply { isDaemon = true; start() }
+            }
             events.ended(failure, cleaned && processStopped && threadsStopped)
         }
+    }
+
+    private fun releaseLeaseAfterRemoteGrace() {
+        // The child is adb's client, not app_process. Allow the remote helper's
+        // 2-second hard-exit guard to finish after its sockets are closed before
+        // admitting another UiAutomation owner. This wait never runs on the UI.
+        val closedAt = channelsClosedAt.get().takeIf { it > 0 } ?: SystemClock.elapsedRealtime()
+        val deadline = closedAt + 2_500
+        var interrupted = false
+        while (true) {
+            val remaining = deadline - SystemClock.elapsedRealtime()
+            if (remaining <= 0) break
+            try { Thread.sleep(remaining) } catch (_: InterruptedException) { interrupted = true }
+        }
+        lease.close()
+        if (interrupted) Thread.currentThread().interrupt()
     }
 
     private fun listener(): ServerSocket = own(ServerSocket().apply {
@@ -255,7 +306,11 @@ internal class TunnelAdbSession(
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         // Closing raw sockets first interrupts any blocked protocol read/write.
-        synchronized(resources) { resources.toList() }.forEach { try { it.close() } catch (_: Exception) { } }
+        val owned = synchronized(resources) { resources.toList() }
+        // Socket.close() interrupts streams without waiting on protocol monitors.
+        owned.filterIsInstance<java.net.Socket>().forEach { try { it.close() } catch (_: Exception) { } }
+        channelsClosedAt.compareAndSet(0, SystemClock.elapsedRealtime())
+        owned.filterNot { it is java.net.Socket }.forEach { try { it.close() } catch (_: Exception) { } }
         try { process?.outputStream?.close() } catch (_: Exception) { }
         try { process?.destroy() } catch (_: Exception) { }
         pending.values.forEach { it.result.completeExceptionally(IOException("HELPER_CLOSED")) }; pending.clear()

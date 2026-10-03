@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/mobile/pages/server_page.dart';
-import 'package:flutter_hbb/mobile/pages/settings_page.dart';
 import 'package:flutter_hbb/web/settings_page.dart';
 import 'package:get/get.dart';
 import '../../common.dart';
-import '../../common/widgets/chat_page.dart';
 import '../../models/platform_model.dart';
 import '../../models/state_model.dart';
 import 'connection_page.dart';
@@ -108,47 +106,19 @@ class HomePageState extends State<HomePage> {
           // backgroundColor: MyTheme.grayBg,
           appBar: AppBar(
             centerTitle: true,
+            elevation: 0,
+            leading: _selectedIndex == 1 ? IconButton(
+              tooltip: '返回主页', icon: const Icon(Icons.arrow_back),
+              onPressed: () => _pageController.animateToPage(0,
+                duration: const Duration(milliseconds: 220), curve: Curves.easeOut),
+            ) : null,
             title: appTitle(),
             actions: _pages.elementAt(_selectedIndex).appBarActions,
           ),
-          bottomNavigationBar: isAndroid && _pages.length == 2
-              ? BottomNavigationBar(
-                  currentIndex: _selectedIndex,
-                  items: const [
-                    BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: '主页'),
-                    BottomNavigationBarItem(icon: Icon(Icons.terminal), label: 'LADB'),
-                  ],
-                  onTap: (index) => _pageController.animateToPage(index,
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOut),
-                )
-              : null,
-          /*
-          bottomNavigationBar: BottomNavigationBar(
-            key: navigationBarKey,
-            items: _pages
-                .map((page) =>
-                    BottomNavigationBarItem(icon: page.icon, label: page.title))
-                .toList(),
-            currentIndex: _selectedIndex,
-            type: BottomNavigationBarType.fixed,
-            selectedItemColor: MyTheme.accent, //
-            unselectedItemColor: MyTheme.darkGray,
-            onTap: (index) => setState(() {
-              // close chat overlay when go chat page
-              if (_selectedIndex != index) {
-                _selectedIndex = index;
-                if (isChatPageCurrentTab) {
-                  gFFI.chatModel.hideChatIconOverlay();
-                  gFFI.chatModel.hideChatWindowOverlay();
-                  gFFI.chatModel.mobileClearClientUnread(
-                      gFFI.chatModel.currentKey.connId);
-                }
-              }
-            }),
-          ),*/
           body: PageView(
             controller: _pageController,
+            // Home remains the initial page; swipe right to reveal local LADB.
+            reverse: isAndroid,
             onPageChanged: (index) {
               setState(() {
                 _selectedIndex = index;
@@ -204,7 +174,7 @@ class HomePageState extends State<HomePage> {
         ],
       );
     }
-    return Text("");
+    return Text(_selectedIndex == 1 ? 'LADB' : '隧道');
   }
 }
 

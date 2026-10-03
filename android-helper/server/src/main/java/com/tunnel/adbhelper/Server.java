@@ -10,6 +10,7 @@ import com.tunnel.adb.protocol.AdbWire;
 import com.tunnel.adb.protocol.AdbCommands;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.SecureRandom;
@@ -61,8 +62,7 @@ public final class Server {
             lifecycle.startStdinMonitor();
             ShellEnvironment.prepare();
             lifecycle.setMainLooper(Looper.myLooper());
-            lifecycle.captureMode = options.initialMode;
-            lifecycle.fallbackMode = 3;
+            lifecycle.task = new Lifecycle.VideoTask(options.initialMode == 3 ? 0 : 1, options.initialMode);
             lifecycle.controlOnly = options.initialMode == 3;
             lifecycle.startAutomation();
             final AdbWire.Bootstrap captureOptions = options;
@@ -140,6 +140,7 @@ public final class Server {
         private volatile long deadline = SystemClock.elapsedRealtime() + 15_000;
         private volatile long lastControl;
         private volatile long videoWriteSince;
+        private volatile long videoProgressAt;
         private volatile long controlWriteSince;
         private volatile long stoppedAt;
         private volatile boolean captureRunning;
@@ -147,9 +148,13 @@ public final class Server {
         private volatile int automationCapabilities;
         private volatile long operationSince;
         private volatile Thread automationThread;
-        private volatile int captureMode;
-        private int fallbackMode;
+        static final class VideoTask {
+            final int id, mode;
+            VideoTask(int id, int mode) { this.id = id; this.mode = mode; }
+        }
+        private volatile VideoTask task = new VideoTask(0, 3);
         private Bitmap bitmap;
+        private int bitmapTask;
         private volatile String reason = "STOPPED";
         private long epoch;
         private long controlSequence;
@@ -182,24 +187,56 @@ public final class Server {
             if (stop.get()) looper.quitSafely();
         }
 
-        void captureStarted(int seconds) throws IOException {
-            if (stop.get()) throw new IOException("STOPPED");
-            if (!captureRunning) {
-                // Zero removes only the production usage deadline. Startup, heartbeat,
-                // I/O and operation watchdogs still cancel an unhealthy session.
+        void captureStarted(int seconds, VideoTask expected) throws IOException {
+            synchronized (this) {
+                if (stop.get()) throw new IOException("STOPPED");
+                if (task != expected || captureRunning) return;
                 deadline = seconds == AdbWire.SESSION_DURATION ? 0 : SystemClock.elapsedRealtime() + seconds * 1000L;
                 captureRunning = true;
             }
+            // Never hold the lifecycle monitor across socket I/O: the watchdog
+            // needs it to cancel a blocked write and close the socket.
+            videoState(expected.id, 1);
         }
 
         void displayChanged() { releaseInput.set(true); }
-        int captureMode() { return captureMode; }
-        synchronized Bitmap takeBitmap() { Bitmap value = bitmap; bitmap = null; return value; }
-        private synchronized void offerBitmap(Bitmap value) {
-            if (bitmap != null) bitmap.recycle(); bitmap = value;
+        int captureMode() { return task.mode; }
+        VideoTask videoTask() { return task; }
+        synchronized Bitmap takeBitmap(VideoTask expected) {
+            if (bitmapTask != expected.id) return null;
+            Bitmap value = bitmap; bitmap = null; return value;
+        }
+        private synchronized void offerBitmap(Bitmap value, VideoTask expected) {
+            if (task != expected) { if (value != null) value.recycle(); return; }
+            if (bitmap != null) bitmap.recycle(); bitmap = value; bitmapTask = expected.id;
+        }
+        private synchronized boolean selectVideo(int id, int mode) {
+            if (id <= task.id) return false;
+            if (bitmap != null) bitmap.recycle(); bitmap = null;
+            task = new VideoTask(id, mode); captureRunning = false;
+            keyframe.set(true);
+            return true;
+        }
+        void videoTaskFailed(VideoTask expected) {
+            synchronized (this) {
+                if (task != expected || expected.mode == 3) return;
+                task = new VideoTask(expected.id, 3); captureRunning = false;
+                if (bitmap != null) bitmap.recycle(); bitmap = null;
+            }
+            try { videoState(expected.id, 2); sendCapabilities(); }
+            catch (IOException closed) { stop("CONTROL_CLOSED"); }
+        }
+        private void videoState(int id, int state) throws IOException {
+            if (id <= 0) return;
+            synchronized (controlWriteLock) {
+                writeControl(AdbWire.Packet.of(AdbWire.VIDEO_STATE, 0, epoch, 0,
+                        ++controlSequence, 0, 0, 0, ByteBuffer.allocate(8).putInt(id).putInt(state).array()));
+            }
         }
 
         void frameSent() { frames.incrementAndGet(); }
+        void videoProgress() { videoProgressAt = SystemClock.elapsedRealtime(); }
+        void videoIdle() { videoProgressAt = 0; }
         boolean stopped() { return stop.get(); }
         void requestKeyframe() { keyframe.set(true); }
         boolean takeKeyframeRequest() { return keyframe.getAndSet(false); }
@@ -241,35 +278,36 @@ public final class Server {
                         if (command != null) {
                             operationSince = SystemClock.elapsedRealtime();
                             AdbCommands.Result reply;
-                            if (command.operation == AdbCommands.CAPTURE_MODE) {
-                                try {
-                                    Bitmap first = command.a == 0 || command.a == 3 ? null : automation.frame(command.a);
-                                    offerBitmap(first); fallbackMode = command.b; captureMode = command.a; releaseInput.set(true); nextFrame = 0;
-                                    reply = new AdbCommands.Result(command.id, AdbCommands.OK, new byte[0]);
-                                } catch (Exception unavailable) {
-                                    automation.revokeMode(command.a);
-                                    reply = new AdbCommands.Result(command.id, AdbCommands.UNSUPPORTED, new byte[0]);
-                                }
+                            if (command.operation == AdbCommands.VIDEO_TASK) {
+                                boolean accepted = selectVideo(command.b, command.a);
+                                reply = new AdbCommands.Result(command.id,
+                                        accepted ? AdbCommands.OK : AdbCommands.REJECTED, new byte[0]);
+                                nextFrame = 0;
+                                if (accepted && command.a == 3) videoState(command.b, 0);
+                            } else if (command.operation == AdbCommands.CAPTURE_MODE) {
+                                // Protocol 5 tasks require a new explicit identity.
+                                reply = new AdbCommands.Result(command.id, AdbCommands.REJECTED, new byte[0]);
                             } else reply = automation.execute(command);
                             operationSince = 0;
                             result(reply);
                         }
-                        if ((captureMode == 1 || captureMode == 2) && SystemClock.elapsedRealtime() >= nextFrame) {
+                        VideoTask current = task;
+                        if ((current.mode == 1 || current.mode == 2) && SystemClock.elapsedRealtime() >= nextFrame) {
                             operationSince = SystemClock.elapsedRealtime();
-                            try { offerBitmap(automation.frame(captureMode)); }
+                            try { offerBitmap(automation.frame(current.mode), current); }
                             catch (Exception lost) {
-                                automation.revokeMode(captureMode); offerBitmap(null); releaseInput.set(true);
-                                stop("FRAME_PROVIDER_FAILED");
+                                automation.revokeMode(current.mode);
+                                videoTaskFailed(current);
                             }
                             finally { operationSince = 0; }
-                            nextFrame = SystemClock.elapsedRealtime() + (captureMode == 2 ? 500 : 200);
+                            nextFrame = SystemClock.elapsedRealtime() + (current.mode == 2 ? 500 : 200);
                         }
                         int next = automation.capabilities();
                         if (next != automationCapabilities) { automationCapabilities = next; sendCapabilities(); }
                     }
                 } catch (Exception failure) {
                     if (!stop.get()) stop("OPERATION_CHANNEL_FAILED");
-                } finally { automation.close(); offerBitmap(null); }
+                } finally { automation.close(); offerBitmap(null, task); }
             }, "tunnel-adb-operations");
             automationThread.setDaemon(true);
             automationThread.start();
@@ -354,9 +392,19 @@ public final class Server {
                         stop("HEARTBEAT_TIMEOUT");
                     } else if (operationSince != 0 && now - operationSince > 10000) {
                         stop("OPERATION_TIMEOUT");
-                    } else if ((videoWriteSince != 0 && now - videoWriteSince > 2000)
-                            || (controlWriteSince != 0 && now - controlWriteSince > 2000)) {
-                        stop("WRITE_TIMEOUT");
+                    } else if (videoProgressAt != 0 && now - videoProgressAt > 15000) {
+                        // An OEM codec that never returns cannot be interrupted
+                        // safely inside Java. Recreate the helper, not the daemon
+                        // or the remote authorization, so a new request can run.
+                        stop("CODEC_WORKER_BLOCKED");
+                    } else if (controlWriteSince != 0 && now - controlWriteSince > 2000) {
+                        stop("CONTROL_WRITE_TIMEOUT");
+                    } else if (videoWriteSince != 0 && now - videoWriteSince > 5000) {
+                        // A broken local socket is distinct from an encoder task
+                        // failure. A partially written authenticated record cannot
+                        // be resumed; the APK must recreate this helper, keeping
+                        // its separate connection authorization intact.
+                        stop("VIDEO_IPC_BLOCKED");
                     }
                     try { Thread.sleep(100); } catch (InterruptedException ignored) { return; }
                 }

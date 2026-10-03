@@ -6,21 +6,22 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** No process/device access; verifies ownership shared by local UI and mirror supervisors. */
+/** No processes/devices: one UiAutomation helper can coexist with ordinary ADB clients. */
 class LocalAdbAccessTest {
-    @Test fun mirrorBlocksLocalActionsUntilItsOwnerCloses() {
+    @Test fun mirrorIsExclusiveButLocalCommandsRemainAvailable() {
         val mirror = LocalAdbAccess.acquire(true)
-        assertNotNull(mirror)
+        val local = LocalAdbAccess.acquire(false)
         try {
+            assertNotNull(mirror)
+            assertNotNull(local)
             assertTrue(LocalAdbAccess.isMirrorActive())
-            assertNull(LocalAdbAccess.acquire(false))
             assertNull(LocalAdbAccess.acquire(true))
-        } finally { mirror?.close() }
+        } finally { local?.close(); mirror?.close() }
         assertFalse(LocalAdbAccess.isMirrorActive())
     }
 
-    @Test fun oldOwnerCannotReleaseANewerLease() {
-        val first = LocalAdbAccess.acquire(false)
+    @Test fun oldOwnerCannotReleaseANewerMirrorLease() {
+        val first = LocalAdbAccess.acquire(true)
         assertNotNull(first)
         first?.close()
         val newer = LocalAdbAccess.acquire(true)
@@ -28,16 +29,20 @@ class LocalAdbAccessTest {
         try {
             first?.close()
             assertTrue(LocalAdbAccess.isMirrorActive())
-            assertNull(LocalAdbAccess.acquire(false))
+            assertNull(LocalAdbAccess.acquire(true))
         } finally { newer?.close() }
     }
 
-    @Test fun localPairingBlocksMirrorAdmission() {
-        val local = LocalAdbAccess.acquire(false)
-        assertNotNull(local)
+    @Test fun ordinaryClientCapacityDoesNotConsumeTheMirrorSlot() {
+        val local = (1..4).map { LocalAdbAccess.acquire(false) }
+        val mirror = LocalAdbAccess.acquire(true)
         try {
-            assertFalse(LocalAdbAccess.isMirrorActive())
-            assertNull(LocalAdbAccess.acquire(true))
-        } finally { local?.close() }
+            local.forEach { assertNotNull(it) }
+            assertNull(LocalAdbAccess.acquire(false))
+            assertNotNull(mirror)
+            local[0]?.close()
+            val replacement = LocalAdbAccess.acquire(false)
+            try { assertNotNull(replacement) } finally { replacement?.close() }
+        } finally { local.forEach { it?.close() }; mirror?.close() }
     }
 }

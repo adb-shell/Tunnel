@@ -26,7 +26,6 @@ class AndroidModeModel extends ChangeNotifier {
   bool adbActionsVisible = true;
   final Map<String, Timer> _actionDeadlines = {};
   final Map<String, String> _actionKeys = {};
-  bool _videoRequestOutstanding = false;
   bool _canRestartStoppedVideo = false;
   String _stopOperation = '';
   void _finishAction(String operation) {
@@ -61,7 +60,7 @@ class AndroidModeModel extends ChangeNotifier {
       'HELPER_CONTROL_HANDSHAKE_FAILED': '手机控制通道连接失败。',
       'HELPER_VIDEO_CHANNEL_FAILED': '手机视频通道已中断。',
       'SESSION_ADB_AUTHORIZATION_REQUIRED': '请先打开远程 ADB 窗口连接并授权。',
-      'ADB_BUSY': '手机 ADB 正忙；如本地 LADB 终端正在运行，请先停止终端再重试。',
+      'ADB_BUSY': '手机正在处理另一项配对或连接请求，请稍后重试。',
       'ACTION_BUSY': '手机正在执行上一项操作，请稍后重试。',
       'ACTION_CANCELLED': '操作已随上一个 ADB 实例结束，可重新点击执行。',
       'ACCESSIBILITY_UNAVAILABLE': '手机无障碍服务尚未运行，请先在手机设置中开启。',
@@ -70,7 +69,12 @@ class AndroidModeModel extends ChangeNotifier {
       'ACCESSIBILITY_NOT_READY': '手机无障碍服务尚未运行，请先开启无障碍权限。',
       'LOCAL_ACTION_REQUIRED': '手机需要确认系统权限，请在手机上完成当前授权提示。',
       'CAPTURE_PERMISSION_REQUIRED': '已在手机发起普通屏幕共享，请在手机上确认系统录屏授权。',
-      'LOCAL_ADB_BUSY': '手机本地终端或 ADB 操作正在占用通道，请结束该操作后重试。',
+      'LOCAL_ADB_BUSY': '手机正在回收旧控制进程或通道已满，请稍后重试。',
+      'ADB_CONTROL_STARTING': 'ADB 控制通道正在准备，请稍后重试此操作。',
+      'VIDEO_TASK_FAILED': '本次 ADB 画面任务已结束，可直接重新开启投屏。',
+      'VIDEO_TASK_REJECTED': '本次画面请求未能启动，可直接重新开启投屏。',
+      'INPUT_OPERATION_TIMEOUT': '本次输入未完成，请重新操作。',
+      'INPUT_REJECTED': '手机未接受本次输入，请重新操作。',
       'LOCAL_ADB_REQUIRED': '手机 ADB 连接已失效，请重新连接已配对设备。',
       'OWNER_BUSY': 'ADB 功能由另一个远程会话使用，请先结束该会话操作。',
       'OVERLAY_UNAVAILABLE': '手机未能创建 ADB 黑屏遮罩，请检查手机端状态。',
@@ -159,12 +163,6 @@ class AndroidModeModel extends ChangeNotifier {
       await _send(op, payload: payload, operation: operation);
       return;
     }
-    if (op == 'start' && !_canRestartStoppedVideo &&
-        (_videoRequestOutstanding || usingAdb || inputFrozen)) {
-      _report(usingAdb && !inputFrozen ? 'ADB 投屏已开启' :
-          '上次 ADB 视频操作尚未结束，请先点击“关闭 ADB 投屏”，再重新开启');
-      return;
-    }
     if (op == 'start' && ffi != null &&
         bind.peerGetSessionsCount(id: ffi.id, connType: ffi.connType.index) > 1) {
       _report('请只保留此设备的一个远控窗口后请求 ADB');
@@ -174,7 +172,7 @@ class AndroidModeModel extends ChangeNotifier {
       _report('ADB 投屏由其他窗口控制，请在该窗口操作');
       return;
     }
-    if ((busy || pairing.busy) && op != 'status' && op != 'stop') {
+    if (pairing.busy && op != 'status' && op != 'stop') {
       _report('上一项 ADB 操作仍在进行，请等待结果后重试');
       return;
     }
@@ -186,13 +184,18 @@ class AndroidModeModel extends ChangeNotifier {
       _deadline?.cancel();
       _deadline = Timer(Duration(seconds: op == 'start' ? 70 : 20), () {
         busy = false;
-        reason = '操作超时，请刷新状态；切换未确认时保持输入冻结';
+        reason = '手机未确认本次视频请求，可重新点击开启 ADB 投屏；其他控制功能仍可使用';
         notifyListeners();
         _send('status');
       });
     }
     if (op == 'start') {
-      _videoRequestOutstanding = true;
+      // A new generation supersedes an unfinished video attempt. Stale frame
+      // callbacks and heartbeats must not acknowledge the replacement source.
+      _presentation = null;
+      _presentationToken++;
+      _heartbeat?.cancel();
+      _heartbeat = null;
       _canRestartStoppedVideo = false;
       state['videoStopped'] = false;
       _stopOperation = '';
@@ -200,6 +203,11 @@ class AndroidModeModel extends ChangeNotifier {
       _startOperation = operation;
       phase = 'REQUESTING';
     } else if (op == 'stop') {
+      _generation++;
+      _presentation = null;
+      _presentationToken++;
+      _heartbeat?.cancel();
+      _heartbeat = null;
       _stopOperation = operation;
       _freeze();
     }
@@ -208,7 +216,8 @@ class AndroidModeModel extends ChangeNotifier {
   }
 
   void _freeze() {
-    if (!inputFrozen) parent.target?.inputModel.enterOrLeave(false);
+    // This records an unconfirmed video presentation only. Input authorization
+    // and geometry validation belong to the independent endpoint input channel.
     inputFrozen = true;
   }
 
@@ -261,7 +270,6 @@ class AndroidModeModel extends ChangeNotifier {
           update['requestOperationId'] == _stopOperation)) {
       _updateConsent(update);
       state.addAll(update);
-      _videoRequestOutstanding = false;
       _canRestartStoppedVideo = false;
       _stopOperation = '';
       _startOperation = '';
@@ -295,7 +303,7 @@ class AndroidModeModel extends ChangeNotifier {
         epoch > 0 && (_startOperation.isEmpty ||
           (next != 'PRESENT_FRAME' && sourceOperation != _startOperation))) {
       // Multiple Flutter windows may share a Rust connection. Only the window
-      // that initiated the transaction may acknowledge or inject input.
+      // that initiated the video transaction may acknowledge its presentation.
       _freeze();
       _observingOtherWindow = true;
       usingAdb = false;
@@ -304,13 +312,12 @@ class AndroidModeModel extends ChangeNotifier {
       _heartbeat = null;
       state = update;
       phase = 'OTHER_WINDOW';
-      reason = 'ADB 由其他窗口控制；当前窗口输入已冻结';
+      reason = 'ADB 视频请求来自其他窗口';
       notifyListeners();
       return;
     }
     if (_observingOtherWindow) {
       if (next == 'NORMAL' && observedLease) {
-        _videoRequestOutstanding = false;
         _canRestartStoppedVideo = false;
         _stopOperation = '';
         _updateConsent(update);
@@ -337,10 +344,15 @@ class AndroidModeModel extends ChangeNotifier {
         reason = update['code']?.toString() ?? '';
         phase = 'IDLE';
         notifyListeners();
-      } else if (next == 'ERROR' && generation == 0) {
+      } else if (next == 'ERROR' && generation == 0 &&
+          (update['operationId'] == _pendingOperation ||
+            update['requestOperationId'] == _pendingOperation)) {
         reason = update['code']?.toString() ?? 'ADB 请求失败';
         busy = false;
         _deadline?.cancel();
+        notifyListeners();
+      } else if (next == 'ERROR' && generation == 0 && freshStatus) {
+        reason = update['code']?.toString() ?? '状态查询失败';
         notifyListeners();
       }
       return;
@@ -361,7 +373,6 @@ class AndroidModeModel extends ChangeNotifier {
         const {'ROLLING_BACK', 'FROZEN'}.contains(next)) {
       // The endpoint has stopped ADB, even if no ordinary MediaProjection
       // frame exists. It permits a new ADB transaction without thawing input.
-      _videoRequestOutstanding = false;
       _canRestartStoppedVideo = true;
       usingAdb = false;
       busy = false;
@@ -382,7 +393,6 @@ class AndroidModeModel extends ChangeNotifier {
       phase = next;
     } else if (next == 'COMMITTED' || next == 'NORMAL') {
       if (next == 'NORMAL') {
-        _videoRequestOutstanding = false;
         _canRestartStoppedVideo = false;
         _stopOperation = '';
       }
@@ -422,7 +432,7 @@ class AndroidModeModel extends ChangeNotifier {
       busy = false;
       _deadline?.cancel();
       showToast(_canRestartStoppedVideo ? 'ADB 投屏已关闭；可在手机启动普通共享，或重新开启 ADB 投屏' :
-          reasonText.isEmpty ? 'ADB 视频已中断；请关闭 ADB 投屏后重试' : reasonText);
+          reasonText.isEmpty ? 'ADB 视频暂不可用，可重新点击开启；其他控制功能仍可使用' : reasonText);
     }
     notifyListeners();
   }
@@ -469,9 +479,10 @@ class AndroidModeModel extends ChangeNotifier {
     }
     final action = actions[type];
     if (action == null) return false;
-    if (enable && !usingAdb && (type == 'wheelback' || type == 'wheelanalysis')) {
-      await request('start', payload: {'initialSource': type == 'wheelback'
-          ? 'IGNORE_CAPTURE' : 'HIERARCHY_CAPTURE'});
+    if (type == 'wheelback' || type == 'wheelanalysis') {
+      // Every source selection is a new last-request-wins video transaction;
+      // an off action removes only its own source at the Android selector.
+      await request('start', payload: {'sourceAction': action});
       return true;
     }
     await request('side_action', payload: {'action': action});
@@ -483,7 +494,6 @@ class AndroidModeModel extends ChangeNotifier {
     for (final timer in _actionDeadlines.values) { timer.cancel(); }
     _actionDeadlines.clear();
     _actionKeys.clear();
-    _videoRequestOutstanding = false;
     _canRestartStoppedVideo = false;
     _stopOperation = '';
     adbActionsVisible = true;

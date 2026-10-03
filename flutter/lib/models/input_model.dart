@@ -386,8 +386,7 @@ class InputModel {
   }
 
   bool get keyboardPerm => parent.target!.ffiModel.keyboard &&
-      _localDialogDepth == 0 &&
-      !parent.target!.androidModeModel.inputFrozen;
+      _localDialogDepth == 0;
   String get id => parent.target?.id ?? '';
   String? get peerPlatform => parent.target?.ffiModel.pi.platform;
   bool get isViewOnly => parent.target!.ffiModel.viewOnly;
@@ -518,7 +517,6 @@ class InputModel {
 
   KeyEventResult handleRawKeyEvent(RawKeyEvent e) {
     if (_localDialogDepth > 0) return KeyEventResult.ignored;
-    if (parent.target?.androidModeModel.inputFrozen == true) return KeyEventResult.handled;
     if (isViewOnly) return KeyEventResult.handled;
     if (isViewCamera) return KeyEventResult.handled;
     if (!isInputSourceFlutter) {
@@ -575,7 +573,6 @@ class InputModel {
 
   KeyEventResult handleKeyEvent(KeyEvent e) {
     if (_localDialogDepth > 0) return KeyEventResult.ignored;
-    if (parent.target?.androidModeModel.inputFrozen == true) return KeyEventResult.handled;
     if (isViewOnly) return KeyEventResult.handled;
     if (isViewCamera) return KeyEventResult.handled;
     if (!isInputSourceFlutter) {
@@ -901,8 +898,6 @@ class InputModel {
           'wheeltouch',
           'wheeldevselector',
         }.contains(type);
-    // The accessibility toolbar stays independent of the active video source.
-    if (parent.target?.androidModeModel.inputFrozen == true && !isAndroidControlCommand) return;
     if (!keyboardPerm && !isAndroidControlCommand) return;
     if (isViewCamera) return;
     

@@ -29,9 +29,9 @@ APK listener 只能绑定 `127.0.0.1`。helper 依次连接 VIDEO、CONTROL，�
 - live：non-secure display mirror → hardware H264。
 - snapshot：UiAutomation screenshot → bounded bitmap → EGL → 同一 H264 wire。
 - hierarchy：UiAutomation 独立节点 → 有界 semantic Canvas → EGL → 同一 H264 wire。它是结构图，不是受保护像素捕获；password 文本不输出。
-- 单一 `captureMode` 互斥三者。选择 alternate 先取得真实 bitmap，失败保留当前模式；后续 provider 丢失或 EGL/codec 失败终止 helper，endpoint 冻结画面/输入；只有显式关闭 ADB 投屏才恢复已有 MediaProjection。
-- 侧栏开/关共享只操作普通 MediaProjection，不选择 helper paused。Bootstrap initialMode=3 是无视频的辅助控制实例，用于未开启视频时的黑罩；随后启视频先关闭辅助实例并等待同一个 transport lease 释放。VIDEO read 无 socket idle timeout，由独立 control 心跳和未暂停 10 秒无帧 watchdog 取消。换源重建 codec、发新 revision/CONFIG 并走新 network epoch 首帧事务。
-- VIDEO_CONFIG flags 标识实际 helper source；源/尺寸/rotation 变化重建 codec、增加 revision、释放按住输入。Runtime 先冻结输入并通知 RECONFIGURE，Rust 给新 network epoch，然后发送 CONFIG/IDR。只有 PC decode ready → Activate → 真实 Presented ACK 后才 COMMITTED。收到 config、socket 通或服务活着均不算首帧。
+- 单一 `captureMode` 互斥三者。选择 alternate 先取得真实 bitmap，失败保留当前模式；后续 provider 丢失或 EGL/codec 失败，仅停止该视频任务并报告失败，control/helper 保留；endpoint 接收仍运行的普通画面。
+- 侧栏开/关共享只操作普通 MediaProjection。授权后单个 helper 持续拥有 UiAutomation、输入和黑罩，Bootstrap initialMode=3 启动；VIDEO_TASK 以 taskId 替换内部 encoder。关闭视频不关闭控制连接，禁止另外启动 UiAutomation 争抢同一服务。VIDEO read 由独立 control 心跳取消，静态画面先请求关键帧；视频超时不撤授权。
+- VIDEO_CONFIG flags 标识实际 helper source；源/尺寸/rotation 变化重建 codec、增加 revision、释放按住输入。Runtime 先冻结输入并通知 RECONFIGURE，Rust 给新 network epoch，然后发送 CONFIG/IDR。只有 PC decode ready → Activate → 真实 Presented ACK 后才确认视频源；输入使用独立控制与当前显示几何。收到 config、socket 通或服务活着均不算首帧。
 - 不请求 secure display/buffer，不承诺 FLAG_SECURE、DRM 或 OEM 安全层可见。截图和树可用性按实际 API 结果变化。
 
 ## 有界资源与恢复

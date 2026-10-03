@@ -124,7 +124,7 @@ class LocalAdbIdentityProbe(context: Context) {
         }
 
     companion object {
-        private val gate = Semaphore(1)
+        private val gate = Semaphore(4)
         private val random = SecureRandom()
     }
 }

@@ -35,15 +35,16 @@ internal class LocalAdbProcessSpec(context: Context) {
         }
 }
 
-/** One process-wide lease spans Activity recreation and the full mirror helper lifetime. */
+/** A single UiAutomation helper, plus independent bounded ADB client sessions. */
 internal object LocalAdbAccess {
     private val lock = Any()
-    private var owner: Lease? = null
+    private val owners = mutableSetOf<Lease>()
     fun acquire(mirror: Boolean): Closeable? = synchronized(lock) {
-        if (owner != null) null else Lease(mirror).also { owner = it }
+        if ((mirror && owners.any { it.mirror }) || (!mirror && owners.count { !it.mirror } >= 4)) null
+        else Lease(mirror).also { owners.add(it) }
     }
-    fun isMirrorActive(): Boolean = synchronized(lock) { owner?.mirror == true }
+    fun isMirrorActive(): Boolean = synchronized(lock) { owners.any { it.mirror } }
     private class Lease(val mirror: Boolean) : Closeable {
-        override fun close() = synchronized(lock) { if (owner === this) owner = null }
+        override fun close() { synchronized(lock) { owners.remove(this) } }
     }
 }

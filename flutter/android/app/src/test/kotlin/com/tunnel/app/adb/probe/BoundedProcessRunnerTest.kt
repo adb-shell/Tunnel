@@ -53,19 +53,22 @@ class BoundedProcessRunnerTest {
         assertEquals(0, launches)
     }
 
-    @Test fun rejectsAnOverlappingRunWithoutLaunchingAnotherChild() {
+    @Test fun admitsFourIndependentCommandsAndBoundsTheFifth() {
         var launches = 0
-        val result = BoundedProcessRunner.runWithFactory(1000, 32) {
+        fun nested(depth: Int): BoundedProcessResult = BoundedProcessRunner.runWithFactory(1000, 32) {
             launches++
-            val overlap = BoundedProcessRunner.runWithFactory(1000, 32) {
-                launches++
-                FakeProcess(ByteArray(0), ByteArray(0))
+            if (depth < 4) assertTrue(nested(depth + 1).succeeded)
+            else {
+                val excess = BoundedProcessRunner.runWithFactory(1000, 32) {
+                    launches++
+                    FakeProcess(ByteArray(0), ByteArray(0))
+                }
+                assertEquals(ProcessFailure.BUSY, excess.failure)
             }
-            assertEquals(ProcessFailure.BUSY, overlap.failure)
             FakeProcess(ByteArray(0), ByteArray(0))
         }
-        assertTrue(result.succeeded)
-        assertEquals(1, launches)
+        assertTrue(nested(1).succeeded)
+        assertEquals(4, launches)
     }
 
     @Test fun cancellationReapsDrainsAndDoesNotPoisonTheNextOperation() {

@@ -1790,19 +1790,20 @@ class TunnelStatusMonitor extends StatelessWidget {
     final connection = pair.busy ? '处理中' : failed ? '操作失败'
         : adbReady == true ? (m.consentActive == true ? '可用' : '待授权')
         : adbReady == false ? '未连接' : '未检测';
+    final source = m.state['actualFrameSource'];
+    const sourceLabels = {'ADB_LIVE': 'ADB 视频', 'ADB_CAPTURE': 'ADB 视频',
+      'ADB_SNAPSHOT': 'ADB 截图', 'IGNORE_CAPTURE': 'ADB 截图',
+      'ADB_HIERARCHY': 'ADB 穿透', 'HIERARCHY_CAPTURE': 'ADB 穿透',
+      'MEDIA_PROJECTION': '屏幕共享', 'NONE': '等待画面'};
     final mode = m.phase == 'OTHER_WINDOW' ? '其他窗口'
-        : m.state['videoStopped'] == true && m.inputFrozen ? '等待普通共享'
-        : m.phase == 'FROZEN' ? 'ADB 已中断'
-        : m.busy || m.inputFrozen ? '切换中'
-        : m.reason.isNotEmpty ? '操作失败'
-        : m.usingAdb ? (m.state['capturePaused'] == true ? 'ADB 暂停' : 'ADB') : '普通共享';
+        : sourceLabels[source] ?? (m.usingAdb ? 'ADB 视频' : '等待画面');
     return [
       const Divider(color: Colors.white24, height: 12),
       _textRow('ADB：', connection,
         detail: failed ? pair.errorText : pair.busy ? pair.statusText : '',
         color: failed ? Colors.redAccent
             : adbReady == true && m.consentActive == true ? Colors.green : null),
-      _textRow('投屏模式：', mode, detail: m.reasonText,
+      _textRow('当前画面：', mode, detail: m.reasonText,
         color: m.reason.isNotEmpty ? Colors.orangeAccent : null),
     ];
   }

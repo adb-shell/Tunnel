@@ -7,7 +7,7 @@ import java.util.Arrays;
 
 /** Fixed-size privileged operations. Values are data, never commands or Intent components. */
 public final class AdbCommands {
-    public static final int TOUCH = 1, KEY = 2, NAVIGATE = 3, SCREENSHOT = 4, TREE = 5, DISPLAY = 6, RELEASE_INPUT = 7, CAPTURE_MODE = 8, OVERLAY_BLACK = 9;
+    public static final int TOUCH = 1, KEY = 2, NAVIGATE = 3, SCREENSHOT = 4, TREE = 5, DISPLAY = 6, RELEASE_INPUT = 7, CAPTURE_MODE = 8, OVERLAY_BLACK = 9, VIDEO_TASK = 10;
     public static final int OK = 0, UNSUPPORTED = 1, REJECTED = 2, BUSY = 3, FAILED = 4, STALE_GEOMETRY = 5;
     public static final int COMMAND_SIZE = 36, MAX_RESULT = 4 * 1024 * 1024 - 12;
     private AdbCommands() { }
@@ -16,7 +16,7 @@ public final class AdbCommands {
         public final long id;
         public final int operation, a, b, c, d, e, f;
         public Command(long id, int operation, int a, int b, int c, int d, int e, int f) throws IOException {
-            if (id <= 0 || operation < TOUCH || operation > OVERLAY_BLACK) throw new IOException("OPERATION_INVALID");
+            if (id <= 0 || operation < TOUCH || operation > VIDEO_TASK) throw new IOException("OPERATION_INVALID");
             this.id = id; this.operation = operation; this.a = a; this.b = b; this.c = c; this.d = d; this.e = e; this.f = f;
             if (operation == TOUCH && (a < 0 || a > 3 || b < 0 || b > 1000000 || c < 0 || c > 1000000
                     || d < 1 || e < 1 || d > 4096 || e > 4096 || f != 0)) throw new IOException("TOUCH_INVALID");
@@ -28,6 +28,8 @@ public final class AdbCommands {
                 throw new IOException("DISPLAY_INVALID");
             if (operation == OVERLAY_BLACK && (a < 0 || a > 1 || b != 0 || c != 0 || d != 0 || e != 0 || f != 0))
                 throw new IOException("OVERLAY_INVALID");
+            if (operation == VIDEO_TASK && (a < 0 || a > 3 || b <= 0 || c != 0 || d != 0 || e != 0 || f != 0))
+                throw new IOException("VIDEO_TASK_INVALID");
             if (operation == CAPTURE_MODE && (a < 0 || a > 3 || (b != 0 && b != 3) || c != 0 || d != 0 || e != 0 || f != 0))
                 throw new IOException("CAPTURE_MODE_INVALID");
             if ((operation == SCREENSHOT || operation == TREE || operation == RELEASE_INPUT)

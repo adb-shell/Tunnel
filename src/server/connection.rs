@@ -2382,7 +2382,7 @@ impl Connection {
                         if !self.peer_keyboard_enabled() { return true; }
                         let side_action = super::android_control::is_legacy_side_action(&me);
                         if side_action && !super::android_control::legacy_side_allowed(self.inner.id()) { return true; }
-                        if !side_action && (super::android_control::route_mouse(self.inner.id(), &me, self.adb_allowed())
+                        if !side_action && (super::android_control::route_mouse(self.inner.id(), &me, self.adb_access().control_error().is_none())
                             || super::android_control::blocks_legacy_input(self.inner.id())) {
                             return true;
                         }
@@ -2410,7 +2410,7 @@ impl Connection {
                 }
                 Some(message::Union::PointerDeviceEvent(pde)) => {
                     #[cfg(target_os = "android")]
-                    if super::android_control::route_pointer(self.inner.id(), &pde, self.adb_allowed())
+                    if super::android_control::route_pointer(self.inner.id(), &pde, self.adb_access().control_error().is_none())
                         || !self.peer_keyboard_enabled() || super::android_control::blocks_legacy_input(self.inner.id()) {
                         return true;
                     }
@@ -2458,7 +2458,7 @@ impl Connection {
                 Some(message::Union::KeyEvent(..)) => {}
                 #[cfg(any(target_os = "android"))]
                 Some(message::Union::KeyEvent(mut me)) => {
-                    if super::android_control::route_key(self.inner.id(), &me, self.adb_allowed())
+                    if super::android_control::route_key(self.inner.id(), &me, self.adb_access().control_error().is_none())
                         || !self.peer_keyboard_enabled() || super::android_control::blocks_legacy_input(self.inner.id()) {
                         return true;
                     }

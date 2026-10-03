@@ -22,12 +22,12 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class AdbWire {
     public static final String LOOPBACK_HOST = "127.0.0.1";
-    public static final int VERSION = 4, CHANNEL_VIDEO = 1, CHANNEL_CONTROL = 2;
+    public static final int VERSION = 5, CHANNEL_VIDEO = 1, CHANNEL_CONTROL = 2;
     /** Production sessions end on cancellation/disconnect, not elapsed usage time. */
     public static final int SESSION_DURATION = 0;
     public static final int CAPABILITIES = 1, VIDEO_CONFIG = 2, VIDEO_FRAME = 3;
     public static final int REQUEST_KEYFRAME = 4, STOP = 5, PING = 6, PONG = 7;
-    public static final int OPERATION = 8, RESULT = 9;
+    public static final int OPERATION = 8, RESULT = 9, VIDEO_STATE = 10;
     public static final int FLAG_KEY_FRAME = 1, CODEC_H264 = 1;
     public static final int CAP_VIDEO = 1, CAP_KEYFRAME = 2;
     public static final int CAP_INPUT = 4, CAP_SCREENSHOT = 8, CAP_TREE = 16, CAP_DISPLAY = 32;
@@ -35,7 +35,7 @@ public final class AdbWire {
     public static final int ALL_CAPS = CAP_VIDEO | CAP_KEYFRAME | CAP_INPUT | CAP_SCREENSHOT | CAP_TREE | CAP_DISPLAY | CAP_OVERLAY;
     public static final int MAX_PAYLOAD = 8 * 1024 * 1024, MAX_CONFIG = 64 * 1024;
     public static final int MAX_SIDE = 4096, MAX_PIXELS = 8 * 1024 * 1024;
-    private static final int MAGIC = 0x54414442, HEADER_SIZE = 52, NONCE_SIZE = 32; // TADB
+    private static final int MAGIC = 0x54414442, HEADER_SIZE = 56, NONCE_SIZE = 32; // TADB
     private static final int CLIENT = 1, SERVER = 2;
     private static final int BOOTSTRAP_MAGIC = 0x54414254; // TABT
     private AdbWire() {}
@@ -94,15 +94,22 @@ public final class AdbWire {
 
     /** Immutable, owned packet. sequence starts at one independently per channel/direction. */
     public static final class Packet {
-        public final int kind, flags, width, height;
+        public final int kind, flags, width, height, taskId;
         public final long epoch, configRevision, sequence, ptsUs;
         private final byte[] payload;
         private Packet(int kind, int flags, long epoch, long configRevision, long sequence,
-                       long ptsUs, int width, int height, byte[] payload) throws IOException {
+                       long ptsUs, int width, int height, int taskId, byte[] payload) throws IOException {
             validate(kind, flags, epoch, configRevision, sequence, ptsUs, width, height, payload.length);
             this.kind = kind; this.flags = flags; this.epoch = epoch;
             this.configRevision = configRevision; this.sequence = sequence; this.ptsUs = ptsUs;
-            this.width = width; this.height = height; this.payload = payload;
+            this.width = width; this.height = height; this.taskId = taskId; this.payload = payload;
+            if ((kind == VIDEO_CONFIG || kind == VIDEO_FRAME) ? taskId <= 0 : taskId != 0)
+                throw invalid("task identity");
+            if (kind == VIDEO_STATE) {
+                ByteBuffer state = bytes(payload);
+                int task = state.getInt(), value = state.getInt();
+                if (task <= 0 || value < 0 || value > 2) throw invalid("video state");
+            }
             if (kind == CAPABILITIES) {
                 ByteBuffer b = bytes(payload);
                 if ((b.getInt() & ~CODEC_H264) != 0 || (b.getInt() & ~ALL_CAPS) != 0)
@@ -111,10 +118,15 @@ public final class AdbWire {
         }
         public static Packet of(int kind, int flags, long epoch, long configRevision, long sequence,
                                 long ptsUs, int width, int height, byte[] payload) throws IOException {
+            return of(kind, flags, epoch, configRevision, sequence, ptsUs, width, height,
+                    kind == VIDEO_CONFIG || kind == VIDEO_FRAME ? 1 : 0, payload);
+        }
+        public static Packet of(int kind, int flags, long epoch, long configRevision, long sequence,
+                                long ptsUs, int width, int height, int taskId, byte[] payload) throws IOException {
             if (payload == null) throw invalid("missing payload");
             // Reject excessive allocations before making the owned copy.
             validate(kind, flags, epoch, configRevision, sequence, ptsUs, width, height, payload.length);
-            return new Packet(kind, flags, epoch, configRevision, sequence, ptsUs, width, height, payload.clone());
+            return new Packet(kind, flags, epoch, configRevision, sequence, ptsUs, width, height, taskId, payload.clone());
         }
         public static Packet capabilities(long epoch, long sequence, int codecs, int capabilities) throws IOException {
             return of(CAPABILITIES, 0, epoch, 0, sequence, 0, 0, 0,
@@ -200,14 +212,14 @@ public final class AdbWire {
                     if (b.getInt() != MAGIC || b.getShort() != VERSION) throw invalid("record version");
                     int kind = b.get() & 255, flags = b.get() & 255;
                     long ep = b.getLong(), cfg = b.getLong(), seq = b.getLong(), pts = b.getLong();
-                    int width = b.getInt(), height = b.getInt(), length = b.getInt();
+                    int width = b.getInt(), height = b.getInt(), length = b.getInt(), taskId = b.getInt();
                     validate(kind, flags, ep, cfg, seq, pts, width, height, length);
                     checkDirection(kind, !client);
                     if (ep != epoch) throw invalid("epoch");
                     byte[] payload = new byte[length]; in.readFully(payload);
                     verify(in, mac(readKey, "record", header, payload));
                     ensureOpen();
-                    Packet p = new Packet(kind, flags, ep, cfg, seq, pts, width, height, payload);
+                    Packet p = new Packet(kind, flags, ep, cfg, seq, pts, width, height, taskId, payload);
                     reads.accept(p); return p;
                 } catch (IOException e) { poison(); throw e; }
             }
@@ -221,7 +233,7 @@ public final class AdbWire {
                     byte[] header = bytes(new byte[HEADER_SIZE]).putInt(MAGIC).putShort((short) VERSION)
                             .put((byte) p.kind).put((byte) p.flags).putLong(p.epoch).putLong(p.configRevision)
                             .putLong(p.sequence).putLong(p.ptsUs).putInt(p.width).putInt(p.height)
-                            .putInt(p.payload.length).array();
+                            .putInt(p.payload.length).putInt(p.taskId).array();
                     out.write(header); out.write(p.payload); out.write(mac(writeKey, "record", header, p.payload)); out.flush();
                 } catch (IOException e) { poison(); throw e; }
             }
@@ -230,7 +242,7 @@ public final class AdbWire {
             boolean allowed = channel == CHANNEL_VIDEO
                     ? !fromClient && (kind == VIDEO_CONFIG || kind == VIDEO_FRAME)
                     : fromClient ? kind == REQUEST_KEYFRAME || kind == STOP || kind == PING || kind == OPERATION
-                    : kind == CAPABILITIES || kind == PONG || kind == RESULT;
+                    : kind == CAPABILITIES || kind == PONG || kind == RESULT || kind == VIDEO_STATE;
             if (!allowed) throw invalid("channel or direction");
         }
         private void ensureOpen() throws IOException { if (closed) throw invalid("closed session"); }
@@ -247,15 +259,15 @@ public final class AdbWire {
 
     private static final class Tracker {
         long sequence, config, lastPts = -1;
-        int width, height;
+        int width, height, taskId;
         boolean needsKey = true;
         void accept(Packet p) throws IOException {
             if (sequence == Long.MAX_VALUE || p.sequence != sequence + 1) throw invalid("sequence");
             if (p.kind == VIDEO_CONFIG) {
                 if (p.configRevision <= config) throw invalid("config revision");
-                config = p.configRevision; width = p.width; height = p.height; needsKey = true;
+                config = p.configRevision; width = p.width; height = p.height; taskId = p.taskId; needsKey = true; lastPts = -1;
             } else if (p.kind == VIDEO_FRAME) {
-                if (config == 0 || p.configRevision != config || p.width != width || p.height != height)
+                if (config == 0 || p.configRevision != config || p.width != width || p.height != height || p.taskId != taskId)
                     throw invalid("frame config");
                 if (p.ptsUs < lastPts || (needsKey && (p.flags & FLAG_KEY_FRAME) == 0)) throw invalid("frame order");
                 lastPts = p.ptsUs; needsKey = false;
@@ -275,7 +287,7 @@ public final class AdbWire {
                     : (flags & ~FLAG_KEY_FRAME) != 0) throw invalid("video flags");
         } else {
             if (flags != 0 || config != 0 || pts != 0 || width != 0 || height != 0) throw invalid("control metadata");
-            if (kind == CAPABILITIES) { if (length != 8) throw invalid("capability size"); }
+            if (kind == CAPABILITIES || kind == VIDEO_STATE) { if (length != 8) throw invalid("capability size"); }
             else if (kind == OPERATION) { if (length != AdbCommands.COMMAND_SIZE) throw invalid("operation size"); }
             else if (kind == RESULT) { if (length < 12 || length > 4 * 1024 * 1024) throw invalid("result size"); }
             else if (kind == REQUEST_KEYFRAME || kind == STOP || kind == PING || kind == PONG) {

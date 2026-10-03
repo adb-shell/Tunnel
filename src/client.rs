@@ -2742,6 +2742,9 @@ pub fn start_video_thread<F, T>(
                         let Some(metadata) = barrier.metadata.into_option() else { continue; };
                         if metadata.epoch == 0 || metadata.epoch < adb_epoch
                             || metadata.generation < adb_generation { continue; }
+                        if (1..=4).contains(&barrier.action) {
+                            adb_generation = metadata.generation;
+                        }
                         if barrier.action == 1 {
                             if adb_frozen && metadata.epoch <= adb_epoch { continue; }
                             let Some((candidate_meta, handler, pixelbuffer, ready)) = adb_candidate.take() else { continue; };

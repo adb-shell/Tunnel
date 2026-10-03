@@ -89,10 +89,6 @@ class _AndroidAdbPairingDialogState extends State<AndroidAdbPairingDialog> {
       return AndroidAdbPairingModel.channelErrorText(mode.reason) ??
           AndroidAdbPairingModel.channelErrorText('SECURE_CHANNEL_REQUIRED');
     }
-    if (mode.usingAdb) return 'ADB 投屏正在运行，无需重复配对。请先关闭 ADB 投屏再重新配对。';
-    if (mode.busy || (mode.inputFrozen && mode.state['videoStopped'] != true)) {
-      return '投屏模式正在切换，请等待完成后再配对。';
-    }
     return null;
   }
 

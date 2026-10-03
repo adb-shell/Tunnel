@@ -191,7 +191,7 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
             result.error("ADB_PROBE_BUSY", "Stop the local capture diagnostic first", null)
             return
         }
-        if (adbMutationsInFlight != 0 || TunnelAdbManager.isMirrorActive() ||
+        if (adbMutationsInFlight != 0 ||
             TunnelAdbManager.wirelessDebugStatus(applicationContext)["running"] == true) {
             result.error("ADB_LOCAL_BUSY", "Another local or remote ADB operation owns the transport", null)
             return
@@ -362,7 +362,7 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                 "tunnel_adb_wireless_debug_set" -> {
                     if (TunnelAdbPrototype.isActive()) {
                         result.error("ADB_PROBE_BUSY", "Stop the local capture diagnostic first", null)
-                    } else if (adbMutationsInFlight != 0 || TunnelAdbManager.isMirrorActive() ||
+                    } else if (adbMutationsInFlight != 0 ||
                         TunnelAdbManager.wirelessDebugStatus(applicationContext)["running"] == true) {
                         result.error("ADB_LOCAL_BUSY", "Wait for the current ADB or settings operation to finish", null)
                     } else {

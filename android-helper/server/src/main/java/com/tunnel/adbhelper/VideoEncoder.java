@@ -35,6 +35,7 @@ final class VideoEncoder {
     private byte[] sentConfig;
     private boolean waitForKey = true;
     private int currentMode;
+    private Server.Lifecycle.VideoTask currentTask;
 
     VideoEncoder(AdbWire.Bootstrap options, Server.Lifecycle lifecycle, AdbWire.Session output) {
         this.options = options;
@@ -44,12 +45,22 @@ final class VideoEncoder {
 
     void run() throws Exception {
         while (!lifecycle.stopped()) {
-            if (lifecycle.captureMode() == 3) { Thread.sleep(100); continue; }
-            try { captureOnce(); return; }
-            catch (DisplayChanged rotation) {
-                lifecycle.displayChanged();
+            currentTask = lifecycle.videoTask();
+            if (currentTask.mode == 3) { Thread.sleep(40); continue; }
+            currentMode = currentTask.mode;
+            lifecycle.videoProgress();
+            try { captureOnce(); }
+            catch (DisplayChanged replacement) { lifecycle.displayChanged(); }
+            catch (Exception videoFailure) {
+                // Codec/provider failure ends only this video task. Input and
+                // overlay continue on the authenticated control connection.
+                lifecycle.videoTaskFailed(currentTask);
+            }
+            finally {
                 if (sentConfig != null) { Arrays.fill(sentConfig, (byte) 0); sentConfig = null; }
                 waitForKey = true;
+                lastPts = 0;
+                lifecycle.videoIdle();
             }
         }
     }
@@ -66,7 +77,6 @@ final class VideoEncoder {
             ensureRunning();
             capture = new DisplayCapture();
             DisplayCapture.Snapshot snapshot = capture.snapshot();
-            currentMode = lifecycle.captureMode();
             MediaCodecInfo selected = findEncoder();
             MediaCodecInfo.VideoCapabilities caps = selected.getCapabilitiesForType(MIME).getVideoCapabilities();
             int alignment = Math.max(2, Math.max(caps.getWidthAlignment(), caps.getHeightAlignment()));
@@ -96,7 +106,7 @@ final class VideoEncoder {
             ensureRunning();
             encoder.start();
             started = true;
-            lifecycle.captureStarted(options.durationSeconds);
+            lifecycle.captureStarted(options.durationSeconds, currentTask);
             lifecycle.sendCapabilities();
             stream(encoder, capture, snapshot, width, height, painter);
         } finally {
@@ -120,10 +130,11 @@ final class VideoEncoder {
         long nextDisplayCheck = 0;
         long lastKeyRequest = 0;
         while (!lifecycle.stopped()) {
+            lifecycle.videoProgress();
             long now = SystemClock.elapsedRealtime();
-            if (currentMode != lifecycle.captureMode()) throw new DisplayChanged();
+            if (currentTask != lifecycle.videoTask()) throw new DisplayChanged();
             if (painter != null) {
-                Bitmap bitmap = lifecycle.takeBitmap();
+                Bitmap bitmap = lifecycle.takeBitmap(currentTask);
                 if (bitmap != null) {
                     try { painter.draw(bitmap, System.nanoTime()); } finally { bitmap.recycle(); }
                 }
@@ -172,14 +183,14 @@ final class VideoEncoder {
                         publishConfiguration(configuration, width, height);
                     } else {
                         boolean key = H264AnnexB.isIdr(bytes);
-                        if (configRevision == 0 || (waitForKey && !key)) {
+                        if (sentConfig == null || (waitForKey && !key)) {
                             lifecycle.requestKeyframe();
                         } else {
                             if (info.presentationTimeUs < lastPts || info.presentationTimeUs < 0) {
                                 throw new IOException("CODEC_PTS_INVALID");
                             }
                             send(AdbWire.Packet.of(AdbWire.VIDEO_FRAME, key ? AdbWire.FLAG_KEY_FRAME : 0,
-                                    options.epoch, configRevision, ++sequence, info.presentationTimeUs, width, height, bytes));
+                                    options.epoch, configRevision, ++sequence, info.presentationTimeUs, width, height, currentTask.id, bytes));
                             lifecycle.frameSent();
                             lastPts = info.presentationTimeUs;
                             waitForKey = false;
@@ -200,7 +211,7 @@ final class VideoEncoder {
         byte[] next = configuration.configuration();
         if (next != null && !Arrays.equals(next, sentConfig)) {
             send(AdbWire.Packet.of(AdbWire.VIDEO_CONFIG, currentMode * 2, options.epoch, ++configRevision, ++sequence,
-                    0, width, height, next));
+                    0, width, height, currentTask.id, next));
             if (sentConfig != null) Arrays.fill(sentConfig, (byte) 0);
             sentConfig = next;
             waitForKey = true;

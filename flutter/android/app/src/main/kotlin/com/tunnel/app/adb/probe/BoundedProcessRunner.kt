@@ -27,11 +27,10 @@ internal class BoundedProcessResult(
  * Executes only caller-owned finite commands. No shell wrapper, logging, or global ADB cleanup.
  * Callers must use fixed command forms and validated parameters; this is not a remote shell API.
  * Runtime is bounded after start() returns; a stuck OS process-start syscall cannot be interrupted
- * safely by Java. A drain that cannot terminate poisons this runner instead of leaking more threads.
+ * safely by Java. A drain that cannot terminate quarantines its concurrency slot instead of leaking more threads.
  */
 internal object BoundedProcessRunner {
-    private val unavailable = AtomicBoolean(false)
-    private val gate = Semaphore(1)
+    private val gate = Semaphore(4)
 
     fun run(
         command: List<String>,
@@ -72,14 +71,14 @@ internal object BoundedProcessRunner {
         if (timeoutMillis !in 1..60_000 || maxBytesPerStream !in 1..1_048_576 || (stdin?.size ?: 0) > 128) {
             return emptyResult(ProcessFailure.INVALID_LIMITS)
         }
-        if (unavailable.get()) return emptyResult(ProcessFailure.RUNNER_UNAVAILABLE)
         if (Thread.currentThread().isInterrupted || cancelled()) return emptyResult(ProcessFailure.INTERRUPTED)
         if (!gate.tryAcquire()) return emptyResult(ProcessFailure.BUSY)
+        val quarantine = AtomicBoolean(false)
         return try {
-            if (unavailable.get()) emptyResult(ProcessFailure.RUNNER_UNAVAILABLE)
-            else runOwned(timeoutMillis, maxBytesPerStream, stdin, cancelled, start)
+            runOwned(timeoutMillis, maxBytesPerStream, stdin, cancelled, start, quarantine)
         } finally {
-            gate.release()
+            // A broken OS pipe quarantines only its slot, not unrelated command sessions.
+            if (!quarantine.get()) gate.release()
         }
     }
 
@@ -89,6 +88,7 @@ internal object BoundedProcessRunner {
         stdin: ByteArray?,
         cancelled: () -> Boolean,
         start: () -> Process,
+        quarantine: AtomicBoolean,
     ): BoundedProcessResult {
         val process = try { start() } catch (_: Exception) {
             return emptyResult(ProcessFailure.START_FAILED)
@@ -169,8 +169,8 @@ internal object BoundedProcessRunner {
             if (outThread.isAlive || errThread.isAlive) {
                 // A pipe close may wait on the same monitor as a blocked read. Do not let
                 // teardown make the caller unbounded; retain at most these two daemon
-                // drains, with bounded buffers, and permanently reject further children.
-                unavailable.set(true)
+                // drains, with bounded buffers, and quarantine this slot.
+                quarantine.set(true)
                 if (failure == null) failure = ProcessFailure.DRAIN_FAILED
             }
             if (!outThread.isAlive) {
@@ -182,7 +182,7 @@ internal object BoundedProcessRunner {
             try { process.outputStream.close() } catch (_: Exception) { }
             if (exitCode == null) {
                 try { exitCode = process.exitValue() } catch (_: IllegalThreadStateException) {
-                    unavailable.set(true) // Do not accumulate children that the OS did not reap.
+                    quarantine.set(true) // Do not accumulate children that the OS did not reap.
                 }
             }
         }

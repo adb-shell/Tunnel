@@ -152,7 +152,9 @@ final class ShellAutomation implements AutoCloseable {
         event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
         try {
             boolean accepted = automation.injectInputEvent(event, true);
-            if (!accepted) { capabilities &= ~AdbWire.CAP_INPUT; releaseInput(); }
+            // A window transition may reject one event without revoking shell
+            // input authority. Cancel this gesture, but permit the next one.
+            if (!accepted) releaseInput();
             return accepted ? AdbCommands.OK : AdbCommands.REJECTED;
         } finally {
             event.recycle();
@@ -173,7 +175,7 @@ final class ShellAutomation implements AutoCloseable {
         boolean accepted = automation.injectInputEvent(event, true);
         if (action == KeyEvent.ACTION_DOWN && accepted) pressedKeys.put(code, down);
         if (action == KeyEvent.ACTION_UP) pressedKeys.remove(code);
-        if (!accepted) capabilities &= ~AdbWire.CAP_INPUT;
+        if (!accepted) releaseInput();
         return accepted;
     }
 

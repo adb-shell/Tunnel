@@ -88,6 +88,35 @@ public class AdbWireTest {
         AdbWire.Packet.capabilities(9, 1, 0, AdbWire.CAP_OVERLAY);
     }
 
+
+    @Test(timeout = 10000) public void videoTasksRemainIndependentOnOneAuthenticatedSession() throws Exception {
+        try (Pair pair = new Pair(AdbWire.CHANNEL_VIDEO, secret())) {
+            pair.server.write(AdbWire.Packet.of(AdbWire.VIDEO_CONFIG, 0, 9, 1, 1, 0, 720, 1280, 10, new byte[]{1}));
+            assertEquals(10, pair.client.read().taskId);
+            pair.server.write(AdbWire.Packet.of(AdbWire.VIDEO_FRAME, 1, 9, 1, 2, 100, 720, 1280, 10, new byte[]{2}));
+            assertEquals(10, pair.client.read().taskId);
+            pair.server.write(AdbWire.Packet.of(AdbWire.VIDEO_CONFIG, 0, 9, 2, 3, 0, 720, 1280, 11, new byte[]{3}));
+            assertEquals(11, pair.client.read().taskId);
+            // A restarted codec may reset PTS, but must still start with a key frame.
+            pair.server.write(AdbWire.Packet.of(AdbWire.VIDEO_FRAME, 1, 9, 2, 4, 1, 720, 1280, 11, new byte[]{4}));
+            assertEquals(11, pair.client.read().taskId);
+            rejects(() -> pair.server.write(AdbWire.Packet.of(AdbWire.VIDEO_FRAME, 0, 9, 2, 5, 2, 720, 1280, 10, new byte[]{5})));
+        }
+        rejects(() -> new AdbCommands.Command(1, AdbCommands.VIDEO_TASK, 0, 0, 0, 0, 0, 0));
+        rejects(() -> new AdbCommands.Command(1, AdbCommands.VIDEO_TASK, 4, 1, 0, 0, 0, 0));
+        assertEquals(10, AdbCommands.Command.decode(new AdbCommands.Command(1,
+                AdbCommands.VIDEO_TASK, 3, 10, 0, 0, 0, 0).encode()).b);
+        rejects(() -> AdbWire.Packet.of(AdbWire.VIDEO_CONFIG, 0, 9, 1, 1, 0, 720, 1280, 0, new byte[]{1}));
+        rejects(() -> AdbWire.Packet.of(AdbWire.PING, 0, 9, 0, 1, 0, 0, 0, 1, new byte[0]));
+        try (Pair pair = new Pair(AdbWire.CHANNEL_CONTROL, secret())) {
+            byte[] state = java.nio.ByteBuffer.allocate(8).putInt(10).putInt(2).array();
+            pair.server.write(AdbWire.Packet.of(AdbWire.VIDEO_STATE, 0, 9, 0, 1, 0, 0, 0, state));
+            assertEquals(AdbWire.VIDEO_STATE, pair.client.read().kind);
+            pair.client.write(AdbWire.Packet.command(AdbWire.PING, 9, 1));
+            assertEquals(AdbWire.PING, pair.server.read().kind);
+        }
+    }
+
     @Test public void sessionDurationRoundTripsAndOlderHelpersAreRejected() throws Exception {
         try (AdbWire.Bootstrap boot = new AdbWire.Bootstrap(secret(), 9, 1234, 1235, 1280, 30,
                 4000000, AdbWire.SESSION_DURATION)) {
@@ -148,9 +177,9 @@ public class AdbWireTest {
     }
 
     @Test(timeout = 10000) public void tamperingAndMaliciousLengthsPoisonSession() throws Exception {
-        for (int offset : new int[] {48, 52}) {
+        for (int offset : new int[] {48, 52, 56}) {
             try (Pair pair = new Pair(AdbWire.CHANNEL_CONTROL, secret())) {
-                pair.output.tamperAt = offset; // Negative payload size, then an authenticated payload bit.
+                pair.output.tamperAt = offset; // Payload length, task identity, or authenticated payload.
                 pair.server.write(AdbWire.Packet.capabilities(9, 1, 1, 3));
                 rejects(pair.client::read); rejects(pair.client::read);
             }

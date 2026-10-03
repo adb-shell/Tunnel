@@ -87,7 +87,7 @@ object RemoteAdbPairing {
                        action: (Context, (String) -> Unit) -> TunnelAdbState): Boolean {
         val app = context.applicationContext
         val job = synchronized(lock) {
-            if (active != null || TunnelAdbManager.isMirrorActive()) return false
+            if (active != null) return false
             Job(connId, operationId, callback).also { active = it }
         }
         val initialState = try { TunnelAdbManager.initialize(app) } catch (_: Exception) {

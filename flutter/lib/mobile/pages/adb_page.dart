@@ -145,7 +145,7 @@ class _AdbPageState extends State<AdbPage>
     await _model.command(text);
   }
 
-  bool get _canRun => !_model.busy && !_model.mirrorActive;
+  bool get _canRun => !_model.busy;
   bool get _canConnect => _canRun && !_model.terminalRunning;
 
   Future<void> _help() => showDialog<void>(
@@ -230,16 +230,37 @@ class _AdbPageState extends State<AdbPage>
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          Row(children: [
-            const Icon(Icons.terminal),
-            const SizedBox(width: 10),
-            Expanded(child: Text('LADB · 本机 ADB', style: Theme.of(context).textTheme.titleLarge)),
-            IconButton(onPressed: _model.openSettings, icon: const Icon(Icons.settings_outlined), tooltip: '无线调试设置'),
-            IconButton(onPressed: _help, icon: const Icon(Icons.help_outline), tooltip: '配对教程'),
-          ]),
-          Text(_model.status, style: TextStyle(color: _model.shellReady ? colors.primary : null)),
+          Card(elevation: 0, margin: EdgeInsets.zero,
+            color: colors.primaryContainer.withOpacity(0.45),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: Padding(padding: const EdgeInsets.all(18),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  CircleAvatar(backgroundColor: colors.primary.withOpacity(0.12),
+                    child: Icon(Icons.terminal_rounded, color: colors.primary)),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('本机无线调试', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 3),
+                    Text('配对、连接与 Shell', style: Theme.of(context).textTheme.bodySmall),
+                  ])),
+                  IconButton(onPressed: _help, icon: const Icon(Icons.help_outline), tooltip: '使用教程'),
+                ]),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Icon(_model.shellReady ? Icons.check_circle_rounded : Icons.circle_outlined,
+                    color: _model.shellReady ? colors.primary : colors.onSurfaceVariant, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_model.status,
+                    style: TextStyle(color: _model.shellReady ? colors.primary : colors.onSurfaceVariant))),
+                ]),
+                const SizedBox(height: 8),
+                TextButton.icon(onPressed: _model.openSettings,
+                  icon: const Icon(Icons.settings_outlined, size: 18),
+                  label: const Text('打开无线调试设置')),
+              ]))),
           if (_model.mirrorActive)
-            const Padding(padding: EdgeInsets.only(top: 8), child: Text('远程 ADB 投屏正在使用连接。切回普通投屏后再操作本地终端。')),
+            const Padding(padding: EdgeInsets.only(top: 8), child: Text('ADB 控制通道已连接，本机 shell 可同时使用。')),
           if (_model.busy) ...[
             const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: LinearProgressIndicator()),
             Row(children: [
@@ -255,14 +276,18 @@ class _AdbPageState extends State<AdbPage>
             TextButton.icon(onPressed: _canConnect ? () => _model.run('扫描已授权连接', 'tunnel_adb_start') : null, icon: const Icon(Icons.wifi_find), label: const Text('扫描连接')),
           ]),
           if (_showPairing) _pairingForm(),
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
+          const SizedBox(height: 8),
+          Card(elevation: 0, margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: colors.outline.withOpacity(0.2))),
+            child: SwitchListTile.adaptive(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             title: const Text('允许远程控制 / ADB 配对'),
             subtitle: const Text('允许已授权、加密的 PC 会话请求配对及控制；不会自动打开无障碍或投屏。'),
             value: _model.remoteControlAllowed == true,
             onChanged: _model.remoteControlAllowed == null ? null : _model.setRemoteControlAllowed,
-          ),
-          const Divider(),
+          )),
+          const SizedBox(height: 18),
           Wrap(spacing: 8, children: [
             TextButton.icon(
                 onPressed: _canConnect && _model.shellReady ? () => _model.run('启动本地终端', 'tunnel_adb_local_shell') : null,
@@ -275,9 +300,9 @@ class _AdbPageState extends State<AdbPage>
                 icon: const Icon(Icons.stop), label: const Text('停止终端')),
           ]),
           if (_model.terminalRunning)
-            const Text('本地终端正在占用 ADB。停止终端后，PC 可接管配对与投屏。'),
+            const Text('本地终端已启动，当前目录和环境会保留至终端停止。'),
           Row(children: [
-            const Expanded(child: Text('Shell 终端')),
+            Expanded(child: Text('Shell 终端', style: Theme.of(context).textTheme.titleMedium)),
             TextButton(onPressed: _model.shellReady && _canRun ? () => _model.command('id') : null, child: const Text('验证 id')),
             PopupMenuButton<String>(
               tooltip: '终端选项',
@@ -295,16 +320,17 @@ class _AdbPageState extends State<AdbPage>
             ),
           ]),
           Container(
-            height: 260,
-            decoration: BoxDecoration(color: const Color(0xff17202a), borderRadius: BorderRadius.circular(8)),
+            height: 280,
+            decoration: BoxDecoration(color: const Color(0xff17202a), borderRadius: BorderRadius.circular(16)),
             child: Scrollbar(
               controller: _outputScroll,
               child: SingleChildScrollView(
                 controller: _outputScroll,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 child: SizedBox(width: double.infinity, child: SelectableText(
                   _model.output.isEmpty ? '等待本机 ADB 连接。连接后输入 id 查看 shell 身份。' : _model.output,
-                  style: TextStyle(fontFamily: 'monospace', fontSize: _fontSize, color: const Color(0xffe5edf5)),
+                  style: TextStyle(fontFamily: 'monospace', height: 1.45,
+                    fontSize: _fontSize, color: const Color(0xffe5edf5)),
                 )),
               ),
             ),
@@ -323,7 +349,9 @@ class _AdbPageState extends State<AdbPage>
               onSubmitted: (_) => _send(),
               decoration: const InputDecoration(labelText: 'Shell 命令', hintText: '例如：id', border: OutlineInputBorder(), counterText: ''),
             )),
-            IconButton(onPressed: _model.shellReady && _canRun ? _send : null, icon: const Icon(Icons.send), tooltip: '执行命令'),
+            const SizedBox(width: 8),
+            IconButton.filled(onPressed: _model.shellReady && _canRun ? _send : null,
+              icon: const Icon(Icons.arrow_upward_rounded), tooltip: '执行命令'),
           ]),
           const Padding(padding: EdgeInsets.only(top: 8), child: Text('持久 shell 在手机本机执行，保留当前目录与环境；输出不发送到 PC。')),
         ],
@@ -332,12 +360,17 @@ class _AdbPageState extends State<AdbPage>
   }
 
   Widget _pairingForm() => Card(
+        elevation: 0,
         margin: const EdgeInsets.symmetric(vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Theme.of(context).colorScheme.outline.withOpacity(0.2))),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           child: Form(
             key: _form,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text('配对与连接', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
               const Text('保持系统配对窗口打开，可使用分屏同时输入。'),
               Align(alignment: Alignment.centerLeft, child: TextButton.icon(
                 onPressed: _canConnect ? _discover : null,

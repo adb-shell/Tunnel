@@ -99,7 +99,7 @@ class AndroidAdbPairingModel extends ChangeNotifier {
       'SEND_FAILED': '配对请求未送达，请确认远程连接仍然正常。',
       'UNAUTHORIZED': '当前远程会话未获得此操作权限。',
       'SESSION_ADB_AUTHORIZATION_REQUIRED': '本连接尚未获得 ADB 授权，请点击“连接已配对设备并授权”。',
-      'STOP_ADB_VIDEO_BEFORE_PAIRING': '请先退出 ADB 投屏并恢复普通共享后配对或连接。',
+      'STOP_ADB_VIDEO_BEFORE_PAIRING': '手机仍在处理旧版投屏请求，请更新两端程序后重试连接。',
       'PAIR_CODE_INVALID': '配对码必须是当前手机配对窗口显示的 6 位数字。',
       'PAIR_CODE_REJECTED': '手机拒绝了配对码，请保持配对窗口打开并输入最新的配对码。',
       'PAIR_PORT_UNREACHABLE': '无法连接手机配对端口，请检查无线调试和当前配对窗口。',

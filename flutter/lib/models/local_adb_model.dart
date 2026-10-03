@@ -98,7 +98,7 @@ class LocalAdbModel extends ChangeNotifier {
   }
 
   Future<void> run(String label, String method, [dynamic args]) async {
-    if (_disposed || busy || mirrorActive) return;
+    if (_disposed || busy) return;
     _working = true;
     operation = label;
     error = '';
@@ -167,7 +167,7 @@ class LocalAdbModel extends ChangeNotifier {
   }
 
   Future<void> command(String text) async {
-    if (!shellReady || busy || mirrorActive || text.trim().isEmpty) return;
+    if (!shellReady || busy || text.trim().isEmpty) return;
     history.remove(text);
     history.insert(0, text);
     if (history.length > 30) history.removeLast();
