@@ -6,6 +6,10 @@ import com.tunnel.adb.protocol.AdbCommands
 import com.tunnel.adb.protocol.AdbWire
 import com.tunnel.app.adb.TunnelAdbManager
 import com.tunnel.app.adb.RemoteAdbPairing
+import com.tunnel.app.adb.LocalAdbProcessSpec
+import com.tunnel.app.adb.probe.BoundedProcessRunner
+import com.tunnel.app.adb.probe.LocalAdbIdentityProbe
+import com.tunnel.app.adb.probe.LocalAdbTargetPolicy
 import org.json.JSONObject
 import java.util.LinkedHashMap
 
@@ -21,6 +25,9 @@ object TunnelAdbRuntime {
         fun accessibilityBound(): Boolean
         fun normalCaptureReady(): Boolean
         fun setAdbCaptureCommitted(committed: Boolean)
+        fun setAdbCaptureFrozen() { setAdbCaptureCommitted(true) }
+        fun setNormalScreenShare(enabled: Boolean): Boolean = false
+        fun accessibilityNavigation(action: String): Boolean = false
         fun openLocalAccessibilitySettings() {}
         fun openUrl(url: String): Boolean = false
         fun setOverlay(blockTouch: Boolean, black: Boolean): Boolean = false
@@ -34,6 +41,7 @@ object TunnelAdbRuntime {
     private var watchdogStarted = false
     private var generation = 1L
     private var owner = 0
+    private var lastVideoOwner = 0
     private var consentOwner = 0
     private var scopes: Set<String> = emptySet()
     private var pendingOwner = 0
@@ -65,6 +73,16 @@ object TunnelAdbRuntime {
     private var frameOverride = 0
     private var capturePaused = false
     private var requestedMode = 0
+    private var auxiliarySession: TunnelAdbSession? = null
+    private var auxiliaryOwner = 0
+    private var auxiliaryEpoch = 0L
+    private var auxiliaryReady = false
+    private var blackRequested = false
+    private var blackEnabled = false
+    private var actionBusy = false
+    private val actionWorker = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
+        Thread(task, "tunnel-adb-scoped-actions").apply { isDaemon = true }
+    }
     private val knownScopes = setOf("video", "input", "accessibility", "display", "snapshot", "hierarchy", "overlay")
     private val pairingOperations = mutableMapOf<Int, String>()
     private val cancelledPairing = mutableSetOf<String>()
@@ -77,6 +95,9 @@ object TunnelAdbRuntime {
     private val completed = object : LinkedHashMap<String, Pair<String, String>>(128, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<String, String>>?): Boolean = size > 128
     }
+    private val actionResults = object : LinkedHashMap<String, Pair<String, String>>(128, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<String, String>>?): Boolean = size > 128
+    }
 
     @JvmStatic fun initialize(value: Context, callbacks: Hooks) = synchronized(lock) {
         context = value.applicationContext
@@ -87,7 +108,7 @@ object TunnelAdbRuntime {
                 while (true) {
                     Thread.sleep(500)
                     val unresponsive = synchronized(lock) {
-                        if (owner != 0 && SystemClock.elapsedRealtime() - lastHeartbeat > 15_000) owner else 0
+                        if (session != null && !stopping && owner != 0 && SystemClock.elapsedRealtime() - lastHeartbeat > 15_000) owner else 0
                     }
                     if (unresponsive != 0) stopOwner(unresponsive, "HEARTBEAT_LOST", true)
                 }
@@ -95,12 +116,12 @@ object TunnelAdbRuntime {
         }
     }
 
-    /** Authenticated explicit action; valid until disconnect, revoke or leaving ADB mode. */
+    /** Authenticated explicit action; video stop does not revoke the connection's grant. */
     @JvmStatic fun grantConsent(connId: Int, requestedScopes: Set<String>): String {
         synchronized(lock) {
             if (connId <= 0 || requestedScopes.isEmpty() || "video" !in requestedScopes ||
                 !knownScopes.containsAll(requestedScopes) ||
-                (owner != 0 && owner != connId)) return snapshot("CONSENT_INVALID")
+                (owner != 0 && owner != connId) || (auxiliaryOwner != 0 && auxiliaryOwner != connId)) return snapshot("CONSENT_INVALID")
             val narrowing = owner != 0 && !requestedScopes.containsAll(scopes)
             consentOwner = connId
             scopes = requestedScopes.toSet(); pendingOwner = 0; pendingScopes = emptySet(); error = ""
@@ -113,19 +134,25 @@ object TunnelAdbRuntime {
     @JvmStatic fun status(): String = synchronized(lock) { snapshot() }
     private fun hasConsent(connId: Int): Boolean = connId > 0 && consentOwner == connId && "video" in scopes
     private fun clearConsentLocked() {
+        AdbScreenShareRequest.clear()
         consentOwner = 0; scopes = emptySet(); consentOperationId = ""
         pendingOwner = 0; pendingScopes = emptySet()
     }
     @JvmStatic fun revokeConsent() {
-        val id = synchronized(lock) { clearConsentLocked(); owner }
+        val id = synchronized(lock) { clearConsentLocked(); closeAuxiliaryLocked(); owner }
         if (id != 0) stopOwner(id, "CONSENT_REVOKED", true)
+    }
+    fun authorizedAction(connId: Int): Boolean = synchronized(lock) {
+        hasConsent(connId) && hooks?.connectionAuthorized(connId) == true
     }
     @JvmStatic fun onDisconnected(connId: Int) {
         synchronized(lock) {
             pairingOperations.remove(connId)
             cancelledPairing.removeAll { it.startsWith("$connId:") }
             pairingResults.keys.removeAll { it.startsWith("$connId:") }
+            actionResults.keys.removeAll { it.startsWith("$connId:") }
             if (consentOwner == connId) clearConsentLocked()
+            if (auxiliaryOwner == connId) closeAuxiliaryLocked()
             if (pendingOwner == connId) { pendingOwner = 0; pendingScopes = emptySet() }
         }
         RemoteAdbPairing.disconnect(connId)
@@ -136,7 +163,7 @@ object TunnelAdbRuntime {
             pairingOperations.keys.toList().also { pairingOperations.clear(); cancelledPairing.clear() }
         }
         pending.forEach { RemoteAdbPairing.disconnect(it) }
-        revokeConsent(); synchronized(lock) { pairingResults.clear(); hooks = null; context = null }
+        revokeConsent(); synchronized(lock) { pairingResults.clear(); actionResults.clear(); hooks = null; context = null }
     }
 
     /** Rust has already checked relay encryption, authentication, permissions and exclusive owner. */
@@ -154,6 +181,10 @@ object TunnelAdbRuntime {
                 // This early return deliberately avoids completed[signature], which would retain the code.
                 return pairingRequest(connId, id, op, payload)
             }
+            if (op == "side_action" || op.startsWith("accessibility_")) {
+                return try { actionRequest(connId, id, op, payload) }
+                catch (_: Exception) { synchronized(lock) { actionNotice(connId, id, "REQUEST_INVALID") } }
+            }
             synchronized(lock) {
                 val signature = request.toString()
                 val replayKey = "$connId:$id:$op:${request.optLong("epoch", 0)}"
@@ -161,34 +192,70 @@ object TunnelAdbRuntime {
                     return@synchronized if (previous.first == signature) previous.second else snapshot("OPERATION_REPLAY")
                 }
                 if (op == "status") { requireKeys(payload, emptySet()); return@synchronized snapshot() }
-                if (op == "start") {
+                if (op == "stop") {
                     requireKeys(payload, emptySet())
+                    if ((owner != 0 && owner != connId) ||
+                        (owner == 0 && lastVideoOwner != connId && consentOwner != connId))
+                        return@synchronized snapshot("NOT_OWNER")
+                    stopLocked("STOPPED")
+                    return@synchronized JSONObject(snapshot()).put("videoStopped", true).toString()
+                }
+                if (op == "start") {
+                    if (actionBusy) return@synchronized snapshot("LOCAL_ADB_BUSY")
+                    requireKeys(payload, setOf("initialSource"))
+                    val initialMode = when (payload.optString("initialSource", "ADB_CAPTURE")) {
+                        "ADB_CAPTURE" -> 0
+                        "IGNORE_CAPTURE" -> 1
+                        "HIERARCHY_CAPTURE" -> 2
+                        else -> return@synchronized snapshot("REQUEST_INVALID")
+                    }
                     val requestedEpoch = number(request, "epoch"); require(requestedEpoch > 0)
                     val requestedGeneration = number(request, "generation"); require(requestedGeneration > 0)
+                    if (stopping && owner == connId && error == "STOPPED") {
+                        session?.close(); session = null; stopping = false; owner = 0
+                    }
                     if (stopping || (owner != 0 && owner != connId)) return@synchronized snapshot("OWNER_BUSY")
                     if (!hasConsent(connId)) {
                         pendingOwner = connId; pendingScopes = knownScopes
                         return@synchronized snapshot("SESSION_ADB_AUTHORIZATION_REQUIRED")
                     }
+                    if ((initialMode == 1 && "snapshot" !in scopes) || (initialMode == 2 && "hierarchy" !in scopes))
+                        return@synchronized snapshot("SCOPE_DENIED")
                     if (owner == connId) return@synchronized snapshot(if (requestedEpoch == epoch) "" else "OWNER_BUSY")
                     val app = context ?: return@synchronized snapshot("RUNTIME_UNAVAILABLE")
                     val serial = TunnelAdbManager.selectedLocalSerial() ?: return@synchronized snapshot("LOCAL_ADB_REQUIRED")
-                    val lease = TunnelAdbManager.acquireMirrorLease() ?: return@synchronized snapshot("LOCAL_ADB_BUSY")
-                    owner = connId; epoch = requestedEpoch; generation = requestedGeneration; operationId = id
+                    if (auxiliaryOwner != 0 && auxiliaryOwner != connId) return@synchronized snapshot("OWNER_BUSY")
+                    auxiliarySession?.close()
+                    owner = connId; lastVideoOwner = connId
+                    epoch = requestedEpoch; generation = requestedGeneration; operationId = id
                     helperEpoch = requestedEpoch; freezeFrames = false; pendingConfig = null; pendingKey = null
                     lastConfig = null; configSent = false
-                    baseLive = true; frameOverride = 0; capturePaused = false; requestedMode = 0
+                    baseLive = true; frameOverride = initialMode; capturePaused = false; requestedMode = initialMode
                     revision = 0; mask = 0; error = ""
                     phase = "PREPARING"; source = "NONE"; videoReady = false; committed = false
                     lastHeartbeat = SystemClock.elapsedRealtime(); lastInputSequence = 0; completed.clear()
-                    try {
-                        val candidate = TunnelAdbSession(app, serial, epoch, lease, events(connId, epoch))
-                        session = candidate; candidate.start()
-                    } catch (_: Exception) {
-                        clearConsentLocked()
-                        session = null; owner = 0; phase = "FAILED"; error = "HELPER_START_FAILED"; lease.close()
-                        return@synchronized snapshot(error)
-                    }
+                    val expectedEpoch = epoch
+                    Thread({
+                        val deadline = SystemClock.elapsedRealtime() + 5_000
+                        var lease: java.io.Closeable? = null
+                        while (lease == null && SystemClock.elapsedRealtime() < deadline) {
+                            val allowed = synchronized(lock) { owner == connId && helperEpoch == expectedEpoch && !stopping && hasConsent(connId) }
+                            if (!allowed) return@Thread
+                            lease = TunnelAdbManager.acquireMirrorLease()
+                            if (lease == null) Thread.sleep(50)
+                        }
+                        val notice = synchronized(lock) {
+                            if (owner != connId || helperEpoch != expectedEpoch || stopping || !hasConsent(connId)) {
+                                lease?.close(); return@Thread
+                            }
+                            if (lease == null) { failLocked("LOCAL_ADB_BUSY"); snapshot() }
+                            else try {
+                                val candidate = TunnelAdbSession(app, serial, expectedEpoch, lease!!, events(connId, expectedEpoch), initialMode)
+                                session = candidate; candidate.start(); null
+                            } catch (_: Exception) { lease?.close(); failLocked("HELPER_START_FAILED"); snapshot() }
+                        }
+                        notice?.let { hooks?.onState(connId, it) }
+                    }, "tunnel-adb-video-start").apply { isDaemon = true; start() }
                 } else {
                     if (owner != connId || owner == 0) return@synchronized snapshot("NOT_OWNER")
                     if (number(request, "generation") != generation) return@synchronized snapshot("STALE_GENERATION")
@@ -225,7 +292,7 @@ object TunnelAdbRuntime {
                             phase = "COMMITTED"; committed = true; hooks?.setAdbCaptureCommitted(true)
                             source = candidateSource
                         }
-                        "stop" -> { requireKeys(payload, emptySet()); stopLocked("STOPPED") }
+                        "video_failed" -> { requireKeys(payload, emptySet()); failLocked("PC_VIDEO_FAILED") }
                         "input" -> {
                             if (!inputReady()) return@synchronized snapshot("INPUT_NOT_READY")
                             val sequence = number(request, "sequence")
@@ -233,32 +300,6 @@ object TunnelAdbRuntime {
                             val arguments = input(payload)
                             lastInputSequence = sequence
                             submit(id, arguments[0], *arguments.copyOfRange(1, arguments.size))
-                        }
-                        "side_action" -> {
-                            if (phase != "COMMITTED") return@synchronized snapshot("NOT_READY")
-                            val result = sideAction(id, payload)
-                            if (result.isNotEmpty()) return@synchronized snapshot(result)
-                        }
-                        "accessibility_pause", "accessibility_disable" -> {
-                            requireKeys(payload, emptySet())
-                            if ("accessibility" !in scopes) return@synchronized snapshot("SCOPE_DENIED")
-                            if (!inputReady()) return@synchronized snapshot("REPLACEMENT_NOT_COMMITTED")
-                            val ok = if (op == "accessibility_pause") hooks?.setAccessibilityPaused(true) == true
-                                else hooks?.disableOwnAccessibility() == true
-                            if (!ok) return@synchronized snapshot("LOCAL_ACTION_REQUIRED")
-                            if (op == "accessibility_pause") pausedByUs = true
-                        }
-                        "accessibility_resume" -> {
-                            requireKeys(payload, emptySet())
-                            if ("accessibility" !in scopes) return@synchronized snapshot("SCOPE_DENIED")
-                            if (hooks?.setAccessibilityPaused(false) != true) return@synchronized snapshot("LOCAL_ACTION_REQUIRED")
-                            pausedByUs = false
-                        }
-                        "accessibility_enable" -> {
-                            requireKeys(payload, emptySet())
-                            if ("accessibility" !in scopes) return@synchronized snapshot("SCOPE_DENIED")
-                            hooks?.openLocalAccessibilitySettings()
-                            return@synchronized snapshot("LOCAL_ACTION_REQUIRED")
                         }
                         else -> return@synchronized snapshot("OPERATION_UNSUPPORTED")
                     }
@@ -296,7 +337,7 @@ object TunnelAdbRuntime {
         fun failure(code: String, targetId: String = id): String = pairingNotice(connId, targetId, JSONObject()
             .put("phase", "PAIR_FAILED").put("code", code).put("terminal", true)
             .put("localAdbReady", TunnelAdbManager.snapshot().shellReady))
-        if (hooks?.connectionAuthorized(connId) != true) return@synchronized failure("PERMISSION_OR_SECURE_CHANNEL_REQUIRED")
+        if (hooks?.connectionAuthorized(connId) != true) return@synchronized failure("ANDROID_ADB_SESSION_NOT_REGISTERED")
         if (op == "pair_cancel") {
             requireKeys(payload, setOf("pairOperationId"))
             val target = payload.getString("pairOperationId")
@@ -305,6 +346,7 @@ object TunnelAdbRuntime {
             RemoteAdbPairing.cancel(connId, target)
             if (consentOwner == connId && consentOperationId == target) {
                 clearConsentLocked()
+                closeAuxiliaryLocked()
                 if (owner == connId) stopLocked("CONSENT_REVOKED")
             }
             val result = pairingNotice(connId, target, JSONObject().put("phase", if (pending) "CANCELLING" else "CANCELLED")
@@ -319,6 +361,7 @@ object TunnelAdbRuntime {
             RemoteAdbPairing.disconnect(connId)
             if (consentOwner == connId) {
                 clearConsentLocked()
+                closeAuxiliaryLocked()
                 if (owner == connId) stopLocked("CONSENT_REVOKED")
             }
             return@synchronized pairingNotice(connId, id, JSONObject().put("phase", "CANCELLED")
@@ -387,10 +430,12 @@ object TunnelAdbRuntime {
                     (frameOverride == 2 && mask and AdbWire.CAP_TREE != 0 && bits and AdbWire.CAP_TREE == 0)
                 mask = bits
                 if (pausedByUs && bits and AdbWire.CAP_INPUT == 0) { hooks?.setAccessibilityPaused(false); pausedByUs = false }
-                if (lostInput) stopLocked("INPUT_CAPABILITY_LOST")
+                if (blackRequested && bits and AdbWire.CAP_OVERLAY != 0)
+                    session?.let { blackOperation(it, id, "overlay-resume", true) }
+                if (lostInput) failLocked("INPUT_CAPABILITY_LOST")
                 if (lostOverride && !stopping) {
                     frameOverride = 0; requestedMode = if (baseLive) 0 else 3
-                    if (!baseLive && phase != "COMMITTED") stopLocked("FRAME_PROVIDER_LOST")
+                    if (!baseLive && phase != "COMMITTED") failLocked("FRAME_PROVIDER_LOST")
                     else if (!baseLive) {
                         capturePaused = true; videoReady = false; source = "NONE"
                         session?.setCapturePaused(true); session?.operation(AdbCommands.RELEASE_INPUT)
@@ -444,10 +489,16 @@ object TunnelAdbRuntime {
             val notice = synchronized(lock) {
                 if (owner != id || helperEpoch != expectedEpoch) return
                 val finalReason = if (stopping && error.isNotEmpty()) error else reason
-                if (consentOwner == id) clearConsentLocked()
-                restoreHooks(); session = null; stopping = false; owner = 0
-                phase = if (finalReason == "STOPPED") "IDLE" else "FAILED"
-                source = if (hooks?.normalCaptureReady() == true) "MEDIA_PROJECTION" else "NONE"
+                val explicitStop = finalReason in setOf("STOPPED", "DISCONNECTED", "CONSENT_REVOKED", "CONSENT_SCOPE_CHANGED")
+                session = null; stopping = false
+                if (explicitStop) {
+                    restoreHooks(); owner = 0; phase = "IDLE"
+                    source = if (hooks?.normalCaptureReady() == true) "MEDIA_PROJECTION" else "NONE"
+                    if (finalReason == "STOPPED" && blackRequested && hasConsent(id)) ensureAuxiliaryLocked(id, "overlay-after-video-stop")
+                } else {
+                    // Preserve the selected source/final frame until an explicit stop.
+                    phase = "FAILED"; hooks?.setAdbCaptureFrozen()
+                }
                 videoReady = false; mask = 0; error = if (cleanupComplete) finalReason else "CLEANUP_INCOMPLETE"
                 completed.clear(); snapshot().let { JSONObject(it).put("ownerConnId", id).toString() }
             }
@@ -478,42 +529,17 @@ object TunnelAdbRuntime {
 
     private fun sideAction(id: String, payload: JSONObject): String {
         val action = payload.getString("action")
-        requireKeys(payload, if (action == "open_url") setOf("action", "url") else setOf("action"))
-        val navigation = listOf("back", "home", "recents", "volume_up", "volume_down").indexOf(action)
-        if (navigation >= 0) {
-            if (!inputReady()) return "INPUT_NOT_READY"
-            submit(id, AdbCommands.NAVIGATE, navigation + 1); return ""
-        }
+        requireKeys(payload, setOf("action"))
         return when (action) {
-            "display_on", "display_off" -> {
-                if ("display" !in scopes) "SCOPE_DENIED"
-                else { submit(id, AdbCommands.DISPLAY, if (action == "display_on") 1 else 0); "" }
-            }
-            "touch_block_on" -> if ("overlay" !in scopes) "SCOPE_DENIED"
-                else if (hooks?.setOverlay(true, false) == true) "" else "LOCAL_ACTION_REQUIRED"
-            "touch_block_off" -> { hooks?.clearOwnedOverlay(); "" }
-            "share_start" -> {
-                if (baseLive && frameOverride == 0 && !capturePaused) session?.keyframe()
-                else changeMode(id, true, 0)
-                ""
-            }
-            "share_stop" -> { changeMode(id, false, frameOverride); "" }
             "ignore_off", "hierarchy_off" -> {
-                if ((action == "ignore_off" && source == "ADB_SNAPSHOT") || (action == "hierarchy_off" && source == "ADB_HIERARCHY"))
-                    changeMode(id, baseLive, 0)
-                "" // Closing a non-current override never cancels the active override.
+                if ((action == "ignore_off" && source == "ADB_SNAPSHOT") ||
+                    (action == "hierarchy_off" && source == "ADB_HIERARCHY")) changeMode(id, true, 0)
+                ""
             }
             "ignore_on", "hierarchy_on" -> {
                 val scope = if (action == "ignore_on") "snapshot" else "hierarchy"
                 if (scope !in scopes) "SCOPE_DENIED"
-                else { changeMode(id, baseLive, if (action == "ignore_on") 1 else 2); "" }
-            }
-            "open_url" -> {
-                if ("input" !in scopes) "SCOPE_DENIED" else {
-                    val uri = android.net.Uri.parse(payload.getString("url"))
-                    if (uri.scheme !in listOf("http", "https") || uri.host.isNullOrEmpty() || uri.userInfo != null || uri.toString().length > 2048) "REQUEST_INVALID"
-                    else if (hooks?.openUrl(uri.toString()) == true) "" else "LOCAL_ACTION_REQUIRED"
-                }
+                else { changeMode(id, true, if (action == "ignore_on") 1 else 2); "" }
             }
             else -> "OPERATION_UNSUPPORTED"
         }
@@ -522,7 +548,7 @@ object TunnelAdbRuntime {
     private fun changeMode(id: String, nextBase: Boolean, nextOverride: Int) {
         val mode = if (nextOverride != 0) nextOverride else if (nextBase) 0 else 3
         requestedMode = mode
-        submit(id, AdbCommands.CAPTURE_MODE, mode, if (nextBase) 0 else 3, onSuccess = {
+        submit(id, AdbCommands.CAPTURE_MODE, mode, if (nextBase) 0 else 3, actionResult = true, onSuccess = {
             baseLive = nextBase; frameOverride = nextOverride
             if (mode == 3) {
                 capturePaused = true; videoReady = false; source = "NONE"
@@ -531,7 +557,8 @@ object TunnelAdbRuntime {
         }, onFailure = { requestedMode = if (frameOverride != 0) frameOverride else if (baseLive) 0 else 3 })
     }
 
-    private fun submit(id: String, operation: Int, vararg args: Int, onSuccess: () -> Unit = {}, onFailure: () -> Unit = {}) {
+    private fun submit(id: String, operation: Int, vararg args: Int, actionResult: Boolean = false,
+                       onSuccess: () -> Unit = {}, onFailure: () -> Unit = {}) {
         val arguments = IntArray(6); args.copyInto(arguments)
         val expected = helperEpoch; val recipient = owner
         session?.operation(operation, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5])
@@ -549,10 +576,11 @@ object TunnelAdbRuntime {
                     if (code.isEmpty()) onSuccess() else onFailure()
                     if ((failure != null || result.code == AdbCommands.FAILED) &&
                         operation in setOf(AdbCommands.TOUCH, AdbCommands.KEY, AdbCommands.NAVIGATE)) {
-                        stopLocked("INPUT_CHANNEL_FAILED")
+                        failLocked("INPUT_CHANNEL_FAILED")
                     }
                     if (code.isEmpty() && operation in setOf(AdbCommands.TOUCH, AdbCommands.KEY)) return@whenComplete
-                    JSONObject(if (stopping) snapshot() else snapshot(code))
+                    if (actionResult) actionNotice(recipient, id, code)
+                    else JSONObject(if (stopping) snapshot() else snapshot(code))
                         .put("requestOperationId", id).put("operationComplete", true).toString()
                 }
                 hooks?.onState(recipient, notice)
@@ -565,24 +593,238 @@ object TunnelAdbRuntime {
     private fun stopOwner(id: Int, reason: String, revoke: Boolean) {
         val notice = synchronized(lock) {
             if (id <= 0 || owner != id) return
-            if (revoke && consentOwner == id) clearConsentLocked()
-            stopLocked(reason); snapshot()
+            if (revoke && reason != "HEARTBEAT_LOST" && consentOwner == id) clearConsentLocked()
+            if (reason == "HEARTBEAT_LOST") failLocked(reason) else stopLocked(reason)
+            snapshot()
         }
         hooks?.onState(id, notice)
     }
     private fun stopLocked(reason: String) {
-        // Stopping the helper is also the end of this ADB authorization.
-        if (owner != 0 && consentOwner == owner) clearConsentLocked()
-        if (stopping) return
+        // Explicit video stop restores normal capture, but keeps the ADB grant.
+        if (stopping) { error = reason; phase = "STOPPING"; restoreHooks(); return }
         stopping = true; phase = "STOPPING"; error = reason; videoReady = false
         pendingConfig = null; pendingKey = null; freezeFrames = false
         lastConfig = null; configSent = false
         restoreHooks(); session?.close()
+        if (session == null) {
+            stopping = false; owner = 0; phase = "IDLE"
+            source = if (hooks?.normalCaptureReady() == true) "MEDIA_PROJECTION" else "NONE"
+        }
+    }
+    private fun failLocked(reason: String) {
+        stopping = session != null; phase = "FAILED"; error = reason; videoReady = false
+        pendingConfig = null; pendingKey = null; freezeFrames = true
+        hooks?.setAdbCaptureFrozen(); session?.close()
+    }
+    /** Private Rust entry: never a remotely accepted arbitrary operation. */
+    @JvmStatic fun abortVideo(connId: Int) = synchronized(lock) {
+        if (owner == connId && connId > 0) {
+            if (stopping && error == "STOPPED") session?.close()
+            else failLocked("VIDEO_ABORTED")
+        }
     }
     private fun restoreHooks() {
         hooks?.setAdbCaptureCommitted(false); committed = false
         if (pausedByUs) { hooks?.setAccessibilityPaused(false); pausedByUs = false }
         hooks?.clearOwnedOverlay()
+    }
+
+    private fun actionNotice(connId: Int, id: String, code: String = "", complete: Boolean = true): String {
+        val key = "$connId:$id"
+        val previous = actionResults[key]
+        if (!complete && previous != null && JSONObject(previous.second).optBoolean("operationComplete")) return previous.second
+        val notice = JSONObject().put("v", 1).put("kind", "action").put("phase", "ACTION_RESULT")
+            .put("operationId", id).put("requestOperationId", id).put("operationComplete", complete)
+            .put("generation", 0).put("epoch", 0).put("code", code)
+            .put("overlayBlack", blackEnabled)
+            .put("consentConnId", if (hasConsent(connId)) connId else 0)
+            .put("consentActive", hasConsent(connId)).put("consentLifetime", "session").toString()
+        previous?.let { actionResults[key] = it.first to notice }
+        return notice
+    }
+
+    private fun actionRequest(connId: Int, id: String, op: String, payload: JSONObject): String = synchronized(lock) {
+        // accessibility_action arrives only through Rust's private, authenticated
+        // control-permission gate. It does not require any ADB pairing/grant.
+        if (hooks == null || (op != "accessibility_action" && hooks?.connectionAuthorized(connId) != true))
+            return@synchronized actionNotice(connId, id, "UNAUTHORIZED")
+        val replayKey = "$connId:$id"
+        // Cache only a digest and redacted result, never a URL or shell command.
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest((op + payload.toString()).toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        actionResults[replayKey]?.let { previous ->
+            return@synchronized if (previous.first == digest) JSONObject(previous.second)
+                .put("consentActive", hasConsent(connId)).put("consentConnId", if (hasConsent(connId)) connId else 0).toString()
+                else actionNotice(connId, id, "OPERATION_REPLAY")
+        }
+        actionResults[replayKey] = digest to actionNotice(connId, id, complete = false)
+        if (op == "accessibility_action") {
+            val action = payload.getString("action")
+            requireKeys(payload, if (action == "open_url") setOf("action", "url") else setOf("action"))
+            if (action == "open_url") {
+                val uri = android.net.Uri.parse(payload.getString("url"))
+                if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrEmpty() || uri.userInfo != null || uri.toString().length > 2048)
+                    return@synchronized actionNotice(connId, id, "REQUEST_INVALID")
+                return@synchronized actionNotice(connId, id,
+                    if (hooks?.accessibilityBound() == true && hooks?.openUrl(uri.toString()) == true) "" else "ACCESSIBILITY_NOT_READY")
+            }
+            if (action !in setOf("back", "home", "recents")) return@synchronized actionNotice(connId, id, "REQUEST_INVALID")
+            return@synchronized actionNotice(connId, id,
+                if (hooks?.accessibilityNavigation(action) == true) "" else "ACCESSIBILITY_NOT_READY")
+        }
+        if (!hasConsent(connId)) return@synchronized actionNotice(connId, id, "SESSION_ADB_AUTHORIZATION_REQUIRED")
+        if (owner != 0 && owner != connId) return@synchronized actionNotice(connId, id, "OWNER_BUSY")
+        if (op.startsWith("accessibility_")) {
+            requireKeys(payload, emptySet())
+            if ("accessibility" !in scopes) return@synchronized actionNotice(connId, id, "SCOPE_DENIED")
+            val ok = when (op) {
+                "accessibility_pause" -> (hooks?.setAccessibilityPaused(true) == true).also { if (it) pausedByUs = true }
+                "accessibility_resume" -> (hooks?.setAccessibilityPaused(false) == true).also { if (it) pausedByUs = false }
+                "accessibility_disable" -> hooks?.disableOwnAccessibility() == true
+                "accessibility_enable" -> { hooks?.openLocalAccessibilitySettings(); false }
+                else -> false
+            }
+            return@synchronized actionNotice(connId, id, if (ok) "" else "LOCAL_ACTION_REQUIRED")
+        }
+        val action = payload.getString("action")
+        requireKeys(payload, if (action == "open_url") setOf("action", "url") else setOf("action"))
+        val openSharePermission = action == "share_start" && hooks?.normalCaptureReady() != true
+        if (action in setOf("share_start", "share_stop") && !openSharePermission) {
+            if ("video" !in scopes) return@synchronized actionNotice(connId, id, "SCOPE_DENIED")
+            return@synchronized actionNotice(connId, id,
+                if (hooks?.setNormalScreenShare(action == "share_start") == true) "" else "LOCAL_ACTION_REQUIRED")
+        }
+        if (action in setOf("overlay_black_on", "overlay_black_off")) {
+            if ("overlay" !in scopes) return@synchronized actionNotice(connId, id, "SCOPE_DENIED")
+            blackRequested = action == "overlay_black_on"
+            val active = session
+            if (active != null && !stopping && mask and AdbWire.CAP_OVERLAY != 0) {
+                blackOperation(active, connId, id, blackRequested)
+                return@synchronized actionNotice(connId, id, complete = false)
+            }
+            if (active != null) return@synchronized actionNotice(connId, id,
+                if (phase == "COMMITTED") "OVERLAY_UNAVAILABLE" else "ADB_BUSY")
+            if (!blackRequested && auxiliarySession == null) return@synchronized actionNotice(connId, id)
+            return@synchronized ensureAuxiliaryLocked(connId, id)
+        }
+        if (action in setOf("ignore_on", "ignore_off", "hierarchy_on", "hierarchy_off")) {
+            if (session == null || owner != connId || phase != "COMMITTED")
+                return@synchronized actionNotice(connId, id, "ADB_VIDEO_REQUIRED")
+            if ((action == "ignore_off" && source != "ADB_SNAPSHOT") ||
+                (action == "hierarchy_off" && source != "ADB_HIERARCHY")) return@synchronized actionNotice(connId, id)
+            val result = sideAction(id, payload)
+            return@synchronized actionNotice(connId, id, result, complete = result.isNotEmpty())
+        }
+        if (action in setOf("touch_block_on", "touch_block_off"))
+            return@synchronized actionNotice(connId, id, "OPERATION_UNSUPPORTED")
+        if ((if (openSharePermission) "video" else "input") !in scopes) return@synchronized actionNotice(connId, id, "SCOPE_DENIED")
+        if (owner != 0 && phase in setOf("PREPARING", "READY", "WAITING_PRESENTED", "RECONFIGURE", "STOPPING"))
+            return@synchronized actionNotice(connId, id, "ADB_BUSY")
+        if (actionBusy || (auxiliarySession != null && !auxiliaryReady))
+            return@synchronized actionNotice(connId, id, "ADB_BUSY")
+        val app = context ?: return@synchronized actionNotice(connId, id, "RUNTIME_UNAVAILABLE")
+        val keys = mapOf("back" to 4, "home" to 3, "recents" to 187, "volume_up" to 24, "volume_down" to 25)
+        val args = if (openSharePermission) AdbScreenShareRequest.command(app, connId)
+            else if (action in keys) listOf("input", "keyevent", keys.getValue(action).toString())
+            else if (action == "open_url") {
+                val uri = android.net.Uri.parse(payload.getString("url"))
+                if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrEmpty() || uri.userInfo != null || uri.toString().length > 2048)
+                    return@synchronized actionNotice(connId, id, "REQUEST_INVALID")
+                listOf("am", "start", "-a", "android.intent.action.VIEW", "-d", uri.toString())
+            } else return@synchronized actionNotice(connId, id, "OPERATION_UNSUPPORTED")
+        val serial = TunnelAdbManager.selectedLocalSerial() ?: return@synchronized actionNotice(connId, id, "LOCAL_ADB_REQUIRED")
+        actionBusy = true
+        actionWorker.execute {
+            val code = try {
+                val target = LocalAdbIdentityProbe(app).probe(serial).trustedTarget
+                if (target == null) "LOCAL_ADB_REQUIRED" else {
+                    val permitted = synchronized(lock) { hasConsent(connId) && hooks?.connectionAuthorized(connId) == true }
+                    if (!permitted) "CONSENT_REVOKED" else {
+                        val spec = LocalAdbProcessSpec(app)
+                        // ADB joins shell args; quote every literal, including the URL.
+                        val command = args.joinToString(" ") { "'" + it.replace("'", "'\\''") + "'" }
+                        if (LocalAdbTargetPolicy.validate(serial) == null) "LOCAL_ADB_REQUIRED"
+                        else if (BoundedProcessRunner.run(spec.command(target, listOf("shell", "-T", "-n", command)),
+                                spec.workingDirectory, spec.environment, 5_000,
+                                cancelled = { !authorizedAction(connId) }).succeeded)
+                            { if (openSharePermission) "CAPTURE_PERMISSION_REQUIRED" else "" } else "ADB_ACTION_FAILED"
+                    }
+                }
+            } catch (_: Exception) { "ADB_ACTION_FAILED" }
+            val notice = synchronized(lock) { actionBusy = false; actionNotice(connId, id, code) }
+            hooks?.onState(connId, notice)
+        }
+        actionNotice(connId, id, complete = false)
+    }
+
+    private fun blackOperation(active: TunnelAdbSession, connId: Int, id: String, enabled: Boolean) {
+        active.operation(AdbCommands.OVERLAY_BLACK, if (enabled) 1 else 0).whenComplete { result, failure ->
+            val code = if (failure == null && result.code == AdbCommands.OK) "" else "OVERLAY_UNAVAILABLE"
+            val notice = synchronized(lock) {
+                // A closed helper can complete its pending command after a new
+                // helper has acquired the lease. It no longer owns overlay state.
+                if ((session !== active || owner != connId || stopping) &&
+                    (auxiliarySession !== active || auxiliaryOwner != connId))
+                    return@synchronized actionNotice(connId, id, "ACTION_CANCELLED")
+                if (code.isEmpty()) blackEnabled = enabled
+                else blackRequested = blackEnabled
+                if (code.isEmpty() && !enabled && auxiliarySession === active) active.close()
+                actionNotice(connId, id, code)
+            }
+            hooks?.onState(connId, notice)
+        }
+    }
+
+    private fun ensureAuxiliaryLocked(connId: Int, id: String): String {
+        if (auxiliarySession != null) {
+            if (auxiliaryOwner != connId || !auxiliaryReady) return actionNotice(connId, id, "ADB_BUSY")
+            blackOperation(auxiliarySession!!, connId, id, blackRequested)
+            return actionNotice(connId, id, complete = false)
+        }
+        if (session != null || stopping || actionBusy) return actionNotice(connId, id, "ADB_BUSY")
+        val app = context ?: return actionNotice(connId, id, "RUNTIME_UNAVAILABLE")
+        val serial = TunnelAdbManager.selectedLocalSerial() ?: return actionNotice(connId, id, "LOCAL_ADB_REQUIRED")
+        val lease = TunnelAdbManager.acquireMirrorLease() ?: return actionNotice(connId, id, "LOCAL_ADB_BUSY")
+        auxiliaryEpoch += 1; val expected = auxiliaryEpoch
+        auxiliaryOwner = connId; auxiliaryReady = false
+        var capabilityUpdates = 0
+        val callbacks = object : TunnelAdbSession.Events {
+            override fun packet(packet: AdbWire.Packet): Boolean = true
+            override fun capabilities(bits: Int) {
+                synchronized(lock) {
+                    if (auxiliaryOwner != connId || auxiliaryEpoch != expected || auxiliaryReady) return
+                    capabilityUpdates += 1
+                    if (bits and AdbWire.CAP_OVERLAY == 0) {
+                        if (capabilityUpdates >= 2) {
+                            blackRequested = false; auxiliarySession?.close()
+                            hooks?.onState(connId, actionNotice(connId, id, "OVERLAY_UNAVAILABLE"))
+                        }
+                        return
+                    }
+                    auxiliaryReady = true
+                    auxiliarySession?.let { blackOperation(it, connId, id, blackRequested) }
+                }
+            }
+            override fun ended(reason: String, cleanupComplete: Boolean) {
+                val notice = synchronized(lock) {
+                    if (auxiliaryEpoch != expected) return
+                    val pending = !auxiliaryReady
+                    auxiliarySession = null; auxiliaryOwner = 0; auxiliaryReady = false
+                    if (owner == 0) blackEnabled = false
+                    if (pending && reason != "STOPPED") actionNotice(connId, id, "OVERLAY_UNAVAILABLE") else null
+                }
+                notice?.let { hooks?.onState(connId, it) }
+            }
+        }
+        try {
+            auxiliarySession = TunnelAdbSession(app, serial, expected, lease, callbacks, 3).also { it.start() }
+        } catch (_: Exception) { lease.close(); auxiliarySession = null; auxiliaryOwner = 0; return actionNotice(connId, id, "OVERLAY_UNAVAILABLE") }
+        return actionNotice(connId, id, complete = false)
+    }
+
+    private fun closeAuxiliaryLocked() {
+        blackRequested = false; blackEnabled = false; auxiliarySession?.close()
     }
     private fun snapshot(code: String? = null): String = JSONObject()
         .put("v", 1).put("phase", phase).put("operationId", operationId).put("ownerConnId", owner)
@@ -591,6 +833,8 @@ object TunnelAdbRuntime {
         .put("width", width).put("height", height).put("actualFrameSource", source)
         .put("candidateFrameSource", candidateSource)
         .put("capturePaused", capturePaused).put("baseMode", if (baseLive) "live" else "stopped")
+        .put("videoStopped", phase == "IDLE" || (stopping && error == "STOPPED"))
+        .put("overlayBlack", blackEnabled)
         .put("frameOverride", when (frameOverride) { 1 -> "screenshot"; 2 -> "hierarchy"; else -> "none" })
         .put("localAdbReady", TunnelAdbManager.snapshot().shellReady)
         .put("videoReady", videoReady).put("inputReady", inputReady()).put("code", code ?: error)
@@ -605,7 +849,8 @@ object TunnelAdbRuntime {
             .put("hierarchy", "hierarchy" in scopes && mask and AdbWire.CAP_TREE != 0)
             .put("snapshotSelectable", "snapshot" in scopes).put("hierarchySelectable", "hierarchy" in scopes)
             .put("display", "display" in scopes && mask and AdbWire.CAP_DISPLAY != 0)
-            .put("accessibility", "accessibility" in scopes).put("overlay", false))
+            .put("accessibility", "accessibility" in scopes)
+            .put("overlay", "overlay" in scopes && (mask and AdbWire.CAP_OVERLAY != 0 || auxiliaryReady)))
         .toString()
 
     private fun requireKeys(value: JSONObject, allowed: Set<String>) {

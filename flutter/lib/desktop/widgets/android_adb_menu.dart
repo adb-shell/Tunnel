@@ -28,6 +28,8 @@ class AndroidAdbMenu extends StatelessWidget {
               showAndroidAdbPairingDialog(ffi);
             } else if (op == 'revoke') {
               m.pairing.revoke();
+            } else if (op == 'show_actions') {
+              m.setAdbActionsVisible(true);
             } else {
               m.request(op);
             }
@@ -37,12 +39,12 @@ class AndroidAdbMenu extends StatelessWidget {
               child: Text('远程 ADB 配对…')),
             const PopupMenuItem(value: 'status', child: Text('刷新状态')),
             const PopupMenuDivider(),
-            PopupMenuItem(value: 'start', enabled: !m.busy && !m.pairing.busy &&
-                !m.usingAdb && !m.inputFrozen && m.state['localAdbReady'] == true &&
-                m.consentActive == true,
-              child: const Text('开始 ADB 投屏')),
-            PopupMenuItem(value: 'stop', enabled: m.usingAdb || m.inputFrozen,
-              child: const Text('切回普通投屏')),
+            PopupMenuItem(value: 'start', enabled: m.consentActive == true,
+              child: const Text('开启 ADB 投屏')),
+            PopupMenuItem(value: 'stop', enabled: m.consentActive == true || m.usingAdb || m.inputFrozen,
+              child: const Text('关闭 ADB 投屏')),
+            PopupMenuItem(value: 'show_actions', enabled: m.consentActive == true,
+              child: const Text('显示 ADB 侧按钮')),
             const PopupMenuItem(value: 'revoke', child: Text('撤销 ADB 授权')),
             const PopupMenuDivider(),
             for (final item in const {
@@ -51,7 +53,7 @@ class AndroidAdbMenu extends StatelessWidget {
               'accessibility_disable': '关闭本应用无障碍权限',
               'accessibility_enable': '打开手机无障碍设置',
             }.entries)
-              PopupMenuItem(value: item.key, enabled: m.usingAdb && !m.busy && !m.inputFrozen,
+              PopupMenuItem(value: item.key, enabled: m.consentActive == true,
                 child: Text(item.value)),
           ],
           child: Container(

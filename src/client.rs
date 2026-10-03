@@ -2721,7 +2721,9 @@ pub fn start_video_thread<F, T>(
         let mut video_handler: Option<VideoHandler> = None;
         let mut adb_candidate: Option<(AndroidVideoMetadata, VideoHandler, bool, bool)> = None;
         let mut adb_epoch = 0u64;
+        let mut adb_generation = 0u64;
         let mut adb_active = false;
+        let mut adb_frozen = false;
         let mut rollback_waiting = false;
         let mut count = 0;
         let mut duration = std::time::Duration::ZERO;
@@ -2738,8 +2740,10 @@ pub fn start_video_thread<F, T>(
                 match data {
                     MediaData::AndroidVideoBarrier(barrier) => {
                         let Some(metadata) = barrier.metadata.into_option() else { continue; };
-                        if metadata.epoch == 0 || metadata.epoch < adb_epoch { continue; }
+                        if metadata.epoch == 0 || metadata.epoch < adb_epoch
+                            || metadata.generation < adb_generation { continue; }
                         if barrier.action == 1 {
+                            if adb_frozen && metadata.epoch <= adb_epoch { continue; }
                             let Some((candidate_meta, handler, pixelbuffer, ready)) = adb_candidate.take() else { continue; };
                             if !ready || candidate_meta.epoch != metadata.epoch
                                 || candidate_meta.revision != metadata.revision
@@ -2753,6 +2757,7 @@ pub fn start_video_thread<F, T>(
                             while video_queue.read().unwrap().pop().is_some() {}
                             adb_epoch = metadata.epoch;
                             adb_active = true;
+                            adb_frozen = false;
                             rollback_waiting = false;
                             session.handle_peer_switch_display(&SwitchDisplay {
                                 display: display as i32, width: metadata.width as i32,
@@ -2763,6 +2768,7 @@ pub fn start_video_thread<F, T>(
                                 video_callback(display, &mut handler.rgb, handler.texture.texture, pixelbuffer);
                             }
                         } else if barrier.action == 2 {
+                            adb_frozen = false;
                             adb_candidate = None;
                             video_handler = None;
                             while video_queue.read().unwrap().pop().is_some() {}
@@ -2773,7 +2779,21 @@ pub fn start_video_thread<F, T>(
                             session.update_android_control(crate::server::android_control::video_event(&metadata, "ROLLING_BACK"));
                         } else if barrier.action == 3 {
                             adb_candidate = None;
+                            while video_queue.read().unwrap().pop().is_some() {}
+                            adb_epoch = metadata.epoch;
+                            adb_frozen = false;
+                            adb_active = false;
+                            rollback_waiting = false;
                             session.update_android_control(crate::server::android_control::video_event(&metadata, "NORMAL"));
+                        } else if barrier.action == 4 {
+                            adb_candidate = None;
+                            video_handler = None;
+                            while video_queue.read().unwrap().pop().is_some() {}
+                            adb_epoch = metadata.epoch;
+                            adb_active = true;
+                            adb_frozen = true;
+                            rollback_waiting = false;
+                            session.update_android_control(crate::server::android_control::video_event(&metadata, "FROZEN"));
                         }
                     }
                     MediaData::VideoFrame(_) | MediaData::VideoQueue => {
@@ -2802,6 +2822,16 @@ pub fn start_video_thread<F, T>(
                         let format = CodecFormat::from(&vf);
                         let android_metadata = vf.android_video.as_ref().cloned();
                         if let Some(metadata) = android_metadata.as_ref() {
+                            if metadata.generation < adb_generation { continue; }
+                            if metadata.phase == 1 && metadata.epoch > adb_epoch {
+                                adb_generation = metadata.generation;
+                            }
+                        }
+                        // A user-requested restart may supersede a stopped frozen
+                        // transaction. Only its strictly newer candidate may decode.
+                        if adb_frozen && !android_metadata.as_ref().map_or(false, |metadata|
+                            metadata.phase == 1 && metadata.epoch > adb_epoch) { continue; }
+                        if let Some(metadata) = android_metadata.as_ref() {
                             if metadata.phase == 1 {
                                 if metadata.epoch <= adb_epoch { continue; }
                                 if adb_candidate.as_ref().map_or(true, |(candidate, _, _, _)| candidate.epoch != metadata.epoch) {
@@ -2817,7 +2847,7 @@ pub fn start_video_thread<F, T>(
                                         if size != (metadata.width as usize, metadata.height as usize) {
                                             handler.fail_counter = usize::MAX;
                                             session.send(Data::Message(crate::server::android_control::message(
-                                                serde_json::json!({"v":1,"op":"stop","operationId":metadata.operation_id,
+                                                serde_json::json!({"v":1,"op":"video_failed","operationId":metadata.operation_id,
                                                     "epoch":metadata.epoch,"generation":metadata.generation,"payload":{}}).to_string())));
                                             continue;
                                         }
@@ -2833,7 +2863,7 @@ pub fn start_video_thread<F, T>(
                                             "code":"CANDIDATE_DECODE_FAILED","operationId":metadata.operation_id,
                                             "epoch":metadata.epoch,"generation":metadata.generation}).to_string());
                                         session.send(Data::Message(crate::server::android_control::message(
-                                            serde_json::json!({"v":1,"op":"stop","operationId":metadata.operation_id,
+                                            serde_json::json!({"v":1,"op":"video_failed","operationId":metadata.operation_id,
                                                 "epoch":metadata.epoch,"generation":metadata.generation,"payload":{}}).to_string())));
                                     }
                                     _ => {}
@@ -2866,7 +2896,7 @@ pub fn start_video_thread<F, T>(
                                             else { (handler.texture.w, handler.texture.h) };
                                         if size != (metadata.width as usize, metadata.height as usize) {
                                             session.send(Data::Message(crate::server::android_control::message(
-                                                serde_json::json!({"v":1,"op":"stop","operationId":metadata.operation_id,
+                                                serde_json::json!({"v":1,"op":"video_failed","operationId":metadata.operation_id,
                                                     "epoch":metadata.epoch,"generation":metadata.generation,"payload":{}}).to_string())));
                                             continue;
                                         }
@@ -2943,7 +2973,7 @@ pub fn start_video_thread<F, T>(
                         if should_update_supported {
                             if let Some(metadata) = android_metadata.as_ref().filter(|metadata| metadata.phase == 2) {
                                 session.send(Data::Message(crate::server::android_control::message(
-                                    serde_json::json!({"v":1,"op":"stop","operationId":metadata.operation_id,
+                                    serde_json::json!({"v":1,"op":"video_failed","operationId":metadata.operation_id,
                                         "epoch":metadata.epoch,"generation":metadata.generation,"payload":{}}).to_string())));
                             }
                             session.send(Data::Message(

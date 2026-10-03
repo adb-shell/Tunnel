@@ -398,6 +398,16 @@ class _RemotePageState extends State<RemotePage>
                             ));
                       }
                     }(),
+              // ADB actions are session-authorized, independent of first frame
+              // arrival and of the accessibility toolbar visibility preference.
+              AnimatedBuilder(animation: _ffi.androidModeModel,
+                builder: (context, _) => _ffi.ffiModel.isPeerAndroid &&
+                    _ffi.androidModeModel.consentActive == true &&
+                    _ffi.androidModeModel.adbActionsVisible
+                  ? Overlay(initialEntries: [makeMobileActionsOverlayEntry(
+                      () => _ffi.androidModeModel.setAdbActionsVisible(false),
+                      ffi: _ffi, adb: true)])
+                  : const SizedBox.shrink()),
               // Use Overlay to enable rebuild every time on menu button click.
               _ffi.ffiModel.pi.isSet.isTrue
                   ? Overlay(

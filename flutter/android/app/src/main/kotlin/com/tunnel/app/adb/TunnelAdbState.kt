@@ -16,6 +16,8 @@ data class TunnelAdbState(
     val adbPath: String = "",
     val environment: Map<String, String> = emptyMap(),
     val lastError: String = "",
+    val phase: String = "IDLE",
+    val terminalRunning: Boolean = false,
 ) {
     fun toMap(): Map<String, Any> = mapOf(
         "supported" to supported,
@@ -31,5 +33,7 @@ data class TunnelAdbState(
         "shellReady" to shellReady,
         "output" to output,
         "lastError" to lastError,
+        "phase" to phase,
+        "terminalRunning" to terminalRunning,
     )
 }

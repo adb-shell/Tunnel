@@ -50,11 +50,6 @@ object TunnelAdbManager {
         return next
     }
 
-    fun cancelPending(): TunnelAdbState {
-        runner?.cancelPending()
-        return snapshot()
-    }
-
     /** Phone-local selection only. Remote requests must not provide a device selector. */
     fun selectedLocalSerial(): String? = runner?.selectedLocalSerial()
     fun acquireMirrorLease(): Closeable? {
@@ -122,6 +117,20 @@ object TunnelAdbManager {
         updateFromRunner(currentRunner)
         return currentRunner.snapshotOutput()
     }
+
+    fun clearOutput(context: Context): TunnelAdbState {
+        val currentRunner = currentRunner(context)
+        currentRunner.clearOutput()
+        return updateFromRunner(currentRunner)
+    }
+
+    fun interruptTerminal(context: Context): TunnelAdbState {
+        val currentRunner = currentRunner(context)
+        currentRunner.interruptTerminal()
+        return updateFromRunner(currentRunner)
+    }
+
+    fun discover(context: Context): Map<String, Any> = currentRunner(context).discover()
 
     fun snapshot(): TunnelAdbState {
         val currentRunner = runner

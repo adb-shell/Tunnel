@@ -1,30 +1,31 @@
-# Android 本地 ADB 二进制来源
+# Android 本地 ADB 来源与准备
 
-2026-10-03 T008 当前实现：`LocalAdbProcessSpec` 改为 `-L localfilesystem:<filesDir>/adb-server.sock`，pair/connect/probe/helper/P0 共用私有 daemon，HOME/key 位置保持。下文 T004 的 `-H localhost` 是历史修复。修正取消后 runner 永久失效、NSD 首记录提前停止及连接就绪竞争；真实 shell 仍须 nonce/uid2000 验证。官方固定提交的 55 个文本源码已下载到仓外 `../ladb-reference` 研究，含 LICENSE、SOURCE_COMMIT.txt、SOURCE_PROVENANCE.json（逐文件 SHA256/URL），没有下载/执行二进制或将研究副本整体嵌入产品。见 [ADB 指南](../docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
+完整 [tytydraco/LADB](https://github.com/tytydraco/LADB) 上游快照保存在 `third_party/ladb/`，固定提交 `60f48029cf9d8e0bc848ca41a7bd76694d4ab796`。原始 79 个文件（含四 ABI 的 `libadb.so`、源码、资源、Gradle wrapper 和许可证）均由 `TUNNEL_SOURCE.json` 记录 SHA-256。标准文件名为 `libadb.so`，不是 `libad.so`。
 
-2026-10-03 T004：专用 Android ADB 页面已移除，PC 可拖动弹窗发送端口/码或复用已配对密钥；APK RemoteAdbPairing 后台 pair→独立connect→fresh shell probe，状态进入右上 Tunnel 检测。内部 runner/probe/helper/有限 shell 保留。`-H localhost` 修复初次 daemon 启动，ADB_MDNS_AUTO_CONNECT=0 配合应用显式本机 NSD/connect，不把配对成功冒充连接成功。当前授权政策与使用见 [指南](../docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)；下文分屏/页面退出的原手机 UI 操作描述属于旧阶段。
+手机第二页按 LADB 流程提供配对、端口发现、手动连接与持久 shell，复用 Tunnel 的 Manager/Runner。原版独立 Activity 不作为另一套后台运行。手机本地与 PC 远程配对共用 `LocalAdbProcessSpec`：私有 `-L localfilesystem:<filesDir>/adb-server.sock` 和 HOME/key，不占用其他 LADB 应用的默认 daemon。操作步骤见 [ADB 指南](../docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
 
-状态：仅来源核查和供应脚本已完成；本次没有下载/执行二进制，没有运行服务器构建、协议测试或设备验证。标准名称始终为 `libadb.so`，不是 `libad.so`。
+## 正式构建机准备
 
-官方来源为 [tytydraco/LADB](https://github.com/tytydraco/LADB)，固定提交 `60f48029cf9d8e0bc848ca41a7bd76694d4ab796`。四个 ABI 的路径、大小和 Git blob SHA-1 来自该提交的官方 Git tree，固定在 [ladb-prebuilt.lock.json](ladb-prebuilt.lock.json)。这里复现的是上游预编译文件的获取，不声称从 AOSP/上游构建源码重建出了相同文件。上游 ADB 源码提交、编译器配置、完整传递依赖 SBOM、16 KiB 页设备验证尚未得到证明。
-
-`prepare_adb.py` 在服务器显式构建阶段下载固定 commit 的 HTTPS raw 文件，验证 Git blob（包含 `blob <size>\0` 前缀）、文件长度、ELF PIE 类型及 ABI。服务器计算实际 SHA-256，写入随 APK 携带的 `assets/adb-provenance/manifest.json`。该 SHA-256 是实际取得字节的记录；本地尚未取得字节，因此本文件不编造一个预先验证的 SHA-256。已有文件不符时拒绝覆盖，要求人工确认旧文件来源。
-
-正式服务器使用方式：
+`prepare_adb.py` 优先复核已有 staging，再从仓内快照取得文件；只有对应文件缺失且未指定 `--offline` 时才下载固定 commit 的 HTTPS raw 文件。四 ABI 路径、大小和 Git blob SHA-1 见 [ladb-prebuilt.lock.json](ladb-prebuilt.lock.json)。文件长度、blob、ELF PIE 和 ABI 必须匹配；已有不同文件拒绝覆盖。实际 SHA-256 写入随 APK 携带的 `assets/adb-provenance/manifest.json`。
 
 ```sh
-python3 android-adb/prepare_adb.py --abi arm64-v8a
-python3 android-adb/prepare_adb.py --abi arm64-v8a --abi armeabi-v7a --abi x86_64
-# 已准备相同产物的离线服务器：
+# 正式构建入口会自动准备所选 ABI
+./build.sh 1
+# 单独准备（也适用于直接调用 Flutter/Gradle 前）
 python3 android-adb/prepare_adb.py --abi arm64-v8a --offline
+python3 android-adb/prepare_adb.py --abi arm64-v8a --abi armeabi-v7a --abi x86_64 --offline
 ```
 
-`build.sh` 为其所选 ABI 调用供应脚本；直接运行 Flutter/Gradle 时必须先准备对应 ABI。Gradle `verifyTunnelAdbArtifacts` 在 preBuild 校验来源锁、receipt、ABI 和哈希，缺少/篡改立即失败；保留可执行文件原始字节，禁止对 `libadb.so` 再 strip。APK 安装后从 `nativeLibraryDir` 执行该文件，不能从可写应用目录下载并执行任意库。
+`--offline` 可以直接使用仓内快照，不要求此前生成过 jniLibs。Gradle `verifyTunnelAdbArtifacts` 在 preBuild 校验来源锁、receipt、ABI 和哈希，缺失/篡改立即失败；保留可执行文件原始字节，禁止再 strip。APK 安装后从 `nativeLibraryDir` 执行，不能从可写应用目录下载并执行任意库。
 
-来源许可证分别为 [jniLibs/LICENSE](https://github.com/tytydraco/LADB/blob/60f48029cf9d8e0bc848ca41a7bd76694d4ab796/app/src/main/jniLibs/LICENSE)（Apache-2.0 文本）与 [根 LICENSE](https://github.com/tytydraco/LADB/blob/60f48029cf9d8e0bc848ca41a7bd76694d4ab796/LICENSE)（包括 Google Play 分发限制）。脚本按固定 blob 原样取得两份文本并随 APK 携带；不能据此省略完整发行合规审查。
+## 配对与生命周期
 
-配对端口属于 `_adb-tls-pairing._tcp`；连接端口属于 `_adb-tls-connect._tcp`，二者不能混用。Android 11–16 用户在系统无线调试页开启配对码对话框，分屏保留设置窗口，输入 6 位配对码；可以自动发现**本机**配对端口或手填本机地址。配对成功后另行发现/输入连接端口。历史配对标记不表示当前授权：每次使用前要求指定本机 transport 并以随机 nonce 包围 `/system/bin/id -u` 的真实 `2000` 响应。
+配对端口属于 `_adb-tls-pairing._tcp`，连接端口属于 `_adb-tls-connect._tcp`，不能混用。保持系统配对码窗口打开，可分屏输入六位码和端口；自动发现只接受本机服务。配对成功后独立 connect，并以随机 nonce 包围 `/system/bin/id -u`，确认真实 `2000` 响应，不能用历史配对标记充当当前连接成功。
 
-[Android 16 本地网络保护](https://developer.android.com/privacy-and-security/local-network-permission)目前是 opt-in，会影响 NSD/局域网访问；这里不伪造授权，不关闭系统保护。mDNS失败提供手工 loopback/当前手机 Wi-Fi 地址入口；实际 ROM、配对对话框生命周期、Android16 16KiB 页运行仍需服务器APK真机验证。
+配对码仅写 stdin，不进入命令行、配置或日志。手机输出保存脱敏原生错误；远程仅接收结构化状态。持久终端使用 `adb shell -tt`，保持当前目录/环境，支持 Ctrl+C；本地终端和远程 helper 互斥，停止终端只关闭其客户端并释放 lease，不执行 `kill-server`。切页或打开系统设置不取消正在进行的配对；取消只中断发起方自己的 worker。
 
-生命周期：配对/连接/终端采用有界独立子进程；配对码只写短 stdin，不放命令行/日志。页面退出只取消该页本地操作；模式切换不执行 `kill-server`、全局断开或无线调试循环。镜像运行持 `TunnelAdbManager.acquireMirrorLease()`，本地配对/终端被共享租约拒绝，helper退出后仅由该 owner 释放。
+## 许可与验证边界
+
+保留上游 [native LICENSE](../third_party/ladb/app/src/main/jniLibs/LICENSE)（Apache-2.0）和 [根 LICENSE](../third_party/ladb/LICENSE)（含非官方 Google Play 分发限制），供应脚本原样核验并随 APK 携带。`.gitattributes` 禁止转换快照行尾，避免破坏原始字节与哈希。
+
+这是一套经哈希核验的上游预编译件，不是从 AOSP 重建的可复现二进制。上游 AOSP revision/toolchain、完整依赖 SBOM、Android 11–16 ROM 及 16 KiB 页设备兼容仍需正式构建与真机验证。本地仅执行快照/离线供应/篡改拒绝测试，没有执行这些 native 二进制。

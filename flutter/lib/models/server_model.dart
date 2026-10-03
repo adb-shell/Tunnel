@@ -220,8 +220,9 @@ class ServerModel with ChangeNotifier {
       });
     }
 
-    // Initial keyboard status is off on mobile
-    if (isMobile) {
+    // Android control consent is persisted independently of AccessibilityService
+    // availability. Reconstructing this model must not revoke a live session.
+    if (isMobile && !isAndroid) {
       bind.mainSetOption(key: kOptionEnableKeyboard, value: 'N');
     }
   }
@@ -541,13 +542,8 @@ class ServerModel with ChangeNotifier {
         _isStart = value;
         break;
       case "input":
-        // A service can be temporarily unbound on OEM ROMs, or deliberately paused
-        // while ADB owns input. Only an explicit user action revokes keyboard consent.
-        if (value && _inputOk != value) {
-          bind.mainSetOption(
-              key: kOptionEnableKeyboard,
-              value: value ? defaultOptionYes : 'N');
-        }
+        // Report actual service availability only. A background rebind must not
+        // override a user's explicit remote-control permission choice.
         _inputOk = value;
         break;
       default:
@@ -1305,7 +1301,9 @@ String getVoiceCallDialogTag(int id) {
 
 showInputWarnAlert(FFI ffi) {
   ffi.dialogManager.show((setState, close, context) {
-    submit() {
+    submit() async {
+      await bind.mainSetOption(
+          key: kOptionEnableKeyboard, value: defaultOptionYes);
       AndroidPermissionManager.startAction(kActionAccessibilitySettings);
       close();
     }

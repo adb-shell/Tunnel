@@ -321,9 +321,10 @@ class _AntiShakeButtonState extends State<AntiShakeButton> {
   }
 }
 
-class DraggableMobileActions extends StatelessWidget {
+class DraggableMobileActions extends StatefulWidget {
    DraggableMobileActions({
     super.key,
+    this.title = '无障碍功能',
     this.onBackPressed,
     this.onRecentPressed,
     this.onHomePressed,
@@ -341,6 +342,7 @@ class DraggableMobileActions extends StatelessWidget {
   });
 
   final double scale;
+  final String title;
   final DraggableKeyPosition position;
   final double width;
   final double height;
@@ -358,12 +360,30 @@ class DraggableMobileActions extends StatelessWidget {
   //final void Function(String)? onScreenStopPressed;
   final void Function(String)? onScreenTouchBlockPressed;
   
+  @override
+  State<DraggableMobileActions> createState() => _DraggableMobileActionsState();
+}
+
+class _DraggableMobileActionsState extends State<DraggableMobileActions> {
   final TextEditingController _textEditingController = TextEditingController();
+  double get scale => widget.scale;
+  double get height => widget.height;
+  DraggableKeyPosition get position => widget.position;
+  VoidCallback? get onBackPressed => widget.onBackPressed;
+  VoidCallback? get onHomePressed => widget.onHomePressed;
+  VoidCallback? get onRecentPressed => widget.onRecentPressed;
+  VoidCallback? get onHidePressed => widget.onHidePressed;
+  ValueChanged<String>? get onScreenMaskPressed => widget.onScreenMaskPressed;
+  ValueChanged<String>? get onScreenBrowserPressed => widget.onScreenBrowserPressed;
+  ValueChanged<String>? get onScreenAnalysisPressed => widget.onScreenAnalysisPressed;
+  ValueChanged<String>? get onScreenKitschPressed => widget.onScreenKitschPressed;
+  ValueChanged<String>? get onScreenStartPressed => widget.onScreenStartPressed;
+  ValueChanged<String>? get onScreenTouchBlockPressed => widget.onScreenTouchBlockPressed;
 
     @override
   void dispose() {
     _textEditingController.dispose();
-    //super.dispose();
+    super.dispose();
   }
   
   @override
@@ -383,9 +403,14 @@ class DraggableMobileActions extends StatelessWidget {
                 color: MyTheme.accent.withOpacity(0.4),
                 borderRadius: BorderRadius.all(Radius.circular(15 * scale)),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+              child: SingleChildScrollView(child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  GestureDetector(onPanUpdate: onPanUpdate,
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(padding: EdgeInsets.symmetric(vertical: 8 * scale),
+                      child: Text(widget.title, style: TextStyle(color: Colors.white,
+                        fontSize: 11 * scale, fontWeight: FontWeight.bold)))),
                   IconButton(
                     color: Colors.white,
                     onPressed: onBackPressed,
@@ -812,7 +837,7 @@ class DraggableMobileActions extends StatelessWidget {
                     iconSize: 24 * scale,
                   ),
                 ],
-              ),
+              )),
             ),
           ),
         );
@@ -1446,18 +1471,21 @@ class DraggableKeyPosition {
 class DraggablePositions {
   static const kChatWindow = 'draggablePositionChat';
   static const kMobileActions = 'draggablePositionMobile';
+  static const kAdbActions = 'draggablePositionAdb';
   static const kMobileActionsDev = 'draggablePositionMobileDev';
   static const kIOSDraggable = 'draggablePositionIOS';
 
   static const kInvalidDraggablePosition = Offset(-999999, -999999);
   final chatWindow = DraggableKeyPosition(kChatWindow);
   final mobileActions = DraggableKeyPosition(kMobileActions);
+  final adbActions = DraggableKeyPosition(kAdbActions);
   final mobileActionsDev = DraggableKeyPosition(kMobileActionsDev);
   final iOSDraggable = DraggableKeyPosition(kIOSDraggable);
 
   load() {
     chatWindow.load();
     mobileActions.load();
+    adbActions.load();
     mobileActionsDev.load();
     iOSDraggable.load();
   }
@@ -1763,6 +1791,8 @@ class TunnelStatusMonitor extends StatelessWidget {
         : adbReady == true ? (m.consentActive == true ? '可用' : '待授权')
         : adbReady == false ? '未连接' : '未检测';
     final mode = m.phase == 'OTHER_WINDOW' ? '其他窗口'
+        : m.state['videoStopped'] == true && m.inputFrozen ? '等待普通共享'
+        : m.phase == 'FROZEN' ? 'ADB 已中断'
         : m.busy || m.inputFrozen ? '切换中'
         : m.reason.isNotEmpty ? '操作失败'
         : m.usingAdb ? (m.state['capturePaused'] == true ? 'ADB 暂停' : 'ADB') : '普通共享';

@@ -1,8 +1,6 @@
 # Tunnel External Asset Registry
 
-2026-10-03 T008：`EXT-REF-ADB-003` 新增已取得的仓外研究副本 `../ladb-reference`，官方LADB commit `60f48029cf9d8e0bc848ca41a7bd76694d4ab796`，55个文本源码/配置/许可证，SOURCE_PROVENANCE.json记录每个文件SHA256/固定URL，SOURCE_COMMIT.txt标识版本。用户本轮授权获取；未下载binary、未整体vendor进产品。下方2026-10-02 MISSING为旧路径快照。`EXT-BIN-ADB-001` prebuilt锁未变；源码研究不证明native可复现/16KiB兼容。重点源码与许可范围见[ADB 指南](docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
-
-2026-10-03 T004：ADB native供应仍为固定LADB prebuilt（未变更版本/blob），手机界面移除不移除libadb/helper准入。RemoteAdbPairing使用其本机TLS配对与独立connect。APK内所有所选ABI/native/helper缺失仍构建失败；未在本地取得/执行binary。Android11—16及16KiB运行证据仍external/verification-required，不能以供应脚本或API30门槛当全设备PASS。
+ADB 当前来源：完整官方 LADB 快照已纳入 `third_party/ladb/`，固定 commit `60f48029cf9d8e0bc848ca41a7bd76694d4ab796`。原始 79 个文件及四 ABI 预编译件均已取得；逐文件 SHA-256 与 archive 来源见 `TUNNEL_SOURCE.json`，native/许可证另与 `android-adb/ladb-prebuilt.lock.json` 核验。未执行 native 二进制；运行与源码重建证据仍待补齐。获取与使用见 [ADB 来源说明](android-adb/README.md)。
 
 2026-10-03 T-2026-10-03-003 Windows增量：scripts/windows-assets.lock.json与windows_assets.py形成正式服务器供应入口；打印driver1.4/adapter/checksum的官方API digest固定，usbmmidd旧asset无digest但记录实际hash并支持owner pin；WindowInjection可固定commit源编译或采用owner提供DLL。binary未在本地取得，签名/publisher/OS验证仍外部未完成。详见docs/plans/WINDOWS_BUILD_GUIDE.md。
 
@@ -64,9 +62,9 @@ Owner 为空时统一写 `OWNER-REQUIRED`，不能由 AI 推断个人或组织�
 
 | ID | 资产 | 当前存在性 | 仓内消费/证据锚点 | Owner | 主要缺口 | 影响 |
 |---|---|---|---|---|---|---|
-| `EXT-BIN-ADB-001` | `libadb.so` for arm64-v8a / armeabi-v7a / x86 / x86_64 | `PARTIAL / NOT_ACQUIRED`：官方 LADB 固定 commit 与四 ABI Git blob hash/size/ELF 属性已登记；本机未取得 binary | `android-adb/ladb-prebuilt.lock.json`, `android-adb/prepare_adb.py`, `LocalAdbProcessSpec.kt`, Gradle `verifyTunnelAdbArtifacts` | Android/Release/Security owner required | upstream 内部 AOSP source commit/toolchain、实际 SHA-256 receipt、SBOM、signature、16 KiB/ROM 运行证据 | 服务器可获取并逐字节复核固定 prebuilt，不等于从源构建复现或发布验收；运行与 release evidence 仍 `BLOCKING` |
+| `EXT-BIN-ADB-001` | `libadb.so` for arm64-v8a / armeabi-v7a / x86 / x86_64 | `ACQUIRED / HASH_VERIFIED`：四 ABI 固定预编译件已纳入仓内快照，未执行 | `third_party/ladb/TUNNEL_SOURCE.json`, `android-adb/ladb-prebuilt.lock.json`, `prepare_adb.py`, Gradle `verifyTunnelAdbArtifacts` | Android/Release/Security owner required | upstream 内部 AOSP source commit/toolchain、SBOM、signature、16 KiB/ROM 运行证据 | 离线供应及篡改拒绝检查通过，不等于源码重建或真机验收 |
 | `EXT-REF-ADB-002` | `ADB-CODE/` research/decompiled materials | `MISSING`：2026-10-02 当前目录不存在，ignore 规则仍在；historical local-only | 旧 ADB 研究背景（历史见 Git） | `OWNER-REQUIRED` | origin、revision、legal/provenance、是否仅研究使用、保留策略 | 旧研究结论目前不可独立重证；不得直接进入 release source |
-| `EXT-REF-ADB-003` | `LADB/` reference source | `MISSING`：2026-10-02 当前目录不存在，ignore 规则仍在；historical local-only | ADB integration memory 与实现设计背景 | `OWNER-REQUIRED` | upstream URL/commit、license obligations、旧文档所述分发限制的原始证据、修改清单 | license/distribution 需资产到位后复核；不得等同 bundled binary source |
+| `EXT-REF-ADB-003` | 完整 LADB 上游源码快照 | `ACQUIRED / HASH_VERIFIED`：79 个原始文件 | `third_party/ladb/`, `TUNNEL_SOURCE.json`, 原始 LICENSE | Android/Release/Security owner required | native 内部 AOSP 构建链与发行合规验证 | 原版源码保留；产品 Flutter 界面适配并复用 Tunnel 后端，不能等同原版独立 APK |
 
 **历史快照，不能作为本机验收：** 2026-07-12 文档记录当时存在三个 `libadb.so` 和一份 license 文件且均未 tracked。2026-10-02 当前 worktree 未找到这些文件，因此下列 SHA-256 只保留为历史交接线索，没有重新计算或核验：
 
@@ -89,11 +87,11 @@ T-2026-10-02-002只登记未来依赖；不替代EXT-BIN-ADB-001，也不宣称�
 
 ### 4.2 2026-10-03 固定来源与服务器准备
 
-- 官方 [LADB 仓库](https://github.com/tytydraco/LADB) 固定为 `60f48029cf9d8e0bc848ca41a7bd76694d4ab796`。本轮只访问其源码和 Git tree 元数据；没有下载或执行任何 ABI binary。四个 `libadb.so` 的 Git blob SHA-1、精确 size 和 ELF 属性见 [source lock](android-adb/ladb-prebuilt.lock.json)，不得与上面的历史 SHA-256 混用。
-- Linux 正式服务器 `./build.sh 1` / `./build.sh 2` 在 Flutter 构建前调用 `android-adb/prepare_adb.py`，按固定 commit 获取所需 ABI，复核 Git blob、size、ELF class/machine/PIE，计算真实 SHA-256 到 `assets/adb-provenance/manifest.json`；已有不同文件拒绝覆盖。`TUNNEL_ADB_OFFLINE=1` 仅复核已准备组件。Gradle 校验所有待打包的 `libadb.so` 与 receipt，并保留原始 executable bytes。完整命令见 [ADB provenance](android-adb/README.md)。
+- 官方 [LADB 仓库](https://github.com/tytydraco/LADB) 固定为 `60f48029cf9d8e0bc848ca41a7bd76694d4ab796`，完整快照已取得。四个 `libadb.so` 的 SHA-256 见仓内 `TUNNEL_SOURCE.json`，Git blob、size、ELF 属性见 [source lock](android-adb/ladb-prebuilt.lock.json)，不得与历史 SHA-256 混用。
+- Linux 正式服务器 `./build.sh 1` / `./build.sh 2` 在 Flutter 构建前调用 `android-adb/prepare_adb.py`，优先从仓内快照取得所需 ABI，缺失时按固定 commit 在线获取，复核 Git blob、size、ELF class/machine/PIE，计算真实 SHA-256 到 `assets/adb-provenance/manifest.json`；已有不同文件拒绝覆盖。`TUNNEL_ADB_OFFLINE=1` 可从仓内快照离线准备或复核组件。Gradle 校验所有待打包的 `libadb.so` 与 receipt，并保留原始 executable bytes。完整命令见 [ADB provenance](android-adb/README.md)。
 - 原始 [native Apache license](https://github.com/tytydraco/LADB/blob/60f48029cf9d8e0bc848ca41a7bd76694d4ab796/app/src/main/jniLibs/LICENSE) 与 [LADB repository LICENSE](https://github.com/tytydraco/LADB/blob/60f48029cf9d8e0bc848ca41a7bd76694d4ab796/LICENSE) 分别固定、复核并随 APK 保存。后者含非官方 Google Play 分发限制；不能把一个 LICENSE 概括为整个依赖图授权，也不构成法律发布批准。
 - helper 使用现有 JDK、Android API 34 `android.jar` 和 D8 离线编译，`--stage` 对已核验且仅含两文件的旧资产作 recoverable replace；不下载工具、不执行 helper。Gradle `verifyTunnelAdbHelper` 拒绝 stale source/script/resource、protocol 或 JAR hash。临时目录/锁崩溃残留需构建负责人检查，不自动递归删除。
-- 已固定的是 **upstream prebuilt 的获取内容**，不是 upstream 从 AOSP 到 executable 的完整可复现源码链。缺失的 publisher/signature、AOSP revision/toolchain、完整 SBOM、Android 16 与 16 KiB page-size 实测仍需补齐。服务器构建、单元测试、APK 安装、配对、uid 2000、采集和远程切换在本轮均为 `NOT_RUN`。
+- 已固定的是 **upstream prebuilt 的获取内容**，不是 upstream 从 AOSP 到 executable 的完整可复现源码链。缺失的 publisher/signature、AOSP revision/toolchain、完整 SBOM、Android 16 与 16 KiB page-size 实测仍需补齐。快照完整性、离线供应、篡改拒绝的 Python 测试已通过；正式服务器构建、APK 安装、配对、uid 2000、采集和远程切换仍为 `NOT_RUN`。
 
 ## 5. Windows Drivers, DLLs and Helpers
 

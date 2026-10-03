@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build-server acquisition of pinned LADB prebuilt bytes. Never executes adb."""
+"""Stage pinned LADB bytes from the vendored source, with network fallback. Never executes adb."""
 import argparse
 import hashlib
 import json
@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCK_PATH = Path(__file__).with_name("ladb-prebuilt.lock.json")
 NATIVE = ROOT / "flutter/android/app/src/main/jniLibs"
 ASSETS = ROOT / "flutter/android/app/src/main/assets/adb-provenance"
+VENDORED = ROOT / "third_party/ladb"
 
 
 def blob_sha1(data):
@@ -57,6 +58,15 @@ def acquire(path, entry, commit, offline):
         data = path.read_bytes()
         verify(data, entry)  # Do not silently replace an existing different local binary.
         return data
+    vendored = VENDORED / entry["path"]
+    if vendored.exists():
+        if not vendored.is_file() or vendored.is_symlink():
+            raise ValueError("refusing non-regular vendored ADB asset")
+        vendored.resolve().relative_to(VENDORED.resolve())
+        data = vendored.read_bytes()
+        verify(data, entry)
+        write_atomic(path, data)
+        return data
     if offline:
         raise ValueError("offline artifact missing: " + entry["path"])
     url = "https://raw.githubusercontent.com/tytydraco/LADB/" + commit + "/" + entry["path"]
@@ -73,7 +83,7 @@ def acquire(path, entry, commit, offline):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--abi", action="append", choices=["arm64-v8a", "armeabi-v7a", "x86", "x86_64"], required=True)
-    parser.add_argument("--offline", action="store_true", help="verify existing pinned bytes, never download")
+    parser.add_argument("--offline", action="store_true", help="use staged or vendored pinned bytes, never download")
     args = parser.parse_args()
     lock = json.loads(LOCK_PATH.read_text(encoding="utf-8"))
     if lock["schema"] != 1 or len(lock["commit"]) != 40:

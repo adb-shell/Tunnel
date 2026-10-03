@@ -55,9 +55,10 @@ public class AdbWireTest {
         AdbWire.Bootstrap boot = new AdbWire.Bootstrap(input, 9, 1234, 1235, 1280, 30, 4000000, 10);
         Arrays.fill(input, (byte) 0);
         ByteArrayOutputStream bytes = new ByteArrayOutputStream(); AdbWire.writeBootstrap(bytes, boot);
-        byte[] wire = bytes.toByteArray(); assertEquals(70, wire.length);
+        byte[] wire = bytes.toByteArray(); assertEquals(74, wire.length);
         AdbWire.Bootstrap read = AdbWire.readBootstrap(new ByteArrayInputStream(wire));
         assertArrayEquals(secret(), read.secretCopy()); assertEquals(10, read.durationSeconds);
+        assertEquals(0, read.initialMode);
         for (int n = 0; n < wire.length; n++) {
             final byte[] truncated = Arrays.copyOf(wire, n);
             rejects(() -> AdbWire.readBootstrap(new ByteArrayInputStream(truncated)));
@@ -65,6 +66,26 @@ public class AdbWireTest {
         rejects(() -> new AdbWire.Bootstrap(secret(), 9, 1, 1, 1280, 30, 4000000, 10));
         rejects(() -> new AdbWire.Bootstrap(secret(), 9, 1, 2, 1280, 30, 4000000, 3601));
         boot.close(); read.close(); rejects(read::secretCopy);
+    }
+
+    @Test public void controlOnlyBootstrapAndOverlayCommandsAreBounded() throws Exception {
+        try (AdbWire.Bootstrap boot = new AdbWire.Bootstrap(secret(), 9, 1234, 1235,
+                1280, 30, 4000000, 0, 3)) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            AdbWire.writeBootstrap(out, boot);
+            try (AdbWire.Bootstrap read = AdbWire.readBootstrap(new ByteArrayInputStream(out.toByteArray()))) {
+                assertEquals(3, read.initialMode);
+                assertEquals(0, read.durationSeconds);
+            }
+            byte[] oldVersion = out.toByteArray(); oldVersion[5] = 3;
+            rejects(() -> AdbWire.readBootstrap(new ByteArrayInputStream(oldVersion)));
+        }
+        rejects(() -> new AdbWire.Bootstrap(secret(), 9, 1, 2, 1280, 30, 4000000, 0, 4));
+        assertEquals(AdbCommands.OVERLAY_BLACK, AdbCommands.Command.decode(
+                new AdbCommands.Command(1, AdbCommands.OVERLAY_BLACK, 1, 0, 0, 0, 0, 0).encode()).operation);
+        rejects(() -> new AdbCommands.Command(1, AdbCommands.OVERLAY_BLACK, 2, 0, 0, 0, 0, 0));
+        rejects(() -> new AdbCommands.Command(1, AdbCommands.OVERLAY_BLACK, 1, 1, 0, 0, 0, 0));
+        AdbWire.Packet.capabilities(9, 1, 0, AdbWire.CAP_OVERLAY);
     }
 
     @Test public void sessionDurationRoundTripsAndOlderHelpersAreRejected() throws Exception {

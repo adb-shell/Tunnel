@@ -610,7 +610,7 @@ impl Connection {
 
                 _ = adb_timer.tick(), if cfg!(target_os = "android") => {
                     #[cfg(target_os = "android")]
-                    if let Some(message) = super::android_control::poll(id, conn.adb_allowed()) {
+                    if let Some(message) = super::android_control::poll(id, conn.adb_access()) {
                         if let Some(message::Union::Misc(misc)) = &message.union {
                             if let Some(misc::Union::AndroidVideoBarrier(barrier)) = &misc.union {
                                 // Discard old source frames before this ordered source barrier.
@@ -1836,14 +1836,21 @@ impl Connection {
 
     #[cfg(target_os = "android")]
     fn adb_allowed(&self) -> bool {
-        self.adb_view_allowed() && self.peer_keyboard_enabled()
+        self.adb_access().video_allowed()
     }
 
     #[cfg(target_os = "android")]
-    fn adb_view_allowed(&self) -> bool {
-        self.authorized && self.stream.is_secured() && self.is_remote()
-            && self.services_subed && !self.closed
-            && super::android_control::capture_permitted(self.inner.id())
+    fn adb_access(&self) -> super::android_control::Access {
+        super::android_control::Access {
+            authorized: self.authorized,
+            secured: self.stream.is_secured(),
+            remote: self.is_remote(),
+            closed: self.closed,
+            keyboard: self.keyboard,
+            disable_keyboard: self.disable_keyboard,
+            video_subscribed: self.services_subed
+                && super::android_control::capture_permitted(self.inner.id()),
+        }
     }
 
     fn clipboard_enabled(&self) -> bool {
@@ -2371,9 +2378,14 @@ impl Connection {
                 #[allow(unused_mut)]
                 Some(message::Union::MouseEvent(mut me)) => {
                     #[cfg(target_os = "android")]
-                    if super::android_control::route_mouse(self.inner.id(), &me, self.adb_allowed())
-                        || !self.peer_keyboard_enabled() || super::android_control::blocks_legacy_input(self.inner.id()) {
-                        return true;
+                    {
+                        if !self.peer_keyboard_enabled() { return true; }
+                        let side_action = super::android_control::is_legacy_side_action(&me);
+                        if side_action && !super::android_control::legacy_side_allowed(self.inner.id()) { return true; }
+                        if !side_action && (super::android_control::route_mouse(self.inner.id(), &me, self.adb_allowed())
+                            || super::android_control::blocks_legacy_input(self.inner.id())) {
+                            return true;
+                        }
                     }
                     if self.is_authed_view_camera_conn() {
                         return true;
@@ -2930,7 +2942,7 @@ impl Connection {
                                 .and_then(|option| option.supported_decoding.as_ref())
                                 .map_or(false, |decoding| decoding.ability_h264 > 0);
                             if let Some(message) = super::android_control::request(
-                                self.inner.id(), &control.json, self.adb_allowed(), self.adb_view_allowed(), h264) {
+                                self.inner.id(), &control.json, self.adb_access(), h264) {
                                 allow_err!(self.stream.send(&message).await);
                             }
                         }

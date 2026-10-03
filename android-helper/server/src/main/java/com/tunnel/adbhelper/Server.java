@@ -61,6 +61,9 @@ public final class Server {
             lifecycle.startStdinMonitor();
             ShellEnvironment.prepare();
             lifecycle.setMainLooper(Looper.myLooper());
+            lifecycle.captureMode = options.initialMode;
+            lifecycle.fallbackMode = 3;
+            lifecycle.controlOnly = options.initialMode == 3;
             lifecycle.startAutomation();
             final AdbWire.Bootstrap captureOptions = options;
             captureThread = new Thread(() -> {
@@ -140,6 +143,7 @@ public final class Server {
         private volatile long controlWriteSince;
         private volatile long stoppedAt;
         private volatile boolean captureRunning;
+        private boolean controlOnly;
         private volatile int automationCapabilities;
         private volatile long operationSince;
         private volatile Thread automationThread;
@@ -225,6 +229,10 @@ public final class Server {
                     try { automation.connect(); } catch (Exception unavailable) { automation.close(); }
                     operationSince = 0;
                     automationCapabilities = automation.capabilities();
+                    // A control-only helper must not create a display/codec or
+                    // expire merely because it intentionally produces no video.
+                    // Heartbeat, parent EOF and operation watchdogs still apply.
+                    if (controlOnly && automationCapabilities != 0) deadline = 0;
                     sendCapabilities();
                     long nextFrame = 0;
                     while (!stop.get()) {
@@ -249,7 +257,10 @@ public final class Server {
                         if ((captureMode == 1 || captureMode == 2) && SystemClock.elapsedRealtime() >= nextFrame) {
                             operationSince = SystemClock.elapsedRealtime();
                             try { offerBitmap(automation.frame(captureMode)); }
-                            catch (Exception lost) { automation.revokeMode(captureMode); captureMode = fallbackMode; offerBitmap(null); releaseInput.set(true); }
+                            catch (Exception lost) {
+                                automation.revokeMode(captureMode); offerBitmap(null); releaseInput.set(true);
+                                stop("FRAME_PROVIDER_FAILED");
+                            }
                             finally { operationSince = 0; }
                             nextFrame = SystemClock.elapsedRealtime() + (captureMode == 2 ? 500 : 200);
                         }

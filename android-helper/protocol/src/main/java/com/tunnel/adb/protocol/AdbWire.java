@@ -22,7 +22,7 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class AdbWire {
     public static final String LOOPBACK_HOST = "127.0.0.1";
-    public static final int VERSION = 3, CHANNEL_VIDEO = 1, CHANNEL_CONTROL = 2;
+    public static final int VERSION = 4, CHANNEL_VIDEO = 1, CHANNEL_CONTROL = 2;
     /** Production sessions end on cancellation/disconnect, not elapsed usage time. */
     public static final int SESSION_DURATION = 0;
     public static final int CAPABILITIES = 1, VIDEO_CONFIG = 2, VIDEO_FRAME = 3;
@@ -31,7 +31,8 @@ public final class AdbWire {
     public static final int FLAG_KEY_FRAME = 1, CODEC_H264 = 1;
     public static final int CAP_VIDEO = 1, CAP_KEYFRAME = 2;
     public static final int CAP_INPUT = 4, CAP_SCREENSHOT = 8, CAP_TREE = 16, CAP_DISPLAY = 32;
-    public static final int ALL_CAPS = CAP_VIDEO | CAP_KEYFRAME | CAP_INPUT | CAP_SCREENSHOT | CAP_TREE | CAP_DISPLAY;
+    public static final int CAP_OVERLAY = 64;
+    public static final int ALL_CAPS = CAP_VIDEO | CAP_KEYFRAME | CAP_INPUT | CAP_SCREENSHOT | CAP_TREE | CAP_DISPLAY | CAP_OVERLAY;
     public static final int MAX_PAYLOAD = 8 * 1024 * 1024, MAX_CONFIG = 64 * 1024;
     public static final int MAX_SIDE = 4096, MAX_PIXELS = 8 * 1024 * 1024;
     private static final int MAGIC = 0x54414442, HEADER_SIZE = 52, NONCE_SIZE = 32; // TADB
@@ -42,19 +43,25 @@ public final class AdbWire {
     /** Fixed stdin-only startup record; never put this secret in argv, URLs or logs. */
     public static final class Bootstrap implements Closeable {
         public final long epoch;
-        public final int videoPort, controlPort, maxSize, fps, bitrate, durationSeconds;
+        public final int videoPort, controlPort, maxSize, fps, bitrate, durationSeconds, initialMode;
         private final byte[] secret;
         private boolean destroyed;
         public Bootstrap(byte[] secret, long epoch, int videoPort, int controlPort,
                          int maxSize, int fps, int bitrate, int durationSeconds) throws IOException {
+            this(secret, epoch, videoPort, controlPort, maxSize, fps, bitrate, durationSeconds, 0);
+        }
+        public Bootstrap(byte[] secret, long epoch, int videoPort, int controlPort,
+                         int maxSize, int fps, int bitrate, int durationSeconds, int initialMode) throws IOException {
             if (secret == null || secret.length != 32 || epoch <= 0 || videoPort < 1 || videoPort > 65535
                     || controlPort < 1 || controlPort > 65535 || videoPort == controlPort
                     || maxSize < 256 || maxSize > 1920 || fps < 1 || fps > 60
-                    || bitrate < 128000 || bitrate > 16000000 || durationSeconds < SESSION_DURATION || durationSeconds > 3600)
+                    || bitrate < 128000 || bitrate > 16000000 || durationSeconds < SESSION_DURATION || durationSeconds > 3600
+                    || initialMode < 0 || initialMode > 3)
                 throw invalid("bootstrap bounds");
             this.secret = secret.clone(); this.epoch = epoch;
             this.videoPort = videoPort; this.controlPort = controlPort; this.maxSize = maxSize;
             this.fps = fps; this.bitrate = bitrate; this.durationSeconds = durationSeconds;
+            this.initialMode = initialMode;
         }
         public synchronized byte[] secretCopy() throws IOException {
             if (destroyed) throw invalid("destroyed bootstrap");
@@ -70,7 +77,7 @@ public final class AdbWire {
         try {
             in.readFully(secret);
             return new Bootstrap(secret, in.readLong(), in.readInt(), in.readInt(), in.readInt(),
-                    in.readInt(), in.readInt(), in.readInt());
+                    in.readInt(), in.readInt(), in.readInt(), in.readInt());
         } finally { Arrays.fill(secret, (byte) 0); }
     }
 
@@ -80,7 +87,8 @@ public final class AdbWire {
             DataOutputStream out = new DataOutputStream(output);
             out.writeInt(BOOTSTRAP_MAGIC); out.writeShort(VERSION); out.write(secret); out.writeLong(bootstrap.epoch);
             out.writeInt(bootstrap.videoPort); out.writeInt(bootstrap.controlPort); out.writeInt(bootstrap.maxSize);
-            out.writeInt(bootstrap.fps); out.writeInt(bootstrap.bitrate); out.writeInt(bootstrap.durationSeconds); out.flush();
+            out.writeInt(bootstrap.fps); out.writeInt(bootstrap.bitrate); out.writeInt(bootstrap.durationSeconds);
+            out.writeInt(bootstrap.initialMode); out.flush();
         } finally { Arrays.fill(secret, (byte) 0); }
     }
 

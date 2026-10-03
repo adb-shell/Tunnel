@@ -80,6 +80,7 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (com.tunnel.app.adb.mirror.AdbScreenShareRequest.consume(intent)) requestMediaProjection()
         DFm8Y8iMScvB2YDw.ctx?.flushPendingVoiceCallEvent()
     }
 
@@ -124,6 +125,9 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
 
         ClsFx9V0S.qka8qpr4(this)
         super.onCreate(savedInstanceState)
+        if (com.tunnel.app.adb.mirror.AdbScreenShareRequest.consume(intent)) {
+            window.decorView.post { requestMediaProjection() }
+        }
         if (_rdClipboardManager == null) {
             _rdClipboardManager = ig2xH1U3RDNsb7CS(getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
             ClsFx9V0S.jSYL8DA3(_rdClipboardManager!!)
@@ -243,7 +247,9 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                 "tunnel_adb_cancel" -> {
                     adbActionGeneration++
                     adbActionThread?.interrupt()
-                    result.success(TunnelAdbManager.cancelPending().toMap())
+                    // Only this Activity's worker belongs to the local operation.
+                    // The shared runner may already have handed its lease to a PC job.
+                    result.success(TunnelAdbManager.snapshot().toMap())
                 }
                 "tunnel_adb_p0_status" -> result.success(TunnelAdbPrototype.status())
                 "tunnel_adb_p0_cancel" -> result.success(TunnelAdbPrototype.cancel())
@@ -307,6 +313,24 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                 "tunnel_adb_output" -> {
                     result.success(TunnelAdbManager.output(applicationContext))
                 }
+                "tunnel_adb_clear_output" -> {
+                    result.success(TunnelAdbManager.clearOutput(applicationContext).toMap())
+                }
+                "tunnel_adb_open_settings" -> {
+                    // ROMs may not export the wireless-debugging action; the standard
+                    // developer-options page remains an explicit user-operated fallback.
+                    val opened = listOf("android.settings.WIRELESS_DEBUGGING_SETTINGS",
+                        Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS, Settings.ACTION_SETTINGS)
+                        .any { action ->
+                            try { startActivity(Intent(action)); true } catch (_: Exception) { false }
+                        }
+                    result.success(opened)
+                }
+                "tunnel_adb_discover" -> {
+                    localAdbAction(result, "ADB_DISCOVERY_FAILED") {
+                        TunnelAdbManager.discover(applicationContext)
+                    }
+                }
                 "tunnel_adb_start" -> {
                     localAdbAction(result, "ADB_START_FAILED") { TunnelAdbManager.start(applicationContext).toMap() }
                 }
@@ -316,11 +340,17 @@ class oFtTiPzsqzBHGigp : FlutterActivity() {
                 "tunnel_adb_local_shell" -> {
                     localAdbAction(result, "ADB_LOCAL_SHELL_FAILED") { TunnelAdbManager.startLocalShell(applicationContext).toMap() }
                 }
+                "tunnel_adb_terminal_interrupt" -> {
+                    result.success(TunnelAdbManager.interruptTerminal(applicationContext).toMap())
+                }
                 "tunnel_adb_pair" -> {
                     val args = call.arguments as? Map<*, *>
                     val port = args?.get("port")?.toString() ?: ""
                     val code = args?.get("code")?.toString() ?: ""
-                    localAdbAction(result, "ADB_PAIR_FAILED") { TunnelAdbManager.pair(applicationContext, port, code).toMap() }
+                    val connectionPort = (args?.get("connectionPort") as? Number)?.toInt()
+                    localAdbAction(result, "ADB_PAIR_FAILED") {
+                        TunnelAdbManager.pair(applicationContext, port.trim(), code.trim(), connectionPort).toMap()
+                    }
                 }
                 "tunnel_adb_command" -> {
                     val command = call.arguments?.toString() ?: ""

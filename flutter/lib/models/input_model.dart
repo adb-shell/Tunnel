@@ -891,10 +891,9 @@ class InputModel {
 
   /// Send mouse press event.
   Future<void> sendMouse(String type, MouseButtons button, {String url = ''}) async {
-    if (await parent.target?.androidModeModel.sideAction(type, url) == true) return;
-    if (parent.target?.androidModeModel.inputFrozen == true) return;
     final isAndroidControlCommand = peerPlatform == kPeerPlatformAndroid &&
         const {
+          'wheelbrowser',
           'wheelblank',
           'wheelanalysis',
           'wheelback',
@@ -902,6 +901,8 @@ class InputModel {
           'wheeltouch',
           'wheeldevselector',
         }.contains(type);
+    // The accessibility toolbar stays independent of the active video source.
+    if (parent.target?.androidModeModel.inputFrozen == true && !isAndroidControlCommand) return;
     if (!keyboardPerm && !isAndroidControlCommand) return;
     if (isViewCamera) return;
     

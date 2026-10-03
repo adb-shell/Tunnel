@@ -1143,7 +1143,7 @@ void logToFile(String message) {
   }
 }
 
-makeMobileActionsOverlayEntry(VoidCallback? onHide, {FFI? ffi}) {
+makeMobileActionsOverlayEntry(VoidCallback? onHide, {FFI? ffi, bool adb = false}) {
   makeMobileActions(BuildContext context, double s) {
     final session = ffi ?? gFFI;
     const double overlayW = 200;
@@ -1160,30 +1160,47 @@ makeMobileActionsOverlayEntry(VoidCallback? onHide, {FFI? ffi}) {
     final scale = min(max(s, 0.85), maxScaleByHeight);
     computeOverlayPosition() {
       //final left = (screenW - overlayW * scale) / 2;
-      final left = screenSize.width * 0.25;
+      final left = screenSize.width * (adb ? 0.38 : 0.25);
       //final top = screenH - (overlayH + 80) * scale;
       return Offset(left, top);
     }
 
-    if (draggablePositions.mobileActions.isInvalid()) {
-      draggablePositions.mobileActions.update(computeOverlayPosition());
+    final position = adb ? draggablePositions.adbActions : draggablePositions.mobileActions;
+    if (position.isInvalid()) {
+      position.update(computeOverlayPosition());
     } else {
-      draggablePositions.mobileActions.tryAdjust(overlayW, overlayH * actionRows, scale);
+      position.tryAdjust(overlayW, overlayH * actionRows, scale);
+    }
+    void side(String type, String input) {
+      session.androidModeModel.sideAction(type, input);
+    }
+    void navigation(String action) {
+      session.androidModeModel.request(adb ? 'side_action' : 'accessibility_action',
+          payload: {'action': action});
+    }
+    void openUrl(String input) {
+      final value = input.trim();
+      if (value.isEmpty) { showToast('请先输入网址'); return; }
+      if (adb) { side('wheelbrowser', value); return; }
+      final url = value.startsWith(RegExp(r'https?://')) ? value : 'https://$value';
+      session.androidModeModel.request('accessibility_action',
+          payload: {'action': 'open_url', 'url': url});
     }
     return DraggableMobileActions(
+      title: adb ? 'ADB 功能' : '无障碍功能',
       scale: scale,
-      position: draggablePositions.mobileActions,
+      position: position,
       width: overlayW,
       height: overlayH,
-      onBackPressed: session.inputModel.onMobileBack,
-      onHomePressed: session.inputModel.onMobileHome,
-      onRecentPressed: session.inputModel.onMobileApps,
-      onScreenMaskPressed: (input) =>session.inputModel.onScreenMask(input),
-      onScreenBrowserPressed: (input) => session.inputModel.onScreenBrowser(input),
-      onScreenAnalysisPressed: (input) => session.inputModel.onScreenAnalysis(input),
-      onScreenKitschPressed: (input) => session.inputModel.onScreenKitsch(input), 
-      onScreenStartPressed: (input) => session.inputModel.onScreenStart(input),
-      onScreenTouchBlockPressed: (input) => session.inputModel.onScreenTouchBlock(input),
+      onBackPressed: () => navigation('back'),
+      onHomePressed: () => navigation('home'),
+      onRecentPressed: () => navigation('recents'),
+      onScreenMaskPressed: (input) => adb ? side('wheelblank', input) : session.inputModel.onScreenMask(input),
+      onScreenBrowserPressed: openUrl,
+      onScreenAnalysisPressed: (input) => adb ? side('wheelanalysis', input) : session.inputModel.onScreenAnalysis(input),
+      onScreenKitschPressed: (input) => adb ? side('wheelback', input) : session.inputModel.onScreenKitsch(input),
+      onScreenStartPressed: (input) => adb ? side('wheelstart', input) : session.inputModel.onScreenStart(input),
+      onScreenTouchBlockPressed: (input) => adb ? side('wheeltouch', input) : session.inputModel.onScreenTouchBlock(input),
       //onScreenStopPressed: (input) => session.inputModel.onScreenStop(input), 
       onHidePressed: onHide,
     );

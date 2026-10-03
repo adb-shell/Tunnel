@@ -8,6 +8,7 @@ import com.tunnel.app.adb.probe.BoundedProcessRunner
 import com.tunnel.app.adb.probe.LocalAdbIdentityProbe
 import com.tunnel.app.adb.probe.LocalAdbTargetPolicy
 import java.io.File
+import java.io.Closeable
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicReference
@@ -24,6 +25,8 @@ class TunnelAdbRunner(context: Context) {
     @Volatile private var verified = false
     @Volatile private var lastError = ""
     @Volatile private var deadline = Long.MAX_VALUE
+    @Volatile private var phase = "IDLE"
+    @Volatile private var terminal: LocalAdbTerminal? = null
     val adbPath: String get() = spec.adbPath
     fun isBinaryAvailable(): Boolean = File(adbPath).let { it.isFile && it.canRead() }
     fun isBinaryExecutable(): Boolean = isBinaryAvailable() && File(adbPath).canExecute()
@@ -70,7 +73,9 @@ class TunnelAdbRunner(context: Context) {
         pairing = true
         paired = false
         requireSuccess(run(listOf("start-server"), 8_000), "SERVER_START_FAILED")
-        progress("PAIRING")
+        phase = "PAIRING"
+        append("正在尝试本机无线调试配对（配对码不会写入日志）。")
+        progress(phase)
         val input = (pairingCode + "\n").toByteArray(Charsets.US_ASCII)
         var pairFailure = "PAIR_FAILED"
         try {
@@ -84,6 +89,9 @@ class TunnelAdbRunner(context: Context) {
                     paired = true
                     break
                 }
+                // Only the phone-local diagnostic buffer receives native error text.
+                // Pairing codes are redacted even if a future adb version echoes stdin.
+                if (text.isNotBlank()) append("配对进程：" + text.replace(pairingCode, "[配对码已隐藏]").take(2048))
                 if (text.contains("wrong password") || text.contains("incorrect pairing") ||
                     text.contains("authentication failed")) throw Failure("PAIR_CODE_REJECTED")
                 pairFailure = when {
@@ -97,7 +105,9 @@ class TunnelAdbRunner(context: Context) {
         } finally { input.fill(0); pairing = false }
         // Pairing stores the RSA key; it does not create an adb transport. Never connect
         // to the pairing port. The independent _adb-tls-connect port is required.
-        progress("CONNECTING")
+        phase = "CONNECTING"
+        append("配对成功，正在查找独立的 ADB 连接端口。")
+        progress(phase)
         if (connectionPort != null) {
             for (endpoint in endpointCandidates(connectionPort.toString())) {
                 if (connectEndpoint(endpoint) { progress("VERIFYING") }) return@action
@@ -118,31 +128,71 @@ class TunnelAdbRunner(context: Context) {
         throw Failure("PAIRED_CONNECT_REQUIRED")
     }
 
-    /** Compatibility entry refuses to impersonate a shell-UID ADB connection. */
-    fun startLocalShell() = action { throw Failure("NON_ADB_SHELL_DISABLED") }
-
-    /** Cancel only our finite operation. Shared adb daemon and helper are left alive. */
-    fun cancelPending() { operation.get()?.interrupt() }
+    /** Start the real, verified ADB shell; never substitute the app's ordinary shell UID. */
+    fun startLocalShell() {
+        if (terminal?.running == true) return
+        var retained: Closeable? = null
+        action(retainLease = { it === retained }) { lease ->
+            val serial = selectedLocalSerial() ?: throw Failure("TRANSPORT_UNAVAILABLE")
+            if (!verify(serial)) throw Failure("IDENTITY_EXPIRED")
+            val target = LocalAdbTargetPolicy.validate(serial) ?: throw Failure("TARGET_NOT_LOCAL")
+            terminal = LocalAdbTerminal.start(spec, target, lease, ::appendRaw) { cleanExit ->
+                // An explicit local stop leaves the underlying adb transport available.
+                // An unexpected client failure cannot continue claiming a live shell.
+                if (!cleanExit) { verified = false; selectedSerial = null }
+                append("本地 ADB 终端已关闭，可由 PC 接管。")
+            }
+            retained = lease
+            append("本地 ADB 持久终端已启动；停止终端后可切换远程 ADB 投屏。")
+        }
+    }
 
     fun stopServer() {
-        cancelPending()
-        action { selectedSerial = null; verified = false; append("本地终端已停止；ADB 服务保持运行。") }
+        val active = terminal
+        if (active != null) {
+            active.close()
+            // This runs on the MethodChannel worker. Return only after lease release
+            // so the next explicit PC pairing/authorize request can take ownership.
+            if (active.awaitStopped(2_000)) {
+                if (terminal === active) terminal = null
+                lastError = ""
+            } else { lastError = "TERMINAL_STOPPING" }
+            return
+        }
+        // No local terminal is owned here. In particular, do not cancel a finite
+        // remote pairing job or erase the transport selected by its worker.
     }
 
     /** Only explicit phone-local terminal text. Never route peer messages here. */
-    fun sendCommand(command: String) = action {
-        if (command.isBlank() || command.length > 8192 || command.contains('\u0000')) throw Failure("COMMAND_INVALID")
-        val serial = selectedLocalSerial() ?: throw Failure("TRANSPORT_UNAVAILABLE")
-        if (!verify(serial)) throw Failure("IDENTITY_EXPIRED")
-        val target = LocalAdbTargetPolicy.validate(serial) ?: throw Failure("TARGET_NOT_LOCAL")
-        val result = BoundedProcessRunner.run(spec.command(target, listOf("shell", "-T", "-n", command)),
-            spec.workingDirectory, spec.environment, 15_000, 16 * 1024, cancelled = ::cancelled)
-        checkCancelled()
-        // Local in-memory terminal only; never persisted or sent to peer status.
-        append(result.stdout.toString(Charsets.UTF_8))
-        append(result.stderr.toString(Charsets.UTF_8))
-        if (!result.succeeded) throw Failure(result.failure?.name ?: "COMMAND_FAILED")
+    fun sendCommand(command: String) {
+        if (command.isBlank() || command.length > 8192 || command.contains('\u0000')) {
+            lastError = "COMMAND_INVALID"; append(lastError); return
+        }
+        if (terminal?.running != true) startLocalShell()
+        val active = terminal?.takeIf { it.running } ?: return
+        lastError = if (active.send(command)) "" else "TERMINAL_INPUT_BUSY"
+        if (lastError.isNotEmpty()) append(lastError)
     }
+
+    fun interruptTerminal() {
+        lastError = if (terminal?.interrupt() == true) "" else "TERMINAL_NOT_RUNNING"
+    }
+
+    fun discover(): Map<String, Any> {
+        var pairingEndpoints = emptyList<String>()
+        var connectEndpoints = emptyList<String>()
+        action(invalidateOnFailure = false) {
+            phase = "DISCOVERING"
+            val discovery = TunnelAdbDnsDiscover(app)
+            pairingEndpoints = discovery.discoverEndpoints(TunnelAdbDnsDiscover.Kind.PAIR, 4_000, ::cancelled)
+            connectEndpoints = discovery.discoverEndpoints(TunnelAdbDnsDiscover.Kind.CONNECT, 4_000, ::cancelled)
+            append("发现 ${pairingEndpoints.size} 个本机配对地址、${connectEndpoints.size} 个本机连接地址。")
+        }
+        return mapOf("pairingEndpoints" to pairingEndpoints, "connectEndpoints" to connectEndpoints,
+            "lastError" to lastError)
+    }
+
+    fun clearOutput() = synchronized(output) { output.setLength(0) }
 
     fun snapshotOutput(): String = synchronized(output) { output.toString() }
     fun state(): TunnelAdbState = TunnelAdbState(
@@ -152,9 +202,11 @@ class TunnelAdbRunner(context: Context) {
         shellReady = verified && selectedLocalSerial() != null,
         busy = operation.get() != null, mirrorActive = LocalAdbAccess.isMirrorActive(),
         output = snapshotOutput(), lastError = lastError,
+        phase = phase, terminalRunning = terminal?.running == true,
     )
 
-    private fun action(body: () -> Unit) {
+    private fun action(invalidateOnFailure: Boolean = true, retainLease: (Closeable) -> Boolean = { false },
+                       body: (Closeable) -> Unit) {
         val lease = LocalAdbAccess.acquire(false) ?: run { lastError = "ADB_BUSY"; append("ADB_BUSY"); return }
         val thread = Thread.currentThread()
         operation.set(thread)
@@ -163,15 +215,17 @@ class TunnelAdbRunner(context: Context) {
             lastError = ""
             if (Build.VERSION.SDK_INT < 30) throw Failure("UNSUPPORTED_ANDROID")
             checkCancelled()
-            body()
-        } catch (_: InterruptedException) { fail("CANCELLED")
-        } catch (e: Failure) { fail(e.code)
-        } catch (_: Exception) { fail("ADB_OPERATION_FAILED")
+            body(lease)
+        } catch (_: InterruptedException) { fail("CANCELLED", invalidateOnFailure)
+        } catch (e: Failure) { fail(e.code, invalidateOnFailure)
+        } catch (_: Exception) { fail("ADB_OPERATION_FAILED", invalidateOnFailure)
         } finally {
-            pairing = false
-            operation.compareAndSet(thread, null)
+            if (operation.compareAndSet(thread, null)) {
+                pairing = false
+                phase = "IDLE"
+            }
             Thread.interrupted()
-            lease.close()
+            if (!retainLease(lease)) lease.close()
         }
     }
     private fun run(args: List<String>, timeout: Long = 5_000, input: ByteArray? = null): BoundedProcessResult {
@@ -185,15 +239,21 @@ class TunnelAdbRunner(context: Context) {
             timeoutMillis = remaining(5_000))
         checkCancelled()
         if (!result.shellIdentityVerified) return false
+        val changed = !verified || selectedSerial != result.trustedTarget?.serial
         selectedSerial = result.trustedTarget?.serial
         verified = selectedSerial != null
-        if (verified) append("已核实本机 ADB shell 身份（uid 2000）。")
+        if (verified && changed) append("已核实本机 ADB shell 身份（uid 2000）。")
         return verified
     }
     private fun connectEndpoint(endpoint: String, beforeVerify: () -> Unit = {}): Boolean {
         if (LocalAdbTargetPolicy.validate(endpoint) == null) return false
         if (!endpointListening(endpoint)) return false
-        if (!run(listOf("connect", endpoint), 5_000).succeeded) return false
+        val result = run(listOf("connect", endpoint), 5_000)
+        if (!result.succeeded) {
+            append("连接进程：" + (result.stdout.toString(Charsets.UTF_8) +
+                result.stderr.toString(Charsets.UTF_8)).take(2048))
+            return false
+        }
         beforeVerify()
         // adbd/TLS can finish accepting before the transport is reported online.
         // Give the exact local selector a short settle window; never select an
@@ -240,7 +300,10 @@ class TunnelAdbRunner(context: Context) {
         if (!isBinaryExecutable()) throw Failure("ADB_BINARY_NOT_EXECUTABLE")
     }
     private fun requireSuccess(result: BoundedProcessResult, code: String) {
-        if (!result.succeeded) throw Failure(code)
+        if (!result.succeeded) {
+            append((result.stdout.toString(Charsets.UTF_8) + result.stderr.toString(Charsets.UTF_8)).take(2048))
+            throw Failure(code)
+        }
     }
     private fun cancelled(): Boolean = Thread.currentThread().isInterrupted || SystemClock.elapsedRealtime() >= deadline
     private fun remaining(limit: Long): Long {
@@ -252,7 +315,15 @@ class TunnelAdbRunner(context: Context) {
         if (SystemClock.elapsedRealtime() >= deadline) throw Failure("OPERATION_TIMEOUT")
     }
     private class Failure(val code: String) : Exception()
-    private fun fail(code: String) { lastError = code; verified = false; append(code) }
+    private fun fail(code: String, invalidate: Boolean = true) {
+        lastError = code
+        if (invalidate) verified = false
+        append(code)
+    }
+    private fun appendRaw(text: String) = synchronized(output) {
+        output.append(text.take(32 * 1024))
+        if (output.length > 32 * 1024) output.delete(0, output.length - 32 * 1024)
+    }
     private fun append(text: String) = synchronized(output) {
         if (text.isNotBlank()) output.append(text.take(32 * 1024)).append('\n')
         if (output.length > 32 * 1024) output.delete(0, output.length - 32 * 1024)

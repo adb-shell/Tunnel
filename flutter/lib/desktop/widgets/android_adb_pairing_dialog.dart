@@ -51,7 +51,6 @@ class _AndroidAdbPairingDialogState extends State<AndroidAdbPairingDialog> {
   final _portFocus = FocusNode(debugLabel: 'ADB pairing port');
   Offset _offset = Offset.zero;
   bool _connectOnly = false;
-  bool _manualPort = false;
   bool _showCode = false;
   AndroidAdbPairingModel get _model => widget.ffi.androidModeModel.pairing;
 
@@ -66,7 +65,7 @@ class _AndroidAdbPairingDialogState extends State<AndroidAdbPairingDialog> {
 
   void _onPairingChanged() {
     if (mounted && _model.phase == 'PAIRED_CONNECT_REQUIRED') {
-      setState(() { _connectOnly = true; _manualPort = true; });
+      setState(() { _connectOnly = true; });
     }
   }
 
@@ -90,15 +89,19 @@ class _AndroidAdbPairingDialogState extends State<AndroidAdbPairingDialog> {
       return AndroidAdbPairingModel.channelErrorText(mode.reason) ??
           AndroidAdbPairingModel.channelErrorText('SECURE_CHANNEL_REQUIRED');
     }
-    if (mode.usingAdb) return 'ADB 投屏正在运行，无需重复配对。请先退出投屏再重新配对。';
-    if (mode.busy || mode.inputFrozen) return '投屏模式正在切换，请等待完成后再配对。';
+    if (mode.usingAdb) return 'ADB 投屏正在运行，无需重复配对。请先关闭 ADB 投屏再重新配对。';
+    if (mode.busy || (mode.inputFrozen && mode.state['videoStopped'] != true)) {
+      return '投屏模式正在切换，请等待完成后再配对。';
+    }
     return null;
   }
 
   void _submit() {
     if (_model.busy || _blockedReason != null) return;
     if (_form.currentState?.validate() != true) return;
-    final connectPort = (_manualPort || _connectOnly) ? _connectPort.text.trim() : '';
+    // Both ports are independent. A supplied connection port is always sent,
+    // including after switching between pairing and reconnecting tabs.
+    final connectPort = _connectPort.text.trim();
     if (_connectOnly) {
       _model.authorize(connectPort: connectPort);
     } else {
@@ -182,13 +185,9 @@ class _AndroidAdbPairingDialogState extends State<AndroidAdbPairingDialog> {
               onFieldSubmitted: (_) => _submit(),
               validator: (value) => RegExp(r'^\d{6}$').hasMatch(value ?? '') ? null : '请输入 6 位配对码',
             ),
-            Align(alignment: Alignment.centerLeft, child: TextButton.icon(
-              onPressed: _model.busy ? null : () => setState(() => _manualPort = !_manualPort),
-              icon: Icon(_manualPort ? Icons.expand_less : Icons.expand_more, size: 18),
-              label: const Text('手动指定连接端口'),
-            )),
+            const SizedBox(height: 14),
           ],
-          if (_connectOnly || _manualPort) ...[
+          ...[
             _portField(_connectPort, '连接端口（可选）', optional: true),
             const SizedBox(height: 6),
             Text('连接端口在无线调试主页，与配对端口不同。', style: theme.textTheme.bodySmall),
@@ -223,7 +222,7 @@ class _AndroidAdbPairingDialogState extends State<AndroidAdbPairingDialog> {
                 child: Text(_connectOnly ? '连接并授权' : '配对并连接')),
           ]),
           const SizedBox(height: 10),
-          Text('授权仅供本次远控使用；断线、撤销或退出 ADB 投屏后结束。',
+          Text('关闭 ADB 投屏保留授权；远控断线或手动撤销后结束。',
               style: theme.textTheme.bodySmall),
         ],
       )),

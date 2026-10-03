@@ -647,7 +647,8 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.N)
     fun onMouseInput(mask: Int, _x: Int, _y: Int,url: String) {
-        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbOwnsInput) return
+        if (AccessibilityLifecycle.paused ||
+            (AccessibilityLifecycle.adbOwnsInput && mask !in setOf(37, 39, 40, 41, 43))) return
         markRemoteTouchBlockActivity()
         val x = max(0, _x)
         val y = max(0, _y)
@@ -814,7 +815,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
               penetrateRenderPending = false
               lastPenetrateRenderMs = 0L
               try {
-                  ClsFx9V0S.VaiKIoQu("video", true)
+                  if (!AccessibilityLifecycle.adbCaptureCommitted) ClsFx9V0S.VaiKIoQu("video", true)
               } catch (e: Exception) {
                   Log.e("InputService", "onstart_capture: enable video raw failed", e)
               }

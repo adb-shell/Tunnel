@@ -39,6 +39,21 @@ class AndroidAdbPairingModel extends ChangeNotifier {
     'SECURE_CHANNEL_HANDSHAKE_INVALID': '远程加密握手消息异常，配对请求未发送。请核对电脑、手机和服务器版本后重新连接。',
   }[code];
 
+  // These failures are returned by Android's session/runtime gates, before adb pair.
+  static String? permissionErrorText(String code) => const <String, String>{
+    'ADB_SESSION_CLOSED': '手机端远程会话已关闭，请重新连接后配对。',
+    'ADB_SESSION_NOT_AUTHORIZED': '手机端尚未批准此远程会话，请先完成远控登录或确认连接。',
+    'ADB_SESSION_NOT_ENCRYPTED': '手机端确认当前会话未加密，尚未执行配对。请核对两端服务器 Key 后重新连接。',
+    'ADB_REMOTE_SESSION_REQUIRED': '请在普通远程控制窗口配对，文件传输、终端或摄像头会话不能执行此操作。',
+    'ADB_CONTROL_PERMISSION_REQUIRED': '手机未允许此会话远程控制，尚未执行 ADB 配对。请在手机开启远程控制权限后重试。',
+    'ADB_VIEW_ONLY_SESSION': '当前电脑窗口处于仅查看模式，请关闭“仅查看”后重试。',
+    'ADB_VIDEO_SUBSCRIPTION_REQUIRED': 'ADB 配对可独立进行，但投屏需要当前远程窗口订阅视频。请恢复视频显示或重新连接。',
+    'ANDROID_ADB_SESSION_NOT_REGISTERED': '手机 ADB 服务尚未登记此连接，未执行配对。请重新发起配对；仍失败时请同步更新 APK 和电脑端。',
+    'ANDROID_SERVICE_UNAVAILABLE': '手机核心服务尚未就绪或调用失败，未执行配对。请打开手机 Tunnel 并确认服务运行后重试。',
+    'RUNTIME_UNAVAILABLE': '手机 ADB 运行组件尚未初始化，请打开手机 Tunnel 后重试。',
+    'PERMISSION_OR_SECURE_CHANNEL_REQUIRED': '手机仍使用旧版会话检查，无法区分加密、控制权限与视频订阅失败。请同步更新 APK 和电脑端。',
+  }[code];
+
   static bool validPort(String value) {
     if (!RegExp(r'^\d{1,5}$').hasMatch(value)) return false;
     final port = int.tryParse(value);
@@ -72,16 +87,17 @@ class AndroidAdbPairingModel extends ChangeNotifier {
     if (errorCode.isEmpty || errorCode == 'CONSENT_REVOKED' || errorCode == 'CANCELLED') return '';
     final channelMessage = channelErrorText(errorCode);
     if (channelMessage != null) return '$channelMessage ($errorCode)';
+    final permissionMessage = permissionErrorText(errorCode);
+    if (permissionMessage != null) return '$permissionMessage ($errorCode)';
     const messages = <String, String>{
       'ADB_PAIR_CODE_INVALID': '配对码必须是当前手机配对窗口显示的 6 位数字。',
       'ADB_PAIR_PORT_INVALID': '配对端口应为 1–65535，不能使用连接端口代替。',
       'ADB_PAIR_FAILED': '配对码或端口已失效。保持手机配对窗口打开，重新输入当前信息。',
       'ADB_CONNECT_REQUIRED': '自动发现未找到连接端口。请填写无线调试主页显示的连接端口。',
-      'ADB_BUSY': '手机 ADB 正被其他操作使用，请结束该操作后重试。',
+      'ADB_BUSY': '手机 ADB 正被本地终端或其他操作占用。请在手机 LADB 页面停止终端，或结束正在执行的操作后重试。',
       'ADB_LIBRARY_MISSING': '手机未找到打包的 ADB 组件，需要重新安装包含原生套件的 APK。',
       'SEND_FAILED': '配对请求未送达，请确认远程连接仍然正常。',
       'UNAUTHORIZED': '当前远程会话未获得此操作权限。',
-      'PERMISSION_OR_SECURE_CHANNEL_REQUIRED': '需要已授权、加密且允许控制的远程会话。',
       'SESSION_ADB_AUTHORIZATION_REQUIRED': '本连接尚未获得 ADB 授权，请点击“连接已配对设备并授权”。',
       'STOP_ADB_VIDEO_BEFORE_PAIRING': '请先退出 ADB 投屏并恢复普通共享后配对或连接。',
       'PAIR_CODE_INVALID': '配对码必须是当前手机配对窗口显示的 6 位数字。',

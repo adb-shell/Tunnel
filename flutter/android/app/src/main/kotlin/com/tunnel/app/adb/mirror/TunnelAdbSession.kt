@@ -29,6 +29,7 @@ internal class TunnelAdbSession(
     val epoch: Long,
     private val lease: Closeable,
     private val events: Events,
+    private val initialMode: Int = 0,
 ) : Closeable {
     interface Events {
         fun packet(packet: AdbWire.Packet): Boolean
@@ -48,7 +49,7 @@ internal class TunnelAdbSession(
     @Volatile private var control: AdbWire.Session? = null
     @Volatile private var process: Process? = null
     @Volatile private var authenticated = false
-    @Volatile private var capturePaused = false
+    @Volatile private var capturePaused = initialMode == 3
     @Volatile private var lastVideoAt = 0L
     @Volatile private var writeSince = 0L
     @Volatile private var failure = "STOPPED"
@@ -138,7 +139,7 @@ internal class TunnelAdbSession(
             val secret = ByteArray(32).also(random::nextBytes)
             try {
                 failureStage = "HELPER_BOOTSTRAP_FAILED"
-                AdbWire.Bootstrap(secret, epoch, videoListener.localPort, controlListener.localPort, 1280, 30, 4_000_000, AdbWire.SESSION_DURATION)
+                AdbWire.Bootstrap(secret, epoch, videoListener.localPort, controlListener.localPort, 1280, 30, 4_000_000, AdbWire.SESSION_DURATION, initialMode)
                     .use { AdbWire.writeBootstrap(child.outputStream, it) }
                 failureStage = "HELPER_VIDEO_HANDSHAKE_FAILED"
                 val video = accept(videoListener, secret, AdbWire.CHANNEL_VIDEO)

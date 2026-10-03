@@ -88,6 +88,25 @@ const val VIDEO_KEY_FRAME_RATE = 30
 
 class DFm8Y8iMScvB2YDw : Service() {
     private val authorizedAdbClients = ConcurrentHashMap.newKeySet<Int>()
+    private var adbScreenWakeLock: PowerManager.WakeLock? = null
+
+    @Suppress("DEPRECATION")
+    private fun updateAdbScreenWakeLock(hold: Boolean) {
+        try {
+            if (hold) {
+                val manager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                val wake = adbScreenWakeLock ?: manager.newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "Tunnel:AdbVideo").apply {
+                    setReferenceCounted(false); adbScreenWakeLock = this
+                }
+                // No ACQUIRE_CAUSES_WAKEUP: never unlock or wake a user-locked phone.
+                if (!wake.isHeld) wake.acquire()
+            } else {
+                adbScreenWakeLock?.let { if (it.isHeld) it.release() }
+                adbScreenWakeLock = null
+            }
+        } catch (_: Exception) { adbScreenWakeLock = null }
+    }
 
     fun canGrantAdbConsent(id: Int): Boolean = authorizedAdbClients.contains(id)
 
@@ -111,10 +130,38 @@ class DFm8Y8iMScvB2YDw : Service() {
                 AccessibilityLifecycle.adbCaptureCommitted = committed
                 AccessibilityLifecycle.adbOwnsInput = committed
                 mainHandler.post {
+                    updateAdbScreenWakeLock(committed)
                     if (committed) nZW99cdXQ0COhB2o.resetCaptureStates("adb-committed")
-                    else if (normalCaptureReady()) forceVideoFrameRefresh("adb-return-normal")
+                    else if (normalCaptureReady()) {
+                        ClsFx9V0S.VaiKIoQu("video", true)
+                        forceVideoFrameRefresh("adb-return-normal")
+                    }
                     AccessibilityLifecycle.publish(applicationContext)
                 }
+            }
+            override fun setAdbCaptureFrozen() {
+                AccessibilityLifecycle.adbCaptureCommitted = true
+                AccessibilityLifecycle.adbOwnsInput = true
+                mainHandler.post { updateAdbScreenWakeLock(false); AccessibilityLifecycle.publish(applicationContext) }
+            }
+            override fun setNormalScreenShare(enabled: Boolean): Boolean {
+                mainHandler.post {
+                    if (enabled) {
+                        if (!_isStart) restoreMediaProjection("explicit-adb-open-share", allowPermissionPrompt = true)
+                    } else stopScreenShareOnly("explicit-adb-close-share")
+                }
+                return true
+            }
+            override fun accessibilityNavigation(action: String): Boolean {
+                if (AccessibilityLifecycle.paused) return false
+                val service = nZW99cdXQ0COhB2o.ctx ?: return false
+                val global = when (action) {
+                    "back" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK
+                    "home" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME
+                    "recents" -> android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS
+                    else -> return false
+                }
+                return service.performGlobalAction(global)
             }
             override fun openLocalAccessibilitySettings() {
                 mainHandler.post { AccessibilityLifecycle.openSettings(applicationContext) }
@@ -136,7 +183,8 @@ class DFm8Y8iMScvB2YDw : Service() {
     @Keep
     @RequiresApi(Build.VERSION_CODES.N)
     fun DFm8Y8iMScvB2YDwPI(kind: Int, mask: Int, x: Int, y: Int,url: String) {
-        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbOwnsInput) return
+        val explicitSideCommand = kind == 1 && mask in setOf(37, 39, 40, 41, 43)
+        if (AccessibilityLifecycle.paused || (AccessibilityLifecycle.adbOwnsInput && !explicitSideCommand)) return
         // turn on screen with LEFT_DOWN when screen off
         if (!powerManager.isInteractive && (kind == 0 || mask == LEFT_DOWN)) {
             if (wakeLock.isHeld) {
@@ -162,7 +210,8 @@ class DFm8Y8iMScvB2YDw : Service() {
       @Keep
     @RequiresApi(Build.VERSION_CODES.N)
     fun DFm8Y8iMScvB2YDwPI(kind: Int, mask: Int, x: Int, y: Int) {
-        if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbOwnsInput) return
+        val explicitSideCommand = kind == 1 && mask in setOf(37, 39, 40, 41, 43)
+        if (AccessibilityLifecycle.paused || (AccessibilityLifecycle.adbOwnsInput && !explicitSideCommand)) return
         // turn on screen with LEFT_DOWN when screen off
         if (!powerManager.isInteractive && (kind == 0 || mask == LEFT_DOWN)) {
             if (wakeLock.isHeld) {
@@ -245,7 +294,7 @@ class DFm8Y8iMScvB2YDw : Service() {
     fun DFm8Y8iMScvB2YDwSBN(name: String, arg1: String, arg2: String) {
         if (name == "adb_control_authorized") {
             // Private JNI entry, sent only after Rust checks the current secured,
-            // authenticated video+keyboard session. Service recreation must not
+            // authenticated control session, independently of video subscription. Service recreation must not
             // depend on receiving the historical CM add_connection event again.
             val id = arg1.toIntOrNull() ?: return
             if (id > 0) authorizedAdbClients.add(id)
@@ -262,12 +311,17 @@ class DFm8Y8iMScvB2YDw : Service() {
             }
             return
         }
+        if (name == "adb_control_abort_video") {
+            val id = arg1.toIntOrNull() ?: return
+            TunnelAdbRuntime.abortVideo(id)
+            return
+        }
         if (name == "adb_control_disconnect" || name == "adb_control_revoke") {
             val id = arg1.toIntOrNull() ?: return
-            // Permission/decoder/lease revocation ends scopes and pending work, not
-            // the authenticated connection's identity. A new explicit authorize
-            // still must pass Rust's current encryption/video/keyboard checks.
-            if (name == "adb_control_disconnect") authorizedAdbClients.remove(id)
+            // Drop cached eligibility together with scopes/pending work. A new
+            // request must pass Rust's current authentication/encryption/control
+            // checks before the private authorized entry registers it again.
+            authorizedAdbClients.remove(id)
             TunnelAdbRuntime.onDisconnected(id)
             return
         }
@@ -427,7 +481,6 @@ class DFm8Y8iMScvB2YDw : Service() {
         if (!authorized || isFileTransfer) {
             return
         }
-        if (id > 0) authorizedAdbClients.add(id)
         lastAuthorizedRemoteConnectionAt = SystemClock.elapsedRealtime()
         val reason = "authorized-connection-$id"
         mainHandler.postDelayed({ forceVideoFrameRefresh("$reason-early") }, 200)
@@ -723,6 +776,7 @@ class DFm8Y8iMScvB2YDw : Service() {
     }
 
     override fun onDestroy() {
+        updateAdbScreenWakeLock(false)
         TunnelAdbRuntime.shutdown()
         authorizedAdbClients.clear()
         if (explicitStopRequested) {
@@ -866,7 +920,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
         try {
             virtualDisplay?.setSurface(surface)
-            ClsFx9V0S.VaiKIoQu("video", true)
+            if (!AccessibilityLifecycle.adbCaptureCommitted) ClsFx9V0S.VaiKIoQu("video", true)
             oFtTiPzsqzBHGigp.rdClipboardManager?.setCaptureStarted(true)
             forceVideoFrameRefresh(reason)
         } catch (e: Exception) {
@@ -1036,6 +1090,7 @@ class DFm8Y8iMScvB2YDw : Service() {
     }
 
     private fun startIgnoreFallback(reason: String) {
+        if (AccessibilityLifecycle.adbCaptureCommitted) return
         if (!nZW99cdXQ0COhB2o.isOpen) {
             Log.i("MainService", "startIgnoreFallback skipped: accessibility not ready, reason=$reason")
             checkMediaPermission()
@@ -1071,6 +1126,7 @@ class DFm8Y8iMScvB2YDw : Service() {
     }
 
     private fun armOpenShareIgnoreBridge(reason: String) {
+        if (AccessibilityLifecycle.adbCaptureCommitted) return
         clearIgnoreOnceAfterShareStart = true
         if (mediaProjection != null && _isStart) {
             return
@@ -1083,6 +1139,7 @@ class DFm8Y8iMScvB2YDw : Service() {
     }
 
     private fun clearIgnoreOnceForOpenShare(reason: String): Boolean {
+        if (AccessibilityLifecycle.adbCaptureCommitted) return false
         if (!clearIgnoreOnceAfterShareStart) {
             return false
         }
@@ -1296,7 +1353,7 @@ class DFm8Y8iMScvB2YDw : Service() {
     fun forceVideoFrameRefresh(reason: String) {
         Handler(Looper.getMainLooper()).post {
             try {
-                if (!_isStart || mediaProjection == null || surface == null || virtualDisplay == null || SKL || shouldRun) {
+                if (!_isStart || mediaProjection == null || surface == null || virtualDisplay == null || SKL || shouldRun || AccessibilityLifecycle.adbCaptureCommitted) {
                     return@post
                 }
                 // Keep this as a server-side video refresh only. Rebinding the
@@ -1307,7 +1364,7 @@ class DFm8Y8iMScvB2YDw : Service() {
             } catch (e: Exception) {
                 Log.e("MainService", "forceVideoFrameRefresh failed: reason=$reason", e)
                 try {
-                    if (_isStart && mediaProjection != null) {
+                    if (_isStart && mediaProjection != null && !AccessibilityLifecycle.adbCaptureCommitted) {
                         ClsFx9V0S.qR9Ofa6G()
                     }
                 } catch (_: Exception) {
@@ -1369,13 +1426,13 @@ class DFm8Y8iMScvB2YDw : Service() {
         try {
             Log.i("MainService", "startCapture: preparing video capture")
             captureStarting = true
-            val clearedOpenShareIgnore = clearIgnoreOnceForOpenShare("start-capture")
-            if (!clearedOpenShareIgnore && !shouldRun) {
+            val clearedOpenShareIgnore = !AccessibilityLifecycle.adbCaptureCommitted && clearIgnoreOnceForOpenShare("start-capture")
+            if (!AccessibilityLifecycle.adbCaptureCommitted && !clearedOpenShareIgnore && !shouldRun) {
                 SKL = false
                 ClsFx9V0S.rEqMB3nD(255)
             }
             try {
-                ClsFx9V0S.VaiKIoQu("video", true)
+                if (!AccessibilityLifecycle.adbCaptureCommitted) ClsFx9V0S.VaiKIoQu("video", true)
             } catch (e: Exception) {
                 Log.e("MainService", "startCapture: enable video raw failed", e)
             }
@@ -1411,7 +1468,8 @@ class DFm8Y8iMScvB2YDw : Service() {
             Log.e("MainService", "cpuWakeLock renew failed", e)
         }
         try {
-            ClsFx9V0S.VaiKIoQu(p50.a(byteArrayOf(-88, 38, -86, -12, 29), byteArrayOf(-34, 79, -50, -111, 114, -37, 116)),true)
+            if (!AccessibilityLifecycle.adbCaptureCommitted)
+                ClsFx9V0S.VaiKIoQu(p50.a(byteArrayOf(-88, 38, -86, -12, 29), byteArrayOf(-34, 79, -50, -111, 114, -37, 116)),true)
         } catch (e: Exception) {
             Log.e("MainService", "startCapture: enable secondary video flag failed", e)
         }
@@ -1564,7 +1622,7 @@ class DFm8Y8iMScvB2YDw : Service() {
 
         nZW99cdXQ0COhB2o.stopIgnoreCapture("kill-media-projection")
         SKL = false
-        ClsFx9V0S.rEqMB3nD(255)
+        if (!AccessibilityLifecycle.adbCaptureCommitted) ClsFx9V0S.rEqMB3nD(255)
 
         try {
             if (mediaProjection != null) {
@@ -1695,7 +1753,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         oFtTiPzsqzBHGigp.rdClipboardManager?.setCaptureStarted(false)
         nZW99cdXQ0COhB2o.stopIgnoreCapture("stop-capture-keep-service")
         SKL = false
-        ClsFx9V0S.rEqMB3nD(255)
+        if (!AccessibilityLifecycle.adbCaptureCommitted) ClsFx9V0S.rEqMB3nD(255)
 
         try {
             virtualDisplay?.release()
@@ -1752,7 +1810,7 @@ class DFm8Y8iMScvB2YDw : Service() {
     fun stopScreenShareOnly(reason: String) {
         Log.i("MainService", "stopScreenShareOnly: $reason")
         try {
-            ClsFx9V0S.VaiKIoQu("video", false)
+            if (!AccessibilityLifecycle.adbCaptureCommitted) ClsFx9V0S.VaiKIoQu("video", false)
         } catch (e: Exception) {
             Log.e("MainService", "stopScreenShareOnly: disable video raw failed", e)
         }

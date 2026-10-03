@@ -47,3 +47,7 @@
 ## 2026-10-03 T005 会话生命周期
 
 Tunnel自有AdbWire升级VERSION3并同步HMAC域：Bootstrap durationSeconds=0表示生产会话持续至EOF/撤销/退出/故障，无一小时截止；1—3600保留有限诊断。Server.captureStarted只取消生产使用期限，启动/心跳/操作/写阻塞watchdog仍保留。P0仍20秒helper/10秒采样。上述修改不是upstream scrcpy原版行为；实际产物由本地source hash/manifest确定，二进制与设备验收NOT_RUN。
+
+## 协议 4 与黑屏遮罩
+
+Tunnel 自有 Bootstrap 增加 initialMode，记录从 70 扩为 74 字节；新增 OVERLAY_BLACK 固定操作和 CAP_OVERLAY，APK/helper/Gradle/供应清单同步为协议 4。黑屏侧按钮不再调用物理 power 操作。BlackOverlay 使用独立 shell SurfaceControl 色层及 setSkipScreenshot；依据 [AOSP Android 12 SurfaceControl](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android12-release/core/java/android/view/SurfaceControl.java) 和 [Android 16 固定 tag](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/java/android/view/SurfaceControl.java) 的截图、镜像与录制排除语义自行实现，未复制上游文件。隐藏 API 运行时反射探测；不支持则返回失败，不使用 secure layer 或物理关屏替代。源码核对不代表 OEM 真机验证。

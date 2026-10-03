@@ -32,6 +32,7 @@ final class ShellAutomation implements AutoCloseable {
     private UiAutomation automation;
     private DisplayCapture display;
     private final DisplayPower power = new DisplayPower();
+    private final BlackOverlay overlay = new BlackOverlay();
     private long touchDown;
     private float touchX, touchY;
     private final Map<Integer, Long> pressedKeys = new HashMap<>();
@@ -49,6 +50,7 @@ final class ShellAutomation implements AutoCloseable {
         display.snapshot();
         capabilities = AdbWire.CAP_INPUT;
         if (power.probe()) capabilities |= AdbWire.CAP_DISPLAY;
+        if (overlay.prepare()) capabilities |= AdbWire.CAP_OVERLAY;
     }
 
     int capabilities() { return capabilities; }
@@ -120,6 +122,10 @@ final class ShellAutomation implements AutoCloseable {
                     boolean powered = power.set(command.a == 1);
                     if (!powered) capabilities &= ~AdbWire.CAP_DISPLAY;
                     return result(command, powered ? AdbCommands.OK : AdbCommands.UNSUPPORTED);
+                case AdbCommands.OVERLAY_BLACK:
+                    boolean covered = overlay.set(command.a == 1, display.snapshot().layerStack);
+                    if (!covered) capabilities &= ~AdbWire.CAP_OVERLAY;
+                    return result(command, covered ? AdbCommands.OK : AdbCommands.UNSUPPORTED);
                 case AdbCommands.RELEASE_INPUT:
                     releaseInput(); return result(command, AdbCommands.OK);
                 default: return result(command, AdbCommands.REJECTED);
@@ -248,6 +254,7 @@ final class ShellAutomation implements AutoCloseable {
 
     @Override public void close() {
         releaseInput();
+        overlay.close();
         power.close();
         capabilities = 0;
         if (automation != null) {

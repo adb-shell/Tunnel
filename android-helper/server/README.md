@@ -10,7 +10,8 @@
 | `VideoEncoder.java` | 硬件 H264 Surface encoder、CSD/IDR、旋转重建和源切换 |
 | `ShellAutomation.java` | 独立 UiAutomation、固定输入、截图、节点和 semantic Canvas |
 | `BitmapSurface.java` | bitmap → EGL/GLES → encoder Surface；video 线程独占 GL |
-| `DisplayPower.java` | display 0 的 physical token/power；仅恢复本实例关闭的屏幕 |
+| `BlackOverlay.java` | shell 黑色合成层；SKIP_SCREENSHOT 排除远端录制，不建立输入窗口 |
+| `DisplayPower.java` | 保留的 display 0 physical power 原语；侧栏黑屏不使用它 |
 | `H264AnnexB.java` | 有界 SPS/PPS/IDR 与 access unit 格式检查 |
 
 编译输入：本目录和共享 `../protocol/src/main/java`，Java 8、SDK API 34、D8 min-api 30。无额外 Java 库、NDK 或完整 scrcpy SDK。来源和固定 commit 见 [PROVENANCE](PROVENANCE.md)；产物必须带 [NOTICE](NOTICE) 和 [LICENSE.scrcpy](LICENSE.scrcpy)。
@@ -28,8 +29,8 @@ APK listener 只能绑定 `127.0.0.1`。helper 依次连接 VIDEO、CONTROL，�
 - live：non-secure display mirror → hardware H264。
 - snapshot：UiAutomation screenshot → bounded bitmap → EGL → 同一 H264 wire。
 - hierarchy：UiAutomation 独立节点 → 有界 semantic Canvas → EGL → 同一 H264 wire。它是结构图，不是受保护像素捕获；password 文本不输出。
-- 单一 `captureMode` 互斥三者。选择 alternate 先取得真实 bitmap，失败保留当前模式；后续 provider 丢失退回 live。EGL/codec 初始化失败则终止 helper，由 endpoint 回退已有 MediaProjection 或提示本机操作。
-- `baseMode=live/stopped` 与唯一 screenshot/hierarchy override 分离；关共享只停止 live，保留 helper/control。关闭当前 override 回 base，关闭非当前 override 为 no-op。base 已停止时 provider 丢失也回暂停，不能偷偷开启 live。暂停丢弃迟到帧并冻结输入；VIDEO read 无 socket idle timeout，由独立 control 心跳和未暂停 10 秒无帧 watchdog 取消。恢复必重建 codec、发新 revision/CONFIG 并走新 network epoch 首帧事务。
+- 单一 `captureMode` 互斥三者。选择 alternate 先取得真实 bitmap，失败保留当前模式；后续 provider 丢失或 EGL/codec 失败终止 helper，endpoint 冻结画面/输入；只有显式关闭 ADB 投屏才恢复已有 MediaProjection。
+- 侧栏开/关共享只操作普通 MediaProjection，不选择 helper paused。Bootstrap initialMode=3 是无视频的辅助控制实例，用于未开启视频时的黑罩；随后启视频先关闭辅助实例并等待同一个 transport lease 释放。VIDEO read 无 socket idle timeout，由独立 control 心跳和未暂停 10 秒无帧 watchdog 取消。换源重建 codec、发新 revision/CONFIG 并走新 network epoch 首帧事务。
 - VIDEO_CONFIG flags 标识实际 helper source；源/尺寸/rotation 变化重建 codec、增加 revision、释放按住输入。Runtime 先冻结输入并通知 RECONFIGURE，Rust 给新 network epoch，然后发送 CONFIG/IDR。只有 PC decode ready → Activate → 真实 Presented ACK 后才 COMMITTED。收到 config、socket 通或服务活着均不算首帧。
 - 不请求 secure display/buffer，不承诺 FLAG_SECURE、DRM 或 OEM 安全层可见。截图和树可用性按实际 API 结果变化。
 
@@ -41,7 +42,7 @@ VIDEO packet 拷贝 codec buffer，outputBuffer 总在 finally 释放；截图�
 
 停止释放输入、自己的 overlay/A11y pause、mirror/codec/GL/socket，关闭 UiAutomation，恢复自己关闭的物理 display；不清配对、不 kill-server、不重启 APK/core。清理 native binder/codec 卡住时 watchdog 最终只终止 helper PID。此时 physical display 恢复仍需真机验证，不能保证被杀死的 Java finally 能执行；物理电源键是本机恢复路径。
 
-屏幕电源以反射签名和 display0 physical address 识别；失败撤销 capability，不注入 POWER toggle。普通 APK overlay 不能可靠区分物理触摸与 ADB 注入，因此防触默认由宿主返回不支持，不伪报成功。无障碍暂停只在 ADB COMMITTED 且输入可用时允许；disableSelf 后的重新开启走本机设置确认，避免覆盖其他服务配置。
+屏幕电源以反射签名和 display0 physical address 识别；失败撤销 capability，不注入 POWER toggle。普通 APK overlay 不能可靠区分物理触摸与 ADB 注入，因此防触默认由宿主返回不支持，不伪报成功。无障碍管理按当前会话独立授权执行，不依赖视频是否开启；disableSelf 后的重新开启走本机设置确认，避免覆盖其他服务配置。
 
 ## 服务器/真机验证需求（均未执行）
 
@@ -50,5 +51,5 @@ VIDEO packet 拷贝 codec buffer，outputBuffer 总在 finally 释放；截图�
 3. 两台目标 Android 16 的 live/静态帧/旋转/折叠、CONFIG/IDR 解码和实际呈现 ACK；旧源不抢帧、无双重输入。
 4. 无障碍共存/暂停/恢复/disableSelf、本机重新开启；拒绝输入、按住时断线和旋转不能留下 stuck key/touch。
 5. snapshot/hierarchy 切换、无节点/截图失败、password/FLAG_SECURE 页面、EGL 失败和源回退。
-6. display0 off/on、helper EOF/应用退出/被杀、物理键唤醒与恢复；防触保持不可用直至有独立可靠 provider。
+6. 黑罩开/关、helper EOF/应用退出/被杀时遮罩清理、常亮锁释放、物理屏幕黑而远端画面保持可见；防触保持不可用直至有独立可靠 provider。
 7. 健康连续运行超过一小时/持续重连和 100 次启动取消：fd/thread/native/GPU/bitmap 不持续增长、不残留 helper。

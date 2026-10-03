@@ -8,6 +8,7 @@ import '../../common/widgets/chat_page.dart';
 import '../../models/platform_model.dart';
 import '../../models/state_model.dart';
 import 'connection_page.dart';
+import 'adb_page.dart';
 
 abstract class PageShape extends Widget {
   final String title = "";
@@ -29,6 +30,7 @@ class HomePageState extends State<HomePage> {
   int get selectedIndex => _selectedIndex;
   late final PageController _pageController;
   final List<PageShape> _pages = [];
+  final _adbVisible = ValueNotifier<bool>(false);
   int _chatPageTabIndex = -1;
   bool get isChatPageCurrentTab => isAndroid
       // ? _selectedIndex == _chatPageTabIndex
@@ -50,6 +52,7 @@ class HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    _adbVisible.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -68,6 +71,7 @@ class HomePageState extends State<HomePage> {
     // }
     if (isAndroid && !bind.isOutgoingOnly()) {
       _pages.add(ServerPage());
+      _pages.add(AdbPage(active: _adbVisible));
       // _chatPageTabIndex = _pages.length;
       //_pages.addAll([ChatPage(type: ChatPageType.mobileMain), ServerPage()]);
     }
@@ -90,6 +94,7 @@ class HomePageState extends State<HomePage> {
           if (_selectedIndex != 0) {
             setState(() {
               _selectedIndex = 0;
+              _adbVisible.value = false;
             });
             _pageController.animateToPage(0,
                 duration: const Duration(milliseconds: 220),
@@ -106,6 +111,18 @@ class HomePageState extends State<HomePage> {
             title: appTitle(),
             actions: _pages.elementAt(_selectedIndex).appBarActions,
           ),
+          bottomNavigationBar: isAndroid && _pages.length == 2
+              ? BottomNavigationBar(
+                  currentIndex: _selectedIndex,
+                  items: const [
+                    BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: '主页'),
+                    BottomNavigationBarItem(icon: Icon(Icons.terminal), label: 'LADB'),
+                  ],
+                  onTap: (index) => _pageController.animateToPage(index,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut),
+                )
+              : null,
           /*
           bottomNavigationBar: BottomNavigationBar(
             key: navigationBarKey,
@@ -135,6 +152,7 @@ class HomePageState extends State<HomePage> {
             onPageChanged: (index) {
               setState(() {
                 _selectedIndex = index;
+                _adbVisible.value = index == 1;
               });
             },
             children: _pages,
