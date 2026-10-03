@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Supply fixed upstream Windows assets on the formal build host; never install drivers."""
+"""Validate the runtime; supply optional Windows assets only for the full profile."""
 import argparse
 import hashlib
 import json
@@ -239,6 +239,19 @@ def injection(spec, options, cache):
     return dll, provenance
 
 
+def write_receipt(options, lock_path, sources):
+    files = []
+    for path in options.stage.rglob('*'):
+        if path.is_file() and (path.name in {'WindowInjection.dll', 'printer_driver_adapter.dll'}
+                              or 'usbmmidd_v2' in path.parts or 'RustDeskPrinterDriver' in path.parts):
+            files.append({'path': path.relative_to(options.stage).as_posix(), 'sha256': sha256(path)})
+    receipt = {'format': 1, 'profile': options.profile, 'lockSha256': sha256(lock_path),
+               'sources': sources, 'files': sorted(files, key=lambda item: item['path']),
+               'note': 'Runtime profile preserves Release files without acquiring optional assets. '
+                       'Driver installation/signature/OS validation is a separate server/device check.'}
+    (options.stage / 'windows-assets.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--stage', type=Path, required=True)
@@ -246,11 +259,12 @@ def main():
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--offline', action='store_true')
     parser.add_argument('--injection-dll')
+    parser.add_argument('--profile', choices=('runtime', 'full'), default='runtime',
+                        help='runtime: no extra downloads; full: virtual display, printing and privacy assets')
     options = parser.parse_args()
     options.stage = options.stage.resolve(strict=True)
     options.root = options.root.resolve(strict=True)
     cache = options.cache.resolve()
-    cache.mkdir(parents=True, exist_ok=True)
     if cache == options.stage or options.stage in cache.parents or cache in options.stage.parents:
         raise ValueError('Asset cache and staging directory must be separate')
     lock_path = Path(__file__).with_name('windows-assets.lock.json')
@@ -258,6 +272,13 @@ def main():
     require_x64_pe(options.stage / 'tunnel.exe')
     for name in ('tunnel.dll', 'flutter_windows.dll', 'dylib_virtual_display.dll'):
         require_x64_dll(options.stage / name)
+    if options.profile == 'runtime':
+        if options.injection_dll:
+            raise ValueError('--injection-dll requires --profile full')
+        write_receipt(options, lock_path, {})
+        print('Windows asset profile: runtime; optional driver downloads and injection build skipped', flush=True)
+        return
+    cache.mkdir(parents=True, exist_ok=True)
     archives, sources = {}, {}
     for kind in ('usbmmidd', 'printer', 'adapter', 'checksums'):
         archives[kind], sources[kind] = acquired(lock[kind], cache, options.offline)
@@ -281,14 +302,7 @@ def main():
     target = options.stage / 'WindowInjection.dll'
     if dll.resolve() != target.resolve():
         shutil.copy2(dll, target)
-    files = []
-    for path in options.stage.rglob('*'):
-        if path.is_file() and (path.name in {'WindowInjection.dll', 'printer_driver_adapter.dll'}
-                              or 'usbmmidd_v2' in path.parts or 'RustDeskPrinterDriver' in path.parts):
-            files.append({'path': path.relative_to(options.stage).as_posix(), 'sha256': sha256(path)})
-    receipt = {'format': 1, 'lockSha256': sha256(lock_path), 'sources': sources, 'files': files,
-               'note': 'Files staged only; driver installation/signature/OS validation is a separate server/device check.'}
-    (options.stage / 'windows-assets.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+    write_receipt(options, lock_path, sources)
     print('Windows driver and injection assets staged successfully', flush=True)
 
 

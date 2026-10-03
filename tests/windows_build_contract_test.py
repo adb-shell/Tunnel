@@ -1,13 +1,16 @@
 """Isolated server-side contract tests: no Cargo, Flutter, downloads or driver install."""
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import struct
 import unittest
+from unittest import mock
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+BROTLI_AVAILABLE = importlib.util.find_spec('brotli') is not None
 
 
 def load(name, relative):
@@ -45,6 +48,43 @@ def synthetic_amyuni(folder):
 
 
 class WindowsBuildContracts(unittest.TestCase):
+    def test_runtime_profile_needs_no_optional_assets_cache_or_network(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); stage = root / 'stage'; stage.mkdir()
+            cache = root / 'no-cache'
+            synthetic_pe(stage / 'tunnel.exe')
+            for name in ('tunnel.dll', 'flutter_windows.dll', 'dylib_virtual_display.dll'):
+                synthetic_pe(stage / name, dll=True)
+            (stage / 'data').mkdir()
+            (stage / 'data/app.so').write_bytes(b'flutter-app')
+            before = {p.relative_to(stage): p.read_bytes() for p in stage.rglob('*') if p.is_file()}
+            argv = ['windows_assets.py', '--stage', str(stage), '--root', str(ROOT),
+                    '--cache', str(cache), '--offline']
+            with mock.patch('sys.argv', argv), mock.patch.object(assets, 'acquired') as download, \
+                    mock.patch.object(assets, 'injection') as injection:
+                assets.main()
+                download.assert_not_called()
+                injection.assert_not_called()
+            self.assertFalse(cache.exists())
+            for name, content in before.items():
+                self.assertEqual((stage / name).read_bytes(), content)
+            receipt = json.loads((stage / 'windows-assets.json').read_text())
+            self.assertEqual(receipt['profile'], 'runtime')
+            self.assertEqual(receipt['sources'], {})
+            self.assertEqual(receipt['files'], [])
+
+    def test_full_profile_still_rejects_unavailable_assets(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); stage = root / 'stage'; stage.mkdir()
+            synthetic_pe(stage / 'tunnel.exe')
+            for name in ('tunnel.dll', 'flutter_windows.dll', 'dylib_virtual_display.dll'):
+                synthetic_pe(stage / name, dll=True)
+            argv = ['windows_assets.py', '--stage', str(stage), '--root', str(ROOT),
+                    '--cache', str(root / 'cache'), '--profile', 'full', '--offline']
+            with mock.patch('sys.argv', argv), self.assertRaisesRegex(ValueError, 'Offline cache is missing'):
+                assets.main()
+            self.assertFalse((stage / 'windows-assets.json').exists())
+
     def test_amyuni_umdf_package_requires_no_vendor_sys_and_keeps_x64_layout(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder); source = root / 'source'; stage = root / 'stage'
@@ -117,6 +157,7 @@ class WindowsBuildContracts(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         portable.require_windows_x64_executable(artifact)
 
+    @unittest.skipUnless(BROTLI_AVAILABLE, 'Brotli not installed; compression checks require the build host')
     def test_payload_must_match_embedded_bytes(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -133,6 +174,7 @@ class WindowsBuildContracts(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 portable.verify_embedded_payload(image, payload)
 
+    @unittest.skipUnless(BROTLI_AVAILABLE, 'Brotli not installed; compression checks require the build host')
     def test_required_driver_cannot_be_an_empty_directory(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder); stage = root / 'stage'; stage.mkdir()

@@ -137,6 +137,8 @@ def make_parser():
         help='Skip cargo build process, only flutter version + Linux supported currently'
     )
     if windows:
+        parser.add_argument('--windows-assets', choices=('runtime', 'full'), default='runtime',
+                            help='Optional Windows components: runtime (no downloads) or full')
         parser.add_argument(
             '--skip-portable-pack',
             action='store_true',
@@ -498,7 +500,7 @@ def windows_release(root):
     return available[0]
 
 
-def build_flutter_windows(version, features, skip_portable_pack):
+def build_flutter_windows(version, features, skip_portable_pack, asset_profile='runtime'):
     root = Path.cwd().resolve()
     if os.environ.get('CARGO_TARGET_DIR'):
         os.environ['CARGO_TARGET_DIR'] = str((root / os.environ['CARGO_TARGET_DIR']).resolve())
@@ -528,8 +530,8 @@ def build_flutter_windows(version, features, skip_portable_pack):
     cache = Path(os.environ.get('TUNNEL_WINDOWS_ASSET_CACHE', str(
         Path(os.environ.get('DEVENV', r'C:\DevEnv')) / 'downloads/rustdesk-drivers')))
     asset_command = [sys.executable, str(root / 'scripts/windows_assets.py'), '--stage', str(release),
-                     '--cache', str(cache), '--root', str(root)]
-    if os.environ.get('TUNNEL_WINDOW_INJECTION_DLL'):
+                     '--cache', str(cache), '--root', str(root), '--profile', asset_profile]
+    if asset_profile == 'full' and os.environ.get('TUNNEL_WINDOW_INJECTION_DLL'):
         asset_command += ['--injection-dll', os.environ['TUNNEL_WINDOW_INJECTION_DLL']]
     pip_command = [sys.executable, '-m', 'pip', 'install', '-r', str(portable / 'requirements.txt')]
     if os.environ.get('TUNNEL_BUILD_OFFLINE') == '1':
@@ -540,9 +542,12 @@ def build_flutter_windows(version, features, skip_portable_pack):
     pack_command = [sys.executable, str(portable / 'generate.py'), '-f', str(release), '-o', str(portable),
                     '-e', str(release / 'tunnel.exe'), '--target', 'x86_64-pc-windows-msvc',
                     '--dist', str(root / f'tunnel-{version}-install.exe')]
-    for required in ('tunnel.dll', 'flutter_windows.dll', 'data/app.so', 'dylib_virtual_display.dll',
-                     'WindowInjection.dll', 'usbmmidd_v2/usbmmIdd.inf',
-                     'drivers/RustDeskPrinterDriver/RustDeskPrinterDriver.inf', 'printer_driver_adapter.dll', 'windows-assets.json'):
+    required_payload = ['tunnel.dll', 'flutter_windows.dll', 'data/app.so', 'data/icudtl.dat',
+                        'data/flutter_assets', 'dylib_virtual_display.dll', 'windows-assets.json']
+    if asset_profile == 'full':
+        required_payload += ['WindowInjection.dll', 'usbmmidd_v2/usbmmIdd.inf',
+                             'drivers/RustDeskPrinterDriver/RustDeskPrinterDriver.inf', 'printer_driver_adapter.dll']
+    for required in required_payload:
         pack_command += ['--require', required]
     subprocess.run(pack_command, check=True)
 
@@ -573,7 +578,7 @@ def main():
     external_resources(flutter, args, res_dir)
     if windows:
         if flutter:
-            build_flutter_windows(version, features, args.skip_portable_pack)
+            build_flutter_windows(version, features, args.skip_portable_pack, args.windows_assets)
             return
         # build virtual display dynamic library
         os.chdir('libs/virtual_display/dylib')

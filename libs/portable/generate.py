@@ -13,8 +13,6 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
-import brotli
-
 # Keep in sync with IDENTIFIER in src/bin_reader.rs.
 PACKAGE_MARKER = b'tunnel'
 MAX_FIELD_LENGTH = (1 << 32) - 1
@@ -41,6 +39,11 @@ def checked_relative(value):
 
 
 def write_payload(folder, output_folder, executable, level, required):
+    try:
+        import brotli
+    except ModuleNotFoundError as error:
+        raise RuntimeError('Brotli is required for packaging; install libs/portable/requirements.txt '
+                           'with the same Python used by the build script') from error
     for name in required:
         target = folder / checked_relative(name)
         target.resolve(strict=True).relative_to(folder)

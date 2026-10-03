@@ -3,6 +3,8 @@
 param(
     [string]$SourceRoot = (Split-Path -Parent $PSScriptRoot),
     [string]$ReleaseDir,
+    [ValidateSet('runtime', 'full')]
+    [string]$AssetProfile = 'runtime',
     [switch]$PackageOnly,
     [switch]$Offline,
     [switch]$Pause,
@@ -10,6 +12,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$AssetProfile = $AssetProfile.ToLowerInvariant()
 $root = $null
 $output = $null
 $runId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
@@ -21,6 +24,7 @@ $buildLock = $null
 $sourceCommit = 'unavailable'
 $sourceTrackedChanges = $null
 $pairingSourceHash = $null
+$buildScriptHashes = @{}
 
 function Write-NativeLine([object]$Record) {
     # PS 5.1 wraps native stderr in ErrorRecord. Render the actual diagnostic,
@@ -123,6 +127,13 @@ try {
     finally { $ErrorActionPreference = $previous }
     Write-Host "[INFO] Source commit: $sourceCommit"
     Write-Host "[INFO] Tracked source changes: $sourceTrackedChanges"
+    Write-Host "[INFO] Windows asset profile: $AssetProfile"
+    foreach ($relative in @('scripts/windows-build.ps1', 'scripts/windows_assets.py', 'libs/portable/generate.py')) {
+        $scriptPath = Join-Path $root $relative
+        Require-File $scriptPath
+        $buildScriptHashes[$relative] = (Get-FileHash -LiteralPath $scriptPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        Write-Host "[INFO] Script SHA256 $relative : $($buildScriptHashes[$relative])"
+    }
     $pairingFile = Join-Path $root 'flutter\lib\desktop\widgets\android_adb_pairing_dialog.dart'
     if (Test-Path -LiteralPath $pairingFile -PathType Leaf) {
         $pairingSourceHash = (Get-FileHash -LiteralPath $pairingFile -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -220,10 +231,13 @@ try {
     $cache = if ($env:TUNNEL_WINDOWS_ASSET_CACHE) { $env:TUNNEL_WINDOWS_ASSET_CACHE } else {
         Join-Path $env:DEVENV 'downloads\rustdesk-drivers'
     }
-    $assetArgs = @((Join-Path $PSScriptRoot 'windows_assets.py'), '--stage', $stage, '--cache', $cache, '--root', $root)
+    $assetArgs = @((Join-Path $PSScriptRoot 'windows_assets.py'), '--stage', $stage, '--cache', $cache, '--root', $root,
+        '--profile', $AssetProfile)
     if ($Offline) { $assetArgs += '--offline' }
-    if ($env:TUNNEL_WINDOW_INJECTION_DLL) { $assetArgs += @('--injection-dll', $env:TUNNEL_WINDOW_INJECTION_DLL) }
-    Write-Host '[STEP] Prepare driver and native assets'
+    if ($AssetProfile -eq 'full' -and $env:TUNNEL_WINDOW_INJECTION_DLL) {
+        $assetArgs += @('--injection-dll', $env:TUNNEL_WINDOW_INJECTION_DLL)
+    }
+    Write-Host "[STEP] Validate runtime and prepare assets ($AssetProfile)"
     Invoke-Checked 'python' $assetArgs
 
     $portable = Join-Path $root 'libs\portable'
@@ -244,9 +258,13 @@ try {
             }
         }
         $packArgs = @('generate.py', '-f', $stage, '-o', $portable, '-e', (Join-Path $stage 'tunnel.exe'), '--dist', $final)
-        foreach ($required in @('tunnel.dll', 'flutter_windows.dll', 'data/app.so', 'data/icudtl.dat', 'data/flutter_assets',
-            'dylib_virtual_display.dll', 'WindowInjection.dll', 'usbmmidd_v2/usbmmIdd.inf',
-            'drivers/RustDeskPrinterDriver/RustDeskPrinterDriver.inf', 'printer_driver_adapter.dll', 'windows-assets.json')) {
+        $requiredPayload = @('tunnel.dll', 'flutter_windows.dll', 'data/app.so', 'data/icudtl.dat', 'data/flutter_assets',
+            'dylib_virtual_display.dll', 'windows-assets.json')
+        if ($AssetProfile -eq 'full') {
+            $requiredPayload += @('WindowInjection.dll', 'usbmmidd_v2/usbmmIdd.inf',
+                'drivers/RustDeskPrinterDriver/RustDeskPrinterDriver.inf', 'printer_driver_adapter.dll')
+        }
+        foreach ($required in $requiredPayload) {
             $packArgs += @('--require', $required)
         }
         # PackageOnly also needs an x64 extractor, irrespective of the host
@@ -261,6 +279,7 @@ try {
         [ordered]@{
             format = 1; createdAt = (Get-Date).ToString('o'); sourceRoot = $root;
             sourceCommit = $sourceCommit; trackedSourceChanges = $sourceTrackedChanges; adbPairingSourceSha256 = $pairingSourceHash;
+            assetProfile = $AssetProfile; buildScriptSha256 = $buildScriptHashes;
             release = $release; staging = $stage; executable = $final; sha256 = $hash;
             packageOnly = [bool]$PackageOnly; offline = [bool]$Offline; log = $log
         } | ConvertTo-Json | Set-Content -LiteralPath ($final + '.build.json') -Encoding UTF8
