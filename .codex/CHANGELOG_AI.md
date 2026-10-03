@@ -1,5 +1,19 @@
 # Tunnel AI Changelog
 
+## T-2026-10-03-008：ADB配对可靠性与Windows打包
+
+- 修取消后永久失效、共享daemon、首NSD记录、服务重建身份、配对UI焦点/按钮与状态；窗口双入口，检测两行，反馈区分ACK/执行失败。
+- Windows按VS工具集编译WindowInjection、固定x64、核验staging、解压失败传播/窗口提示。保留T007日志修复。
+- 官方LADB文本已下载对照；V0通过，编译/设备/自解压运行未验。详情ADB_RELIABILITY_REPAIR_TASK.md；CE-20261003-T008-01，无提交推送。
+
+## T-2026-10-03-007：Windows窗口提前关闭与诊断修复
+
+- 后续用户日志定位Flutter旧配对窗返回类型错误；test/0720e49已修复，服务器源版本未绑定。PS增加源码提交/dirty/hash与native stderr消息显示；CE-20261003-T007-02，服务器核对与重编待验。
+
+- CMD默认保留窗口，覆盖VS/PS早期失败；NoPause/CI自动化路径，启动日志+构建transcript、原生输出、阶段/失败行、真实退出码与独立清理。
+- V0 Windows PS5.1/PS7解析、CMD路径/标签/源码/链接/diff；未执行构建/下载/测试/Git。真实服务器停止原因仍待用户日志，不声明编译通过。
+- Guide：WINDOWS_BUILD_GUIDE；Task：WINDOWS_BUILD_EXIT_FIX_TASK；Event CE-20261003-T007-01；STATE-20261003-009 / WORK-20261003-013。
+
 ## T-2026-10-03-006：ADB配对窗类型修复
 
 - 修复Android/PC共用Dart编译链中StatefulWidget返回值不满足CustomAlertDialog的问题；私有overlay适配器保留全窗口拖动和取消生命周期。

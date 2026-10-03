@@ -8,6 +8,7 @@ import mmap
 import os
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -102,7 +103,7 @@ def portable_manifest(output_folder):
 def build_portable(output_folder, target):
     command = ['cargo', 'build', '--manifest-path', str(output_folder / 'Cargo.toml'),
                '--package', 'tunnel-portable-packer', '--bin', 'tunnel-portable-packer',
-               '--release', '--message-format=json-render-diagnostics', '--color', 'never']
+               '--release', '--locked', '--message-format=json-render-diagnostics', '--color', 'never']
     if target:
         command.extend(['--target', target])
     print('Building tunnel-portable-packer', flush=True)
@@ -133,6 +134,21 @@ def build_portable(output_folder, target):
     if artifact is None or not artifact.is_file():
         raise RuntimeError('Cargo did not report an existing portable executable')
     return artifact
+
+
+def require_windows_x64_executable(artifact):
+    """PackageOnly must not publish a host-architecture or DLL Cargo artifact."""
+    with artifact.open('rb') as stream:
+        dos = stream.read(64)
+        if len(dos) != 64 or dos[:2] != b'MZ':
+            raise RuntimeError('Portable artifact does not have a Windows PE header')
+        stream.seek(struct.unpack_from('<I', dos, 60)[0])
+        pe = stream.read(24)
+    if len(pe) != 24 or pe[:4] != b'PE\0\0' or struct.unpack_from('<H', pe, 4)[0] != 0x8664:
+        raise RuntimeError('Portable artifact must be a Windows x64 executable')
+    flags = struct.unpack_from('<H', pe, 22)[0]
+    if not flags & 0x0002 or flags & 0x2000:
+        raise RuntimeError('Portable artifact must be an executable, not a DLL')
 
 
 def verify_embedded_payload(artifact, payload):
@@ -182,9 +198,7 @@ def main():
     if artifact.stat().st_size < payload.stat().st_size:
         raise RuntimeError('Reported executable is too small to contain the current payload')
     if os.name == 'nt':
-        with artifact.open('rb') as stream:
-            if stream.read(2) != b'MZ':
-                raise RuntimeError('Portable artifact does not have a Windows PE header')
+        require_windows_x64_executable(artifact)
         payload_hash = verify_embedded_payload(artifact, payload)
         manifest_path = output_folder / 'payload-manifest.json'
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))

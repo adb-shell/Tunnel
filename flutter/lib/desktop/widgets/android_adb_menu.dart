@@ -20,7 +20,7 @@ class AndroidAdbMenu extends StatelessWidget {
         child: PopupMenuButton<String>(
           tooltip: '远程 ADB',
           padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 240),
+          constraints: const BoxConstraints(minWidth: 210),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
           onOpened: () => m.request('status'),
           onSelected: (op) {
@@ -33,17 +33,17 @@ class AndroidAdbMenu extends StatelessWidget {
             }
           },
           itemBuilder: (_) => [
-            PopupMenuItem(value: 'pair_dialog', enabled: !m.usingAdb && !m.busy && !m.inputFrozen,
-              child: const Text('远程 ADB 配对 / 连接授权')),
-            const PopupMenuItem(value: 'status', child: Text('刷新 ADB 能力')),
+            const PopupMenuItem(value: 'pair_dialog',
+              child: Text('远程 ADB 配对…')),
+            const PopupMenuItem(value: 'status', child: Text('刷新状态')),
             const PopupMenuDivider(),
             PopupMenuItem(value: 'start', enabled: !m.busy && !m.pairing.busy &&
                 !m.usingAdb && !m.inputFrozen && m.state['localAdbReady'] == true &&
                 m.consentActive == true,
               child: const Text('开始 ADB 投屏')),
             PopupMenuItem(value: 'stop', enabled: m.usingAdb || m.inputFrozen,
-              child: const Text('退出 ADB 并恢复普通共享')),
-            const PopupMenuItem(value: 'revoke', child: Text('撤销本连接 ADB 授权')),
+              child: const Text('切回普通投屏')),
+            const PopupMenuItem(value: 'revoke', child: Text('撤销 ADB 授权')),
             const PopupMenuDivider(),
             for (final item in const {
               'accessibility_pause': '暂停无障碍运行',
@@ -60,7 +60,7 @@ class AndroidAdbMenu extends StatelessWidget {
               color: m.usingAdb ? MyTheme.button : Colors.grey[800],
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.developer_mode_rounded, color: Colors.white, size: 22),
+            child: const Icon(Icons.adb_rounded, color: Colors.white, size: 21),
           ),
         ),
       );

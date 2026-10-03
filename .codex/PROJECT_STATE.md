@@ -1,7 +1,7 @@
 # Tunnel Project State
 
 Schema Version：`1.0`  
-State Revision：`STATE-20261003-008`
+State Revision：`STATE-20261003-011`
 Last Updated：2026-10-03（Asia/Shanghai）
 Observed At：2026-10-03（Asia/Shanghai）
 Evidence Scope：`repository-observed / V0 / external and runtime verification pending`
@@ -18,10 +18,10 @@ Evidence Scope：`repository-observed / V0 / external and runtime verification p
 | Branch | test（独立worktree） | 本任务只读Git观察；用户选择后续在worktree开发 |
 | ADB实施起点 | `bc50fe5b2061970e4e88ff58bbd76c7827de1159` | 初始干净；后续交付提交由Git log确认 |
 | Source delivery | ADB全链源码、本地配对/native供应、A11y适配、portable及文档；用户授权提交“ADB版本首次测试”并推送origin/test | T-2026-10-03-001；每次会话重查当前HEAD与远端ref |
-| Current source | test；基于da2923e的T006弹窗类型/焦点修复，当前用户授权Git交付“修复编译” | 精确HEAD与origin/test每次会话重新核对；源码/V0，正式重编待验 |
-| Windows build baseline | TUN-BL-2026-10-03-WINDOWS-BUILD；统一CMD/PS入口、固定driver供应、Cargo DLL路径及payload核验 | docs/plans/WINDOWS_BUILD_GUIDE.md；V0，正式服务器NOT_RUN |
+| Current source | test/0720e4964c4868394ca24aa8b30aba9089f8aacf“修复编译”；T007+T008 ADB/PC交互/Windows修复工作树 | T008源码/V0、LADB55文本研究完成，无Git写入；ADB_RELIABILITY_REPAIR_TASK.md |
+| Windows build baseline | TUN-BL-2026-10-03-WINDOWS-BUILD；T007默认pause/启动日志/退出码及source提交/dirty/hash记录 | 用户日志Rust release完成、Flutter旧配对弹窗类型失败、外层1；未到驱动/打包；修订版服务器待验 |
 | Highest completed verification | `V0` repository/document/schema checks | `TEST_MATRIX.md` + task records |
-| Formal build/runtime evidence | 用户服务器Flutter3.24.5在配对弹窗类型处编译失败；修订版 `NOT_RUN / VERIFICATION-REQUIRED` | T006匹配源码根因；用户日志未绑定精确HEAD；本地未执行构建，其他阶段/设备未验 |
+| Formal build/runtime evidence | Android及Windows日志均在旧配对弹窗类型处编译失败；Windows Rust release步骤完成；修订版 `NOT_RUN / VERIFICATION-REQUIRED` | test/0720e49已推送T006修复；日志未绑定服务器HEAD；不能从该失败日志声明修订版或打包通过 |
 | Release readiness | `BLOCKED` | security、external assets、V2—V4、signing/SBOM/rollback gaps |
 
 ## 2. Governance and Knowledge Readiness
@@ -57,7 +57,7 @@ Evidence Scope：`repository-observed / V0 / external and runtime verification p
 - Detailed task history：`TASK_HISTORY.md`。
 - Latest completed AI task：`T-2026-10-02-004`（身份迁移源码/V0；runtime未验）。
 - Current implementation：ADB T-2026-10-03-001承接T-2026-10-02-003；Windows后续T-2026-10-03-003源码/V0修复交付，正式服务器/设备验收待执行；状态以CURRENT_WORK为准。
-- Latest recorded modification event：`CE-20261003-T006-02`（当前用户授权提交/推送“修复编译”；结果以Git核对）。
+- Latest recorded modification event：`CE-20261003-T007-02`（日志定位Flutter旧配对窗类型；补源码身份与stderr显示，重编待验）。
 - Latest architecture amendment：`D-019` / ADR-0017（授权持续至会话结束、生产helper无固定期限）；治理决定D-014仍保持。
 - Architecture decisions：ADR-0014 / D-015由D-017追记用户顺序调整；有限typed远程范围扩展ADR-0007，任意shell仍local-only。
 - Identity decision：ADR-0015 / D-016 accepted；supersedes ADR-0002；新Android包com.tunnel.app、ORG com.tunnel；配置/授权独立，外部broker另行部署，证书未变。

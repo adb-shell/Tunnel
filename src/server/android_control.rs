@@ -409,6 +409,14 @@ mod endpoint {
             request.generation = 0; request.epoch = 0; request.revision = 0;
             request.sequence = 0; request.input_frozen = false;
             drop(state);
+            // MainService may have been recreated while the authenticated Rust
+            // connection stayed alive. Its old CM add_connection notification is
+            // not replayed on recreation. Refresh eligibility only after the
+            // current secure/view/keyboard checks above, never from a peer field.
+            if matches!(request.op.as_str(), "pair" | "authorize")
+                && call_main_service_set_by_name("adb_control_authorized", Some(&conn.to_string()), Some("")).is_err() {
+                return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE"));
+            }
             if !forward(conn, &request) {
                 return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE"));
             }

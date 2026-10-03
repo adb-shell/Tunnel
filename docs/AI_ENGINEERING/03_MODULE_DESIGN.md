@@ -1,5 +1,7 @@
 # Tunnel 模块设计 / Module Design
 
+2026-10-03 T008：配对弹窗首次配对/已配对连接分离，手动连接端口折叠；InputModel本地dialog引用计数释放并阻止远控键盘抓取，关闭后由画布焦点恢复。按钮与mode/pairing可用性同源且显示原因，12秒无手机ACK与90秒执行超时分别报告并等待取消确认。状态面板仅ADB/投屏模式，错误放tooltip。见[修复记录](../plans/ADB_RELIABILITY_REPAIR_TASK.md)，构建/交互待验。
+
 2026-10-03 T006：common.dart::DialogBuilder要求返回CustomAlertDialog；配对窗使用私有_AndroidAdbPairingOverlay子类override build承载原StatefulWidget，保留OverlayDialogManager生命周期和全窗口拖动约束。不能将含LayoutBuilder的完整窗口直接嵌入AlertDialog intrinsic content。修复用户Flutter3.24.5返回类型编译错误；源码/V0，重编待验。[任务](../plans/ADB_PAIRING_DIALOG_BUILD_FIX_TASK.md)。
 
 2026-10-03 T004当前ADB：RemoteAdbPairing单后台worker与独立pairing状态；PC主动请求、端fresh probe后当前conn会话scopes（T005/ADR-0017无固定期限；helper protocol3 duration=0；断连/撤销/退出ADB清理）；旧手机页移除。本机consent旧设计由[ADR-0016](../ADR/0016-pc-owned-adb-pairing-and-session-consent.md)限定替代；视频epoch/帧事务保留。

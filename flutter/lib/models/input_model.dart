@@ -371,7 +371,22 @@ class InputModel {
 
   late final SessionID sessionId;
 
+  int _localDialogDepth = 0;
+
+  /// Local forms must own the keyboard even if a native focus event arrives
+  /// while the remote toolbar's popup route is closing.
+  void beginLocalDialog() {
+    enterOrLeave(false);
+    _localDialogDepth++;
+  }
+
+  void endLocalDialog() {
+    if (_localDialogDepth > 0) _localDialogDepth--;
+    // The remote canvas regains input on its next explicit focus/click.
+  }
+
   bool get keyboardPerm => parent.target!.ffiModel.keyboard &&
+      _localDialogDepth == 0 &&
       !parent.target!.androidModeModel.inputFrozen;
   String get id => parent.target?.id ?? '';
   String? get peerPlatform => parent.target?.ffiModel.pi.platform;
@@ -502,6 +517,7 @@ class InputModel {
   }
 
   KeyEventResult handleRawKeyEvent(RawKeyEvent e) {
+    if (_localDialogDepth > 0) return KeyEventResult.ignored;
     if (parent.target?.androidModeModel.inputFrozen == true) return KeyEventResult.handled;
     if (isViewOnly) return KeyEventResult.handled;
     if (isViewCamera) return KeyEventResult.handled;
@@ -558,6 +574,7 @@ class InputModel {
   }
 
   KeyEventResult handleKeyEvent(KeyEvent e) {
+    if (_localDialogDepth > 0) return KeyEventResult.ignored;
     if (parent.target?.androidModeModel.inputFrozen == true) return KeyEventResult.handled;
     if (isViewOnly) return KeyEventResult.handled;
     if (isViewCamera) return KeyEventResult.handled;
@@ -998,6 +1015,7 @@ class InputModel {
   
 
   void enterOrLeave(bool enter) {
+    if (enter && _localDialogDepth > 0) enter = false;
     toReleaseKeys.release(handleKeyEvent);
     toReleaseRawKeys.release(handleRawKeyEvent);
     _pointerMovedAfterEnter = false;

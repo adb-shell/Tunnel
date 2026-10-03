@@ -1,5 +1,7 @@
 # Tunnel 网络与协议 / Network Protocol
 
+2026-10-03 T008：外部AndroidControl/protobuf不变。Rust仅在pair/authorize通过当前secure/authenticated/video/keyboard门后发送私有JNI `adb_control_authorized`，恢复服务重建后丢失的连接资格；该名称不在peer操作白名单。native回调仍检查连接，断线/撤权清job/grant。PC区分本地提交与手机ACK，不再假报已开始配对。
+
 2026-10-03 T005：外部AndroidControl JSON v1保持；状态consentActive/consentLifetime=session替代倒计时。端内helper wire升级VERSION3、HMAC域与manifest同步，production duration0；断线/退出/撤权撤销scopes。见 [ADR-0017](../ADR/0017-adb-session-lifetime.md)。
 
 2026-10-03 T004：AndroidControl JSON v1新增严格pair(port/code/optionalconnectPort)、authorize(optionalconnectPort)、pair_cancel(pairOperationId)、revoke({})；只有secured/authenticated keyboard+video permission可执行。配对无video lease/epoch，kind=pairing回包不触发视频回滚，operationId/error脱敏关联。断线/撤权cancel及撤销scopes，恢复权限须新显式请求。

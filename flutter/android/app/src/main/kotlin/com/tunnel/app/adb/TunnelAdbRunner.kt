@@ -42,7 +42,7 @@ class TunnelAdbRunner(context: Context) {
         if (previous != null && verify(previous)) return@action
         for (candidate in candidates.take(4)) if (verify(candidate)) return@action
         val endpoints = TunnelAdbDnsDiscover(app).discoverEndpoints(TunnelAdbDnsDiscover.Kind.CONNECT, cancelled = ::cancelled)
-        for (endpoint in endpoints.take(4)) if (connectEndpoint(endpoint)) return@action
+        for (endpoint in endpoints.take(12)) if (connectEndpoint(endpoint)) return@action
         throw Failure("CONNECT_ADDRESS_REQUIRED")
     }
 
@@ -110,7 +110,7 @@ class TunnelAdbRunner(context: Context) {
             checkCancelled()
             val found = TunnelAdbDnsDiscover(app).discoverEndpoints(
                 TunnelAdbDnsDiscover.Kind.CONNECT, remaining(4_000), ::cancelled)
-            for (endpoint in found.take(4)) {
+            for (endpoint in found.take(12)) {
                 if (connectEndpoint(endpoint) { progress("VERIFYING") }) return@action
             }
             if (verifyExistingDevices { progress("VERIFYING") }) return@action
@@ -195,7 +195,17 @@ class TunnelAdbRunner(context: Context) {
         if (!endpointListening(endpoint)) return false
         if (!run(listOf("connect", endpoint), 5_000).succeeded) return false
         beforeVerify()
-        return verify(endpoint)
+        // adbd/TLS can finish accepting before the transport is reported online.
+        // Give the exact local selector a short settle window; never select an
+        // unrelated device or claim success merely from adb connect's exit code.
+        val readyBy = SystemClock.elapsedRealtime() + remaining(3_000)
+        do {
+            if (verify(endpoint)) return true
+            if (SystemClock.elapsedRealtime() >= readyBy) break
+            Thread.sleep(150)
+        } while (!cancelled())
+        checkCancelled()
+        return false
     }
     private fun endpointListening(endpoint: String): Boolean {
         checkCancelled()
@@ -220,7 +230,7 @@ class TunnelAdbRunner(context: Context) {
     }
     private fun endpointCandidates(input: String): List<String> {
         if (Regex("[1-9][0-9]{0,4}").matches(input) && (input.toIntOrNull() ?: 0) in 1..65535) {
-            return listOfNotNull("127.0.0.1:" + input, "localhost:" + input,
+            return listOfNotNull("localhost:" + input, "127.0.0.1:" + input,
                 TunnelAdbDnsDiscover.localIpv4Address(app)?.let { it + ":" + input })
         }
         return listOf(LocalAdbTargetPolicy.validate(input)?.serial ?: throw Failure("TARGET_NOT_LOCAL"))

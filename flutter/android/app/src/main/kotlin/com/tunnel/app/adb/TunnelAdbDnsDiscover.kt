@@ -34,6 +34,7 @@ class TunnelAdbDnsDiscover(context: Context) {
         val retries = mutableMapOf<String, Int>()
         val handler = Handler(Looper.getMainLooper())
         var resolving = false
+        var firstResultAt = 0L
         val multicast = try {
             (app.getSystemService(Context.WIFI_SERVICE) as? WifiManager)
                 ?.createMulticastLock("tunnel:adb-mdns")?.apply { setReferenceCounted(false); acquire() }
@@ -75,8 +76,8 @@ class TunnelAdbDnsDiscover(context: Context) {
                                 synchronized(lock) {
                                     endpoints.add("127.0.0.1:" + info.port)
                                     if (LocalAdbTargetPolicy.validate(endpoint) != null) endpoints.add(endpoint)
+                                    if (firstResultAt == 0L) firstResultAt = System.nanoTime()
                                 }
-                                wake.countDown()
                             }
                         }
                         finished()
@@ -103,6 +104,14 @@ class TunnelAdbDnsDiscover(context: Context) {
             val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs.coerceIn(1, 15_000))
             while (!cancelled() && !Thread.currentThread().isInterrupted && System.nanoTime() < deadline) {
                 if (wake.await(100, TimeUnit.MILLISECONDS)) break
+                // Wireless-debugging toggles leave stale advertisements in NSD's
+                // cache. Do not stop on the first record and rediscover that same
+                // dead port on every retry; collect the remaining local records.
+                val settled = synchronized(lock) {
+                    firstResultAt != 0L && !resolving && queue.isEmpty() &&
+                        System.nanoTime() - firstResultAt >= TimeUnit.MILLISECONDS.toNanos(1_200)
+                }
+                if (settled) break
             }
             if (cancelled() || Thread.currentThread().isInterrupted) emptyList()
             else synchronized(lock) { endpoints.toList() }

@@ -1,5 +1,7 @@
 # Tunnel Android 完整链路 / Android Pipeline
 
+2026-10-03 T008：ADB统一私有 `-L localfilesystem:<filesDir>/adb-server.sock`（同一HOME/key），取消不再使进程执行器永久失效；NSD收集多个本机记录，连接后有界等待真实uid2000。Rust权限门后私有JNI刷新MainService连接资格，解决服务重建丢CM身份；helper按固定阶段报错。未运行修订版真机；[源码修复与LADB对照](../plans/ADB_RELIABILITY_REPAIR_TASK.md)。
+
 2026-10-03 T005：[ADR-0017](../ADR/0017-adb-session-lifetime.md)将conn scopes改为会话生命周期；生产helper VERSION3/duration0取消一小时限制。断连/撤销/退出ADB/故障清理，暂停采集保留helper/control；Startup/control/写阻塞/操作守卫不变，P0仍有限诊断。
 
 2026-10-03 T004当前ADB：手机专用页面/两诊断与授权card移除，HomePage空列表有ConnectionPage fallback；Runner保持内部shell与helper。localhost修复首次daemon启动；pair成功后发现独立连接端口、connect、fresh nonce UID2000；RemoteAdbPairing异步进度/取消，权限撤销与实际连接身份注销分离。SDK30+；Android11—16/16KiB正式验收仍NOT_RUN。[指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。

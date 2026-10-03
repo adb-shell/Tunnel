@@ -1,5 +1,9 @@
 # Tunnel 构建系统 / Build System
 
+2026-10-03 T008：Windows Cargo DLL/portable明确x64与--locked，PS/Python统一Release override与UTF-8，Release→stage核验SHA256；WindowInjection缺件按初始化VS工具集从固定源码构建。保留T007启动日志/单次pause。源码/AST通过不代表EXE可运行；[验证入口](../plans/WINDOWS_BUILD_GUIDE.md)。
+
+2026-10-03 T007：三个Windows入口默认CMD收尾pause覆盖VS/PS启动失败，-NoPause或CI禁等待；launcher日志由PS追加transcript。root解析/清理受保护，原生输出与global退出码核对，仍按robocopy0—7。PS5.1/PS7 AST V0，正式build NOT_RUN，用户真实失败待日志；见[指南](../plans/WINDOWS_BUILD_GUIDE.md)。
+
 2026-10-03 T005：helper wire/manifest/Gradle检查统一protocol3，production Bootstrap duration0。build_helper安全替换已校验protocol1/2旧资产；运行时严格按AdbWire.VERSION拒绝旧helper。须正式PC/APK/helper同批重编，无本地构建证据。
 
 2026-10-03 T-2026-10-03-003：Windows三个CMD统一至new-build.cmd→scripts/windows-build.ps1；完整Release新staging、官方driver供应锁/receipt、Cargo DLL/packer实际artifact、CMake传入DLL、独立DPI manifest与EXE完整payload核验。服务器执行/输出/限制见 [Windows构建指南](../plans/WINDOWS_BUILD_GUIDE.md)。仅V0，正式编译/下载/解压与驱动NOT_RUN；替代下文旧“只预备cache/外部Driver.ps1”的入口判断。

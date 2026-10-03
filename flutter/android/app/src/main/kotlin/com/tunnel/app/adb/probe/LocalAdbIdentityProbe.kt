@@ -6,8 +6,6 @@ import android.os.Looper
 import android.os.SystemClock
 import com.tunnel.app.adb.LocalAdbProcessSpec
 import java.io.File
-import java.net.InetSocketAddress
-import java.net.Socket
 import java.security.SecureRandom
 import java.util.concurrent.Semaphore
 
@@ -51,9 +49,9 @@ class AdbIdentityProbeResult internal constructor(
 }
 
 /**
- * Fixed local identity preflight. Does not connect, pair, grant, change settings or kill ADB.
- * Invoke on a worker thread. The packaged CLI's own internal behavior requires provenance review;
- * an existing server preflight is not a guarantee against an unknown binary auto-starting a daemon.
+ * Fixed local identity preflight. Does not connect a transport, pair, grant, change settings or kill ADB.
+ * Invoke on a worker thread. The bounded CLI may auto-start Tunnel's private daemon; get-state
+ * never establishes an adbd transport. Do not add an unbounded raw Unix-socket connect here.
  */
 class LocalAdbIdentityProbe(context: Context) {
     private val appContext = context.applicationContext
@@ -81,7 +79,6 @@ class LocalAdbIdentityProbe(context: Context) {
             target = LocalAdbTargetPolicy.validate(serial) ?: return result(AdbProbeReason.TARGET_NOT_LOCAL)
             if (cancelled()) return result(AdbProbeReason.PROCESS_INTERRUPTED)
             // No discovery or implicit target selection; the local pairing runner owns transport.
-            if (!existingServerReachable()) return result(AdbProbeReason.SERVER_UNAVAILABLE)
             val spec = LocalAdbProcessSpec(appContext)
             val prefix = spec.command(target!!, emptyList())
             val environment = spec.environment
@@ -114,13 +111,6 @@ class LocalAdbIdentityProbe(context: Context) {
         } finally {
             gate.release()
         }
-    }
-
-    private fun existingServerReachable(): Boolean = try {
-        Socket().use { it.connect(InetSocketAddress("127.0.0.1", 5037), 300) }
-        true
-    } catch (_: Exception) {
-        false
     }
 
     private fun processReason(result: BoundedProcessResult, fallback: AdbProbeReason): AdbProbeReason =

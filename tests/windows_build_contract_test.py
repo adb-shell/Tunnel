@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 from pathlib import Path
 import tempfile
+import struct
 import unittest
 import zipfile
 
@@ -21,6 +22,25 @@ portable = load('tunnel_portable', 'libs/portable/generate.py')
 
 
 class WindowsBuildContracts(unittest.TestCase):
+    def test_portable_rejects_wrong_architecture_and_dll_artifacts(self):
+        with tempfile.TemporaryDirectory() as folder:
+            artifact = Path(folder) / 'synthetic.exe'
+            for machine, flags, accepted in ((0x8664, 0x0002, True),
+                                             (0xaa64, 0x0002, False),
+                                             (0x014c, 0x0002, False),
+                                             (0x8664, 0x2002, False)):
+                image = bytearray(88)
+                image[:2] = b'MZ'; struct.pack_into('<I', image, 60, 64)
+                image[64:68] = b'PE\0\0'
+                struct.pack_into('<H', image, 68, machine)
+                struct.pack_into('<H', image, 86, flags)
+                artifact.write_bytes(image)
+                if accepted:
+                    portable.require_windows_x64_executable(artifact)
+                else:
+                    with self.assertRaises(RuntimeError):
+                        portable.require_windows_x64_executable(artifact)
+
     def test_payload_must_match_embedded_bytes(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

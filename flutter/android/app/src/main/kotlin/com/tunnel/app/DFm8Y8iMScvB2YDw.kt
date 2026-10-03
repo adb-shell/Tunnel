@@ -243,6 +243,14 @@ class DFm8Y8iMScvB2YDw : Service() {
 
     @Keep
     fun DFm8Y8iMScvB2YDwSBN(name: String, arg1: String, arg2: String) {
+        if (name == "adb_control_authorized") {
+            // Private JNI entry, sent only after Rust checks the current secured,
+            // authenticated video+keyboard session. Service recreation must not
+            // depend on receiving the historical CM add_connection event again.
+            val id = arg1.toIntOrNull() ?: return
+            if (id > 0) authorizedAdbClients.add(id)
+            return
+        }
         if (name == "adb_control_request") {
             val id = arg1.toIntOrNull() ?: return
             val state = TunnelAdbRuntime.handleRequest(id, arg2)

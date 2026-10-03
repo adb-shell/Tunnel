@@ -54,6 +54,9 @@ internal class TunnelAdbSession(
     @Volatile private var failure = "STOPPED"
     private var sequence = 0L
     private val startedAt = SystemClock.elapsedRealtime()
+    // Only locally defined identifiers may cross the status channel. Never expose
+    // adb stderr, shell arguments, socket addresses or exception messages.
+    private class SessionFailure(val code: String) : IOException(code)
 
     fun start() { launch("supervisor") { execute() } }
     fun setCapturePaused(paused: Boolean) { if (!paused) lastVideoAt = SystemClock.elapsedRealtime(); capturePaused = paused }
@@ -83,6 +86,7 @@ internal class TunnelAdbSession(
         var cleaned = false
         var processSpec: LocalAdbProcessSpec? = null
         var target: com.tunnel.app.adb.probe.LocalAdbTarget? = null
+        var failureStage = "LOCAL_ADB_REQUIRED"
         launch("watchdog") {
             while (!finished.get()) {
                 val now = SystemClock.elapsedRealtime()
@@ -97,29 +101,35 @@ internal class TunnelAdbSession(
             val spec = LocalAdbProcessSpec(context)
             processSpec = spec
             checkOpen()
-            val trusted = LocalAdbIdentityProbe(context).probe(serial).trustedTarget ?: throw IOException("LOCAL_ADB_REQUIRED")
+            val trusted = LocalAdbIdentityProbe(context).probe(serial).trustedTarget ?: throw SessionFailure("LOCAL_ADB_REQUIRED")
             target = trusted
+            failureStage = "HELPER_ASSET_INVALID"
             artifact = PackagedAdbHelper.load(context)
             remoteDirectory = "/data/local/tmp/tunnel-adb-${ByteArray(16).also(random::nextBytes).hex()}"
             val directory = remoteDirectory
             val remoteJar = "$directory/helper.jar"
             fun finite(arguments: List<String>, timeout: Long = 10_000): ByteArray {
                 checkOpen()
-                if (LocalAdbTargetPolicy.validate(serial) == null) throw IOException("TARGET_NOT_LOCAL")
+                if (LocalAdbTargetPolicy.validate(serial) == null) throw SessionFailure("TARGET_NOT_LOCAL")
                 val response = BoundedProcessRunner.run(spec.command(trusted, arguments), spec.workingDirectory, spec.environment, timeout)
-                if (!response.succeeded) throw IOException("HELPER_PREPARE_FAILED")
+                if (!response.succeeded) throw SessionFailure(failureStage)
                 checkOpen(); return response.stdout
             }
+            failureStage = "HELPER_DIRECTORY_FAILED"
             finite(listOf("shell", "-T", "-n", "umask 077; mkdir '$directory'"))
             created = true
+            failureStage = "HELPER_PUSH_FAILED"
             finite(listOf("push", artifact.file.absolutePath, remoteJar))
+            failureStage = "HELPER_HASH_INVALID"
             val digest = finite(listOf("shell", "-T", "-n", "chmod 400 '$remoteJar' && sha256sum '$remoteJar'"))
                 .toString(Charsets.US_ASCII).trim()
-            if (digest != "${artifact.sha256}  $remoteJar") throw IOException("HELPER_HASH_INVALID")
+            if (digest != "${artifact.sha256}  $remoteJar") throw SessionFailure("HELPER_HASH_INVALID")
+            failureStage = "HELPER_LISTENER_FAILED"
             val videoListener = listener()
             val controlListener = listener()
-            if (!LocalAdbIdentityProbe(context).probe(serial).shellIdentityVerified) throw IOException("LOCAL_ADB_REQUIRED")
+            if (!LocalAdbIdentityProbe(context).probe(serial).shellIdentityVerified) throw SessionFailure("LOCAL_ADB_REQUIRED")
             checkOpen()
+            failureStage = "HELPER_PROCESS_START_FAILED"
             val child = spec.processBuilder(trusted, listOf("shell", "-T",
                 "CLASSPATH='$remoteJar' exec app_process / ${PackagedAdbHelper.ENTRY_POINT}")).start()
             process = child
@@ -127,9 +137,12 @@ internal class TunnelAdbSession(
             drain(child.inputStream); drain(child.errorStream)
             val secret = ByteArray(32).also(random::nextBytes)
             try {
+                failureStage = "HELPER_BOOTSTRAP_FAILED"
                 AdbWire.Bootstrap(secret, epoch, videoListener.localPort, controlListener.localPort, 1280, 30, 4_000_000, AdbWire.SESSION_DURATION)
                     .use { AdbWire.writeBootstrap(child.outputStream, it) }
+                failureStage = "HELPER_VIDEO_HANDSHAKE_FAILED"
                 val video = accept(videoListener, secret, AdbWire.CHANNEL_VIDEO)
+                failureStage = "HELPER_CONTROL_HANDSHAKE_FAILED"
                 val commands = accept(controlListener, secret, AdbWire.CHANNEL_CONTROL)
                 control = commands
                 videoListener.close(); controlListener.close()
@@ -155,6 +168,7 @@ internal class TunnelAdbSession(
                     while (!closed.get()) { write(AdbWire.PING); Thread.sleep(1_000) }
                 }
                 keyframe()
+                failureStage = "HELPER_VIDEO_CHANNEL_FAILED"
                 var dropping = false
                 while (!closed.get()) {
                     val packet = video.read()
@@ -166,7 +180,7 @@ internal class TunnelAdbSession(
                     else { dropping = true; keyframe() }
                 }
             } finally { secret.fill(0) }
-        } catch (_: Exception) { if (!closed.get()) fail("HELPER_OR_TRANSPORT_FAILED")
+        } catch (e: Exception) { if (!closed.get()) fail(if (e is SessionFailure) e.code else failureStage)
         } finally {
             close()
             val child = process

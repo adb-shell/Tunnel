@@ -1,5 +1,28 @@
 # Tunnel Change Event Log
 
+## CE-20261003-T008-01：ADB与Windows可靠性修复
+
+- 2026-10-03 / T008 / 用户直接授权源码修复与官方LADB文本下载；test/0720e49，保留T007工作树；Principal tunnel-master，Android/Flutter/Release专项与root安全/跨层复核。
+- 修改与逐项证据见docs/plans/ADB_RELIABILITY_REPAIR_TASK.md；无协议字段重编号、无任意远程shell、无secret输出、无全局kill-server。私有JNI仅由当前Rust权限门后调用。
+- 来源：LADB55文本commit60f4802、仓外manifest/hash/许可证；native binary锁不变。Python4文件AST、PS5.1/7 parser、15Dart/Kotlin词法及diff V0；正式编译/测试/设备/EXE启动NOT_RUN。
+- 已同步指南、领域地图、D-020、外部资产、测试矩阵、memory/history/state/registry。STATE-20261003-011 / WORK-20261003-016。无Git写、产品执行、签名/发布；T6 handoff。
+
+## CE-20261003-T007-02：服务器日志根因与源码身份记录
+
+- Date/Task/Authority：2026-10-03；T007持续排查；用户提供launcher-4807-28083.log；在既有构建脚本修复范围内继续，非Git/构建执行授权。
+- Evidence：日志Rust release完成后Flutter Windows的ADB配对窗返回类型失败（旧StatefulWidget → CustomAlertDialog错误）；python退出-1、CMD退出1；未到资产/打包。云端test/0720e49已含T006适配器，经ls-remote核对；服务器HEAD未提供，不能声明已同步或将RemoteException噪音当首因。
+- Source：scripts/windows-build.ps1加入只读source commit/tracked changes/关键Dart SHA256，成功build.json同步；ZIP无Git时unavailable/null。stderr ErrorRecord显示实际Exception.Message而非空行异常类型；不吞诊断/退出码。
+- Docs：Windows任务/指南、05Windows/09Debug与state/registry/memory/history/changelog同步；本地PS5.1 AST/引用/diff V0，不执行脚本/build/test/Git写入。STATE-20261003-010 / WORK-20261003-014；T6 handoff。
+
+## CE-20261003-T007-01：Windows构建保留窗口与启动诊断
+
+- Date/Owner：2026-10-03；T-2026-10-03-007 / tunnel-release-engineer；test/0720e49起点干净。
+- Authority：用户回报PC构建未完成窗口即退出，排查/修复源码与文档；无构建/测试/下载/设备/Git/发布授权。
+- Code：new-build.cmd、scripts/windows-build.ps1；统一CMD收尾/default pause、NoPause/CI、VS前launcher日志、PS追加transcript/原生输出/阶段/失败行、global退出码、初始化和独立清理保护。build.cmd/pc-bulid.cmd继续转发，不另加pause。
+- Docs：WINDOWS_BUILD_GUIDE、WINDOWS_BUILD_EXIT_FIX_TASK、AI_ENGINEERING05/08/09、TEST_MATRIX及memory/state/registry/history/changelog/event。
+- Evidence：PS5.1/PS7 AST、CMD标签/参数/返回路径、源码/链接/diff V0；用户真实停止原因尚无日志，正式环境/运行NOT_RUN。无新ADR/外部资产变化。
+- Git/Build/Test/Device/Binary/Sign/Release/Delete/Move/Generated：none；STATE-20261003-009 / WORK-20261003-013，T6 handoff。回滚只T007，不动Release/staging/cache及ADB。
+
 ## CE-20261003-T006-02：弹窗编译修复Git交付授权
 
 - Timestamp/Task：2026-10-03；T-2026-10-03-006续接；root。

@@ -22,6 +22,21 @@ const APPNAME_RUNTIME_ENV_KEY: &str = "TUNNEL_APPNAME";
 #[cfg(windows)]
 const SET_FOREGROUND_WINDOW_ENV_KEY: &str = "SET_FOREGROUND_WINDOW";
 
+fn report_error(message: &str) {
+    eprintln!("{}", message);
+    #[cfg(windows)]
+    {
+        // GUI subsystem binaries have no visible stderr when double-clicked.
+        // Report extraction/launch failures instead of exiting silently.
+        let text: Vec<u16> = message.encode_utf16().chain(std::iter::once(0)).collect();
+        let title: Vec<u16> = "Tunnel portable error".encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            winapi::um::winuser::MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(),
+                winapi::um::winuser::MB_OK | winapi::um::winuser::MB_ICONERROR);
+        }
+    }
+}
+
 fn is_timestamp_matches(dir: &Path, ts: &mut u64) -> bool {
     let Ok(app_metadata) = std::str::from_utf8(APP_METADATA) else {
         return true;
@@ -50,13 +65,13 @@ fn is_timestamp_matches(dir: &Path, ts: &mut u64) -> bool {
     false
 }
 
-fn write_meta(dir: &Path, ts: u64) {
+fn write_meta(dir: &Path, ts: u64) -> std::io::Result<()> {
     let meta_file = dir.join(APP_METADATA_CONFIG);
     if ts != 0 {
         let content = format!("{}{}", META_LINE_PREFIX_TIMESTAMP, ts);
-        // Ignore is ok here
-        let _ = std::fs::write(meta_file, content);
+        std::fs::write(meta_file, content)?;
     }
+    Ok(())
 }
 fn setup(
     reader: BinaryReader,
@@ -72,13 +87,14 @@ fn setup(
         if let Some(dir) = dirs::data_local_dir() {
             dir.join(APP_PREFIX)
         } else {
-            eprintln!("not found data local dir");
+            report_error("Cannot find a local application data directory for Tunnel extraction.");
             return None;
         }
     };
 
     let mut ts = 0;
-    if clear || !is_timestamp_matches(&dir, &mut ts) {
+    let timestamp_matches = is_timestamp_matches(&dir, &mut ts);
+    if clear || !timestamp_matches {
         #[cfg(windows)]
         if _args.is_empty() {
             *_ui = true;
@@ -87,16 +103,26 @@ fn setup(
         std::fs::remove_dir_all(&dir).ok();
     }
     for file in reader.files.iter() {
-        file.write_to_file(&dir);
+        if let Err(error) = file.write_to_file(&dir) {
+            report_error(&format!("Cannot extract {}: {}. Close any running Tunnel from this folder and retry.",
+                file.path, error));
+            return None;
+        }
     }
-    write_meta(&dir, ts);
+    if let Err(error) = write_meta(&dir, ts) {
+        report_error(&format!("Cannot write the Tunnel extraction metadata: {}", error));
+        return None;
+    }
     #[cfg(windows)]
     windows::copy_runtime_broker(&dir);
     #[cfg(linux)]
     reader.configure_permission(&dir);
     // The packer records the exact startup path for each platform.
     let packaged_exe = dir.join(&reader.exe);
-    packaged_exe.is_file().then_some(packaged_exe)
+    if packaged_exe.is_file() { Some(packaged_exe) } else {
+        report_error("The extracted Tunnel startup executable is missing.");
+        None
+    }
 }
 
 fn execute(path: PathBuf, args: Vec<String>, _ui: bool) {
@@ -115,22 +141,25 @@ fn execute(path: PathBuf, args: Vec<String>, _ui: bool) {
             cmd.env(SET_FOREGROUND_WINDOW_ENV_KEY, "1");
         }
     }
-    let _child = cmd
+    let child = cmd
         .env(APPNAME_RUNTIME_ENV_KEY, exe_name)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn();
 
-    #[cfg(windows)]
-    if _ui {
-        match _child {
-            Ok(child) => unsafe {
-                winapi::um::winuser::AllowSetForegroundWindow(child.id() as u32);
-            },
-            Err(e) => {
-                eprintln!("{:?}", e);
+    match child {
+        Ok(_child) => {
+            #[cfg(windows)]
+            if _ui {
+                unsafe {
+                    winapi::um::winuser::AllowSetForegroundWindow(_child.id() as u32);
+                }
             }
+        }
+        Err(error) => {
+            report_error(&format!("Cannot launch the extracted Tunnel executable: {}", error));
+            std::process::exit(1);
         }
     }
 }
@@ -165,6 +194,8 @@ fn main() {
             args = vec!["--quick_support".to_owned()];
         }
         execute(exe, args, ui);
+    } else {
+        std::process::exit(1);
     }
 }
 

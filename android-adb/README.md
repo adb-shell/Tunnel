@@ -1,5 +1,7 @@
 # Android 本地 ADB 二进制来源
 
+2026-10-03 T008 当前实现：`LocalAdbProcessSpec` 改为 `-L localfilesystem:<filesDir>/adb-server.sock`，pair/connect/probe/helper/P0 共用私有 daemon，HOME/key 位置保持。下文 T004 的 `-H localhost` 是历史修复。修正取消后 runner 永久失效、NSD 首记录提前停止及连接就绪竞争；真实 shell 仍须 nonce/uid2000 验证。官方固定提交的 55 个文本源码已下载到仓外 `../ladb-reference` 研究，含 LICENSE、SOURCE_COMMIT.txt、SOURCE_PROVENANCE.json（逐文件 SHA256/URL），没有下载/执行二进制或将研究副本整体嵌入产品。见 [修复记录](../docs/plans/ADB_RELIABILITY_REPAIR_TASK.md)。
+
 2026-10-03 T004：专用 Android ADB 页面已移除，PC 可拖动弹窗发送端口/码或复用已配对密钥；APK RemoteAdbPairing 后台 pair→独立connect→fresh shell probe，状态进入右上 Tunnel 检测。内部 runner/probe/helper/有限 shell 保留。`-H localhost` 修复初次 daemon 启动，ADB_MDNS_AUTO_CONNECT=0 配合应用显式本机 NSD/connect，不把配对成功冒充连接成功。当前授权政策与使用见 [指南](../docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md) / ADR-0016；下文分屏/页面退出的原手机 UI 操作描述属于旧阶段。
 
 状态：仅来源核查和供应脚本已完成；本次没有下载/执行二进制，没有运行服务器构建、协议测试或设备验证。标准名称始终为 `libadb.so`，不是 `libad.so`。

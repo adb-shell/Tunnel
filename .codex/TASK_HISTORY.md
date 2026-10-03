@@ -1,5 +1,21 @@
 # Tunnel Task History
 
+## T-2026-10-03-008：ADB可靠性、PC交互与Windows打包修复
+
+- 用户直接授权修源码、简化UI、拉取LADB研究；source test/0720e49+保留T007dirty；Baseline ADB/WINDOWS-BUILD，D-020。
+- Delta：私有ADBdaemon、取消回收、NSD多记录、UID就绪、服务重建资格、helper固定错误、PC本地焦点/输入租约/按钮状态/ACK超时与双行面板；VS工具集、x64、Release hash、自解压失败可见。
+- LADB55文本已取得，固定commit与现有native锁一致；未下载执行binary。V0 Python/PS AST、Dart/Kotlin词法、跨层/来源/diff通过；新增测试源码未运行，服务器/两Android16设备待验。
+- Task/hand-off：docs/plans/ADB_RELIABILITY_REPAIR_TASK.md；T6源码交付，非真机完成；STATE-20261003-011 / WORK-20261003-016 / CE-20261003-T008-01。无Git写入/产品build/test/device/release。
+
+## T-2026-10-03-007：PC构建提前退出排查
+
+- 后续日志CE-20261003-T007-02：Rust阶段完成、Flutter旧配对窗类型失败；test/0720e49已有修复，需服务器实际源码核对。补source commit/tracked changes/关键Dart SHA256及stderr消息显示，PS5.1 AST/V0；STATE-20261003-010 / WORK-20261003-014。此前“尚无日志”是原时点，不再是当前结论。
+
+- 用户报告未完成编译即关闭窗口；已询问入口/运行方式/最后输出，尚无日志。Source test/0720e49起点干净；Baseline TUN-BL-2026-10-03-WINDOWS-BUILD。
+- 确定源码缺口：CMD提前exit、PS Pause无法覆盖VS/PS启动、root解析在try外、清理失败可能跳过锁释放；不确定真实编译失败阶段。
+- Delta：两脚本默认CMD统一pause和退出码，NoPause/CI、启动日志、PS追加transcript/stdout/stderr、阶段/失败行、受保护初始化和清理。驱动/native/portable合同不改。
+- V0：Windows PS5.1/PS7语法解析、CMD引用/exit/标签/参数、文档/diff；build/test/driver/download/Git none。Formal handoff，见WINDOWS_BUILD_EXIT_FIX_TASK/BUILD_GUIDE；CE-20261003-T007-01；STATE-20261003-009 / WORK-20261003-013。
+
 ## T-2026-10-03-006：ADB配对弹窗类型编译修复
 
 - Source：test/da2923e干净起点；Baseline TUN-BL-2026-10-03-ADB；用户服务器Flutter3.24.5类型编译失败，APK未输出。

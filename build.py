@@ -445,7 +445,8 @@ def build_flutter_arch_manjaro(version, features):
 def windows_library(root, package, features=None):
     """Get the DLL emitted by this Cargo invocation, including custom target dirs."""
     command = ['cargo', 'build', '--manifest-path', str(root / 'Cargo.toml'),
-               '--package', package, '--lib', '--release',
+               '--package', package, '--lib', '--release', '--locked',
+               '--target', 'x86_64-pc-windows-msvc',
                '--message-format=json-render-diagnostics', '--color', 'never']
     if features:
         command += ['--features', features]
@@ -476,10 +477,11 @@ def cached_windows_library(root, name):
         ['cargo', 'metadata', '--manifest-path', str(root / 'Cargo.toml'),
          '--no-deps', '--format-version', '1'], cwd=root, encoding='utf-8'))
     target = Path(metadata['target_directory'])
-    triple = os.environ.get('CARGO_BUILD_TARGET')
-    if triple:
-        target /= triple
-    for candidate in (target / 'release' / (name + '.dll'), target / 'release/deps' / (name + '.dll')):
+    selected = target / 'x86_64-pc-windows-msvc'
+    # Retain --skip-cargo support for existing native-host caches created by
+    # older scripts; new invocations always emit into the explicit x64 target.
+    for candidate in (selected / 'release' / (name + '.dll'), selected / 'release/deps' / (name + '.dll'),
+                      target / 'release' / (name + '.dll'), target / 'release/deps' / (name + '.dll')):
         if candidate.is_file():
             return candidate.resolve()
     raise RuntimeError(f'--skip-cargo requested but {name}.dll is missing in {target}')
@@ -536,7 +538,8 @@ def build_flutter_windows(version, features, skip_portable_pack):
     subprocess.run(asset_command, check=True)
     subprocess.run(pip_command, check=True)
     pack_command = [sys.executable, str(portable / 'generate.py'), '-f', str(release), '-o', str(portable),
-                    '-e', str(release / 'tunnel.exe'), '--dist', str(root / f'tunnel-{version}-install.exe')]
+                    '-e', str(release / 'tunnel.exe'), '--target', 'x86_64-pc-windows-msvc',
+                    '--dist', str(root / f'tunnel-{version}-install.exe')]
     for required in ('tunnel.dll', 'flutter_windows.dll', 'data/app.so', 'dylib_virtual_display.dll',
                      'WindowInjection.dll', 'usbmmidd_v2/usbmmIdd.inf',
                      'drivers/RustDeskPrinterDriver/RustDeskPrinterDriver.inf', 'printer_driver_adapter.dll', 'windows-assets.json'):

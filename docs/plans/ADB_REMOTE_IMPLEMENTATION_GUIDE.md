@@ -1,5 +1,7 @@
 # ADB 远程投屏：源码交接、构建与使用
 
+2026-10-03 T008：针对用户实际配对失败，修正取消后的进程执行器永久失效、NSD 首记录提前结束、与 LADB 共用 daemon、弹窗远控键盘抢占/按钮静默退出。当前使用应用私有 `adb -L localfilesystem:<filesDir>/adb-server.sock`，替代 T004 的 TCP5037；源码/V0，修订版真机验收待执行。研究与故障清单见 [修复记录](ADB_RELIABILITY_REPAIR_TASK.md)。
+
 2026-10-03 T005：授权持续至当前连接结束/撤销/退出ADB，无10分钟倒计时；生产helper protocol3 durationSeconds=0，取消一小时停止，故障守卫保留。PC/APK/helper同批重建，旧protocol2资产不可混用；验收必须包含健康运行超过一小时。详见 [ADR-0017](../ADR/0017-adb-session-lifetime.md) / [任务](ADB_SESSION_LIFETIME_TASK.md)。
 
 2026-10-03 · T-2026-10-03-001 / 004 · 基线 `TUN-BL-2026-10-03-ADB`。
@@ -69,11 +71,11 @@ pc-bulid.cmd
 ## 4. PC 配对与远程使用
 
 1. PC/APK 使用同一批源码构建安装，建立已有普通远控连接。在手机系统开发者选项打开无线调试及“使用配对码配对设备”；**保持系统配对窗口打开**，关闭会使码/端口失效。手机 Tunnel 没有专用 ADB 页面。
-2. PC 顶栏开发者图标 →“远程 ADB 配对 / 连接授权”。拖动弹窗标题移动位置，输入系统窗口的配对端口与六位码，点击“配对并授权本连接”。请求经原 Tunnel 加密会话发给 APK，APK 立即在后台执行；PC 不直接连接手机 ADB，二者不必同局域网。
-3. APK 配对后自动发现独立连接端口并连接，再进行本机 nonce / `uid 2000` 校验。**配对端口和连接端口不能混用**。若显示“已配对，尚未连接”，在可选连接端口填入无线调试主页端口，点“连接已配对设备并授权”；已有系统信任 key 的设备也使用此入口，不必每次重新配对。
-4. 弹窗显示准备/配对/连接/核验及明确终态。码提交即清空，不保存在偏好/日志；可取消，关闭弹窗会取消未完成任务。APK 操作预算45秒，PC 90秒无结果主动请求取消；断线/撤权阻止迟到 grant，不 kill 全局 ADB。
+2. PC 顶栏 ADB 图标 →“远程 ADB 配对 / 连接授权”。选择“首次配对”，输入系统窗口的配对端口与六位码，点击“配对并连接”。拖动标题移动窗口；打开弹窗时远控键盘让给本地输入框。请求经原 Tunnel 加密会话发给 APK，APK 在后台执行；PC 不直接连接手机 ADB，二者不必同局域网。
+3. APK 配对后自动发现独立连接端口并连接，再进行本机 nonce / `uid 2000` 校验。**配对端口和连接端口不能混用**。若已配对但未连接，弹窗自动切到“已配对，连接”，填无线调试主页的连接端口，点“连接并授权”；已由 Tunnel 配对的设备也用此入口。LADB 与 Tunnel 有各自密钥，LADB 的配对成功不能代替 Tunnel 配对。
+4. 弹窗先显示发送/等待手机确认，收到手机回包后才显示准备/配对/连接/核验。12 秒无接收确认显示 NO_RESPONSE 并请求取消；已确认但 90 秒未结束也请求取消；取消等待手机确认，10 秒仍无确认明确显示未确认。APK 操作预算45秒。码提交即清空、不入偏好/日志；关闭弹窗取消未完成任务。断线/撤权阻止迟到 grant，不 kill 全局 ADB。
 5. fresh 校验成功后，当前有输入/视频权限的加密已认证 conn 获得投屏、输入、无障碍及侧按钮 scopes，在当前会话持续有效，无固定到期时间。此为 PC 主动授权政策，见 ADR-0016/0017，已经替代旧 phone-local consent；历史配对和普通连接不自动 grant。点击“开始 ADB 投屏”，首帧解码与显示确认 COMMITTED 后才接管 ADB 输入及允许暂停/关闭自身无障碍。
-6. 右上角 Tunnel 检测面板显示 ADB 连接、投屏模式/真实来源、输入、会话授权状态、配对状态/错误；菜单只放动作。断线或“撤销本连接 ADB 授权”撤销 scopes；退出 ADB 同时撤销 scopes、释放 helper 并回退已有普通共享，MP 失效仍须手机显式开共享。恢复连接后再通过 PC 显式连接授权，不复用旧 conn 权限。
+6. 右上角检测面板只显示“ADB”和“投屏模式”两行，错误细节保留在配对窗口/悬停提示，菜单只放动作。断线或“撤销本连接 ADB 授权”撤销 scopes；退出 ADB 同时撤销 scopes、释放 helper 并回退已有普通共享，MP 失效仍须手机显式开共享。恢复连接后再通过 PC 显式连接授权，不复用旧 conn 权限。
 
 内部 Manager/Runner/native suite/probe/helper/有限 shell 继续保留，手机 UI 的页面、终端控件和诊断卡已移除。投屏期间独占 transport，配对/连接操作须先退出投屏；撤销与状态查询仍可用。不开放远程任意 shell。
 
@@ -94,6 +96,9 @@ pc-bulid.cmd
 “关共享”与顶栏“退出ADB”不同：前者不关闭helper，也不kill ADB；base stopped且无override时status.capturePaused=true，保留最后图像但冻结普通输入，可用侧按钮开共享/开无视/开穿透恢复有效源。后者才释放ADB模式，按新epoch回退已有MediaProjection。截图/节点关闭回到base mode。录像会在切ADB前停止；受控Android的自动录像已开启时拒绝ADB启动，不能把两路来源混录。
 
 ## 6. 本轮故障定位与验证重点
+
+- T008：取消中断必须先暂时清除再回收进程/等待输出线程，最后恢复中断；否则执行器误判泄漏并永久拒绝后续命令。NSD 收集多个本机记录，不能首记录到达即终止。独立私有 daemon socket 和既有 HOME 配套，pair/connect/probe/helper/P0 共用同一配置；有界 get-state 与 nonce uid 探测是 shell 就绪依据，连接后允许短暂就绪等待。
+- T008：MainService 重建后旧 CM add_connection 不一定重发；Rust 在当前安全/认证/视频/输入权限检查之后通过私有 JNI 刷新连接资格，native 仍复查且断线撤销。helper 错误按固定准备/资产/上传/握手/视频阶段报告，不回传 shell 文本或异常消息。弹窗监听配对与投屏状态，按钮禁用原因可见。
 
 - T004 首次无响应/失败：`LocalAdbProcessSpec` 原 `-H 127.0.0.1` 被 AOSP local socket 判断视作 remote server，尚无 daemon 时不能自动启动；改为 `-H localhost`。原 pair 成功即返回，且 ADB_MDNS_AUTO_CONNECT=0，不会创建 transport；现在补独立连接端口发现/连接/fresh核验。stderr/stdout 均解析成功与拒绝码，只传稳定错误标识。
 - T004 状态/安全：独立 pairing kind/operationId/revision，不改 video epoch；取消/撤权/断线阻止 late grant；ADB_BUSY 不沿用旧 verified 作为本次核验；PC 显示明确错误和会话授权状态。

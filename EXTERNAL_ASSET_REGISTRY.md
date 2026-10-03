@@ -1,5 +1,7 @@
 # Tunnel External Asset Registry
 
+2026-10-03 T008：`EXT-REF-ADB-003` 新增已取得的仓外研究副本 `../ladb-reference`，官方LADB commit `60f48029cf9d8e0bc848ca41a7bd76694d4ab796`，55个文本源码/配置/许可证，SOURCE_PROVENANCE.json记录每个文件SHA256/固定URL，SOURCE_COMMIT.txt标识版本。用户本轮授权获取；未下载binary、未整体vendor进产品。下方2026-10-02 MISSING为旧路径快照。`EXT-BIN-ADB-001` prebuilt锁未变；源码研究不证明native可复现/16KiB兼容。重点源码与许可范围见[任务](docs/plans/ADB_RELIABILITY_REPAIR_TASK.md)。
+
 2026-10-03 T004：ADB native供应仍为固定LADB prebuilt（未变更版本/blob），手机界面移除不移除libadb/helper准入。RemoteAdbPairing使用其本机TLS配对与独立connect。APK内所有所选ABI/native/helper缺失仍构建失败；未在本地取得/执行binary。Android11—16及16KiB运行证据仍external/verification-required，不能以供应脚本或API30门槛当全设备PASS。
 
 2026-10-03 T-2026-10-03-003 Windows增量：scripts/windows-assets.lock.json与windows_assets.py形成正式服务器供应入口；打印driver1.4/adapter/checksum的官方API digest固定，usbmmidd旧asset无digest但记录实际hash并支持owner pin；WindowInjection可固定commit源编译或采用owner提供DLL。binary未在本地取得，签名/publisher/OS验证仍外部未完成。详见docs/plans/WINDOWS_BUILD_GUIDE.md。

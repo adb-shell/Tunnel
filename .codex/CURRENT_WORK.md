@@ -1,9 +1,9 @@
 # Tunnel Current Work
 
 Schema Version：`1.0`  
-Registry Revision：`WORK-20261003-012`
+Registry Revision：`WORK-20261003-016`
 Last Updated：2026-10-03（Asia/Shanghai）
-Active Task Count：5
+Active Task Count：7
 
 > 本文件是支持 0..N 个并行 Codex 会话的协作 registry，不是锁、不是真相层，也不是授权凭证。任何新会话都必须重新执行 T0；历史 C1/C2/C3 不能继承。每个会话只更新自己的 Task ID 段，并在写入前重新读取 revision，防止覆盖其他会话。
 
@@ -11,11 +11,13 @@ Active Task Count：5
 
 | Task | Owner | Status | Scope / source |
 |---|---|---|---|
+| T-2026-10-03-008 | tunnel-master | handoff / T6 | native/LADB、PC交互、远程资格与Windows打包源码修复；V0通过、正式构建和设备待验，未Git写入；docs/plans/ADB_RELIABILITY_REPAIR_TASK.md |
 | T-2026-10-03-001 | tunnel-master | handoff / T6 | 承接T003；P0—P6主链源码及A11y/ADB/portable修复交付，等待正式服务器编译与Android16双ROM验证；docs/plans/ADB_P0_P6_IMPLEMENTATION_TASK.md |
 | T-2026-10-03-003 | tunnel-release-engineer | handoff / T6 | Windows产物/官方驱动供应/自解压源码修复及V0交付，待正式服务器验证；保留T002/3c22a25的Android helper修复；docs/plans/WINDOWS_BUILD_GUIDE.md |
 | T-2026-10-03-004 | tunnel-master | handoff / T6 | PC远程配对/连接授权与撤销、手机ADB页面移除、状态面板、首次daemon/独立连接修复；source/V0，服务器/Android11—16 NOT_RUN；docs/plans/ADB_REMOTE_PAIRING_TASK.md |
 | T-2026-10-03-005 | tunnel-master | handoff / T6 | 源码/V0交付；按当前用户要求取消10分钟授权，改为当前会话持续有效，断连/撤销/退出ADB撤权；docs/plans/ADB_SESSION_LIFETIME_TASK.md |
 | T-2026-10-03-006 | tunnel-flutter-engineer | handoff / T6 | 修复配对弹窗builder与CustomAlertDialog返回类型，保留全窗口拖动与关闭清理；V0，服务器重编待验；docs/plans/ADB_PAIRING_DIALOG_BUILD_FIX_TASK.md |
+| T-2026-10-03-007 | tunnel-release-engineer | handoff / T6 | 日志定位Flutter旧弹窗类型失败；Windows保留窗口/日志/退出码及source身份修复；源码/V0，服务器同步T006并重编待验；docs/plans/WINDOWS_BUILD_EXIT_FIX_TASK.md |
 
 T006当前Git交付：用户明确授权提交并推送origin/test，提交说明“修复编译”；范围为弹窗适配器、焦点修复及对应文档。操作前本地与远端均为da2923e；实际提交/push结果以HEAD与远端ref核对。Event CE-20261003-T006-02；运行验证仍待正式服务器。
 

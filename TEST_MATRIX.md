@@ -1,5 +1,9 @@
 # Tunnel Commercial Test Matrix
 
+2026-10-03 T008：ADBP-02 改验私有 daemon；新增 ADBP-13：同机 LADB 已运行/关闭时 Tunnel 独立配对与 shell；ADBP-14：连续取消/关闭/错误码后重新正确配对（执行器不得永久失效）、多条旧 NSD 广告后找到有效端口；ADBP-15：弹窗输入/粘贴/Tab/Enter/拖动/ESC/关闭重开不向手机注入键，模式忙时禁用原因可见，12秒无 ACK 与90秒执行超时可区分；ADBP-16：保留 Rust 会话重建 MainService 后可重新显式配对/授权，输入权限关闭仍拒绝。WIN-08 增加仅 v143 的 WindowInjection、中文路径、Release逐文件核验、错误PE架构、解压目录不可写/文件占用/坏payload/启动失败应非零且可见。新增取消fake-process/PE合同测试源码，均 NOT_RUN；源码与AST检查不等于通过。
+
+2026-10-03 T007：WIN-08增加CMD早期失败/默认一次pause/NoPause/CI、启动日志、原生stdout+stderr、真实exitcode、锁与transcript清理。VS缺失/VCVARS非零、PS参数/解析错、不可写目录、原生命令缺失/非零、完整成功与robocopy0—7/8+按WINDOWS_BUILD_GUIDE验证；全部运行NOT_RUN。本地只有PS5.1/PS7 AST及源码V0。
+
 2026-10-03 T005：ADBP-06/09按会话授权更新；新增AdbWireTest duration=0往返、旧version与负duration拒绝测试源码 NOT_RUN。生产helper protocol3，旧manifest/helper必须拒绝；P0 20秒有限诊断保留。服务器同批重编，长时运行/退出/重放仍 NOT_RUN。
 
 2026-10-03 T004远程配对增量：[当前指南](docs/plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)与[任务](docs/plans/ADB_REMOTE_PAIRING_TASK.md)。以下新增案例均 NOT_RUN，必须同批 PC/APK/helper 构建；Rust 新增 malformed/port/code/payload/revoke/secret-error 单元测试源码尚未执行。
@@ -7,7 +11,7 @@
 | Case | 验证目标 / 通过条件 | Level / 当前状态 |
 |---|---|---|
 | ADBP-01 | APK所选ABI均含libadb.so与固定helper/receipt，native可执行；缺件构建失败 | V2/V3 NOT_RUN |
-| ADBP-02 | 未启动5037 daemon，PC输入有效port+六位码；localhost启动成功且45s预算内明确终态 | V3/V4 NOT_RUN |
+| ADBP-02 | 未启动Tunnel私有daemon，PC输入有效port+六位码；私有socket自动启动且45s预算内明确终态，不使用LADB的5037 | V3/V4 NOT_RUN |
 | ADBP-03 | 保持系统码窗口：pair→独立NSD connection port→connect→fresh nonce uid2000→conn grant；原普通视频继续 | V3/V4 NOT_RUN |
 | ADBP-04 | 过期/错误码、错端口/窗口关闭：稳定错误可见、非ready、不假grant、secret无日志/偏好/argv | V3/V4 NOT_RUN |
 | ADBP-05 | 本机IPv4/IPv6 NSD、resolver busy、发现失败；手填独立connectPort仍可连接，拒绝foreign host/serial | V3/V4 NOT_RUN |

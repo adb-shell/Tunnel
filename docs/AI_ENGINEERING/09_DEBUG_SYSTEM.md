@@ -1,5 +1,7 @@
 # Tunnel 调试与验证体系 / Debug System
 
+2026-10-03 T007《编译验证需求》：后续日志定位Rust完成后Flutter旧ADB配对窗类型失败；云端test/0720e49有T006修复，先核对服务器git log/status与实际Dart文件，再完整重编。CMD默认保留窗口；自动化new-build.cmd -NoPause。新日志/build.json记录source commit/tracked changes/关键Dart SHA256，回传STEP/FAILED与source/toolchain；按[指南](../plans/WINDOWS_BUILD_GUIDE.md)验证。仅PS5.1/PS7静态解析与源码V0；修订版及驱动/打包尚未通过。
+
 2026-10-03 T004《编译验证需求》：Linux正式源码根 ./build.sh 1（或2）、Windows x64正式源码根 new-build.cmd；PC/APK/helper同批重建。按 TEST_MATRIX ADBP-01—12/ADBM 验首次daemon、配对/独立connect、错误码、取消确认、lategrant、撤权恢复、授权健康运行超过10/30分钟及1小时、退出ADB撤销、MP/侧按钮/A11y；T005 helper protocol3与APK/PC同批重编。记录Android11—16与OnePlus/iQOO16的ROM/ABI/页大小、产物hash；16KiB native未证明。当前只有源码词法/引用/协议/交叉review/diff V0，Rust新增测试源码未执行。[指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。
 
 2026-10-03 T003 Windows《编译验证需求》：正式x64服务器完整源码根运行new-build.cmd，已有完整Release可-PackageOnly；查看PC-Bulid/logs与EXE.payload/build/sha256记录，按WIN05/07/08验真实解压与驱动。合同测试源码tests/windows_build_contract_test.py尚未执行。完整环境、命令与oracle见 [Windows指南](../plans/WINDOWS_BUILD_GUIDE.md)；本轮只有V0。

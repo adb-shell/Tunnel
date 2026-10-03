@@ -13,6 +13,7 @@ class AndroidAdbPairingModel extends ChangeNotifier {
   AndroidAdbPairingModel(this.parent);
   final WeakReference<FFI> parent;
   Timer? _deadline;
+  Timer? _ackDeadline;
   String operationId = '';
   String phase = 'IDLE';
   String errorCode = '';
@@ -25,6 +26,7 @@ class AndroidAdbPairingModel extends ChangeNotifier {
   bool _timedOut = false;
   final Map<String, String> _cancelOperations = {};
   bool _disposed = false;
+  bool get cancelling => _cancelling;
 
   static bool validPort(String value) {
     if (!RegExp(r'^\d{1,5}$').hasMatch(value)) return false;
@@ -34,6 +36,8 @@ class AndroidAdbPairingModel extends ChangeNotifier {
 
   String get statusText {
     switch (phase) {
+      case 'SENDING': return '正在发送请求…';
+      case 'WAITING_ACK': return '请求已提交，等待手机接收确认…';
       case 'PAIR_STARTING': return '手机正在准备 ADB 配对组件…';
       case 'PAIRING': return '手机正在使用配对端口验证配对码…';
       case 'CONNECTING': return '正在发现连接端口并验证 shell 权限…';
@@ -47,7 +51,7 @@ class AndroidAdbPairingModel extends ChangeNotifier {
       case 'CANCELLED': return errorCode == 'CONSENT_REVOKED' ? '本连接的 ADB 授权已撤销' :
           _timedOut ? '操作超时，手机已确认取消配对' : '手机已确认取消配对';
       case 'DISCONNECTED': return '远程连接已断开，配对请求已终止';
-      case 'TIMEOUT': return '90 秒内未收到完成结果，已请求手机取消。请检查状态再重试。';
+      case 'TIMEOUT': return '手机已接收请求，但操作超时，已请求取消。';
       case 'PAIR_FAILED': return '配对或连接失败';
       default: return '等待输入手机无线调试的配对信息';
     }
@@ -82,6 +86,7 @@ class AndroidAdbPairingModel extends ChangeNotifier {
       'UNSUPPORTED_ANDROID': '无线调试配对需要 Android 11 或更高版本。',
       'OPERATION_TIMEOUT': '手机 ADB 操作超时，请检查无线调试和系统配对窗口后重试。',
       'CANCEL_SEND_FAILED': '取消请求未送达，请检查远程连接并刷新 ADB 状态。',
+      'NO_RESPONSE': '12 秒内未收到手机接收确认。请确认电脑和手机均已更新到同一版本；这不代表配对码错误。',
     };
     // Endpoint codes are identifiers, never native command output or the code.
     return '${messages[errorCode] ?? '手机返回错误，请检查无线调试设置并重试。'} ($errorCode)';
@@ -126,26 +131,35 @@ class AndroidAdbPairingModel extends ChangeNotifier {
     _revision = -1;
     _cancelling = false;
     _timedOut = false;
-    phase = op == 'revoke' ? 'REVOKING' : 'PAIR_STARTING';
+    phase = 'SENDING';
     errorCode = '';
     busy = true;
     notifyListeners();
     _deadline?.cancel();
+    _ackDeadline?.cancel();
+    _ackDeadline = Timer(const Duration(seconds: 12), () {
+      if (!busy || operationId != id || _cancelling) return;
+      errorCode = 'NO_RESPONSE';
+      _timedOut = true;
+      cancel();
+    });
     _deadline = Timer(const Duration(seconds: 90), () {
       if (!busy || operationId != id) return;
-      _cancelling = true;
       _timedOut = true;
-      _cancelRequest(id);
-      busy = false;
-      phase = 'TIMEOUT';
-      notifyListeners();
+      errorCode = 'OPERATION_TIMEOUT';
+      cancel();
     });
     try {
       await _send(op, id, payload);
+      if (!_disposed && operationId == id && phase == 'SENDING') {
+        phase = 'WAITING_ACK';
+        notifyListeners();
+      }
       return true;
     } catch (_) {
       if (!_disposed && operationId == id && busy) {
         _deadline?.cancel();
+        _ackDeadline?.cancel();
         busy = false;
         phase = 'PAIR_FAILED';
         errorCode = 'SEND_FAILED';
@@ -169,7 +183,7 @@ class AndroidAdbPairingModel extends ChangeNotifier {
         _deadline?.cancel();
         busy = false;
         phase = 'CANCEL_UNCONFIRMED';
-        errorCode = 'CANCEL_SEND_FAILED';
+        if (!_timedOut) errorCode = 'CANCEL_SEND_FAILED';
         notifyListeners();
       }
     }
@@ -179,6 +193,7 @@ class AndroidAdbPairingModel extends ChangeNotifier {
     if (!busy || _cancelling) return;
     final id = operationId;
     _cancelling = true;
+    _ackDeadline?.cancel();
     _cancelRequest(operationId);
     _deadline?.cancel();
     phase = 'CANCELLING';
@@ -205,7 +220,10 @@ class AndroidAdbPairingModel extends ChangeNotifier {
         busy = false;
         phase = 'CANCEL_UNCONFIRMED';
         final code = update['code'];
-        errorCode = code is String && RegExp(r'^[A-Z0-9_]{1,80}$').hasMatch(code) ? code : 'CANCEL_SEND_FAILED';
+        if (!_timedOut) {
+          errorCode = code is String && RegExp(r'^[A-Z0-9_]{1,80}$').hasMatch(code)
+              ? code : 'CANCEL_SEND_FAILED';
+        }
         notifyListeners();
       }
       return true;
@@ -223,10 +241,13 @@ class AndroidAdbPairingModel extends ChangeNotifier {
     final next = update['phase'];
     if (next is! String || !const {'PAIR_STARTING', 'PAIRING', 'CONNECTING', 'VERIFYING', 'VERIFIED',
         'PAIRED_CONNECT_REQUIRED', 'PAIR_FAILED', 'CANCELLED', 'ERROR'}.contains(next)) return true;
+    _ackDeadline?.cancel();
     lastEventAccepted = true;
     phase = next == 'ERROR' ? 'PAIR_FAILED' : next;
     final code = update['code'];
-    errorCode = code is String && RegExp(r'^[A-Z0-9_]{1,80}$').hasMatch(code) ? code : '';
+    if (!(next == 'CANCELLED' && _timedOut)) {
+      errorCode = code is String && RegExp(r'^[A-Z0-9_]{1,80}$').hasMatch(code) ? code : '';
+    }
     if (update['localAdbReady'] is bool) localAdbReady = update['localAdbReady'];
     if (update['paired'] is bool) paired = update['paired'];
     if (!const {'PAIR_STARTING', 'PAIRING', 'CONNECTING', 'VERIFYING'}.contains(phase)) {
@@ -241,6 +262,7 @@ class AndroidAdbPairingModel extends ChangeNotifier {
   void reset() {
     if (busy) _cancelRequest(operationId);
     _deadline?.cancel();
+    _ackDeadline?.cancel();
     _deadline = null;
     operationId = '';
     _revision = -1;
@@ -260,6 +282,7 @@ class AndroidAdbPairingModel extends ChangeNotifier {
     _disposed = true;
     if (busy) _cancelRequest(operationId);
     _deadline?.cancel();
+    _ackDeadline?.cancel();
     super.dispose();
   }
 }

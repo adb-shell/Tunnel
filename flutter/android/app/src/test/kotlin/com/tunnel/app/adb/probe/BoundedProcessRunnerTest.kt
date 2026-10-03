@@ -2,6 +2,8 @@ package com.tunnel.app.adb.probe
 
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -64,6 +66,47 @@ class BoundedProcessRunnerTest {
         }
         assertTrue(result.succeeded)
         assertEquals(1, launches)
+    }
+
+    @Test fun cancellationReapsDrainsAndDoesNotPoisonTheNextOperation() {
+        val closed = CountDownLatch(1)
+        val child = object : Process() {
+            private val output = ByteArrayOutputStream()
+            private fun drain() = object : InputStream() {
+                override fun read(): Int {
+                    closed.await()
+                    Thread.sleep(50) // The pipe drains only after child termination.
+                    return -1
+                }
+            }
+            override fun getInputStream() = drain()
+            override fun getErrorStream() = drain()
+            override fun getOutputStream() = output
+            override fun waitFor(): Int { closed.await(); return 0 }
+            override fun waitFor(timeout: Long, unit: TimeUnit): Boolean {
+                if (closed.count == 0L) return true
+                Thread.currentThread().interrupt()
+                return false
+            }
+            override fun exitValue(): Int {
+                if (closed.count != 0L) throw IllegalThreadStateException()
+                return 0
+            }
+            override fun destroy() { closed.countDown() }
+            override fun destroyForcibly(): Process { destroy(); return this }
+            override fun isAlive() = closed.count != 0L
+        }
+        try {
+            val result = BoundedProcessRunner.runWithFactory(1000, 32,
+                cancelled = { Thread.currentThread().isInterrupted }, start = { child })
+            assertEquals(ProcessFailure.INTERRUPTED, result.failure)
+            assertTrue(Thread.currentThread().isInterrupted)
+        } finally { Thread.interrupted() }
+        val next = BoundedProcessRunner.runWithFactory(1000, 32) {
+            FakeProcess("ready".toByteArray(), ByteArray(0))
+        }
+        assertTrue(next.succeeded)
+        assertEquals("ready", next.stdout.toString(Charsets.UTF_8))
     }
 
     private class FakeProcess(

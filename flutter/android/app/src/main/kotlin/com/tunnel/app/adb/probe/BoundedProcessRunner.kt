@@ -58,6 +58,13 @@ internal object BoundedProcessRunner {
         start: () -> Process,
     ): BoundedProcessResult = runControlled(timeoutMillis, maxBytesPerStream, null, { false }, start)
 
+    internal fun runWithFactory(
+        timeoutMillis: Long,
+        maxBytesPerStream: Int,
+        cancelled: () -> Boolean,
+        start: () -> Process,
+    ): BoundedProcessResult = runControlled(timeoutMillis, maxBytesPerStream, null, cancelled, start)
+
     private fun runControlled(
         timeoutMillis: Long, maxBytesPerStream: Int, stdin: ByteArray?,
         cancelled: () -> Boolean, start: () -> Process,
@@ -132,20 +139,33 @@ internal object BoundedProcessRunner {
         } catch (_: Exception) {
             failure = ProcessFailure.DRAIN_FAILED
         } finally {
+            // Cancellation commonly arrives while waiting or just before teardown.
+            // Clear it while reaping/joining: otherwise join() throws immediately,
+            // healthy drains look stuck and one cancelled pairing permanently
+            // poisons every future ADB operation until the app is restarted.
+            if (Thread.interrupted()) interrupted = true
             if (exitCode == null) {
                 try { process.destroyForcibly() } catch (_: Exception) { }
-                try {
-                    if (process.waitFor(250, TimeUnit.MILLISECONDS)) exitCode = process.exitValue()
-                } catch (_: InterruptedException) {
-                    interrupted = true
-                } catch (_: Exception) { }
+                val reapDeadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(250)
+                while (System.nanoTime() < reapDeadline) {
+                    try {
+                        if (process.waitFor((reapDeadline - System.nanoTime()).coerceAtLeast(1), TimeUnit.NANOSECONDS))
+                            exitCode = process.exitValue()
+                        break
+                    } catch (_: InterruptedException) { interrupted = true
+                    } catch (_: Exception) { break }
+                }
             }
-            try {
-                outThread.join(250)
-                errThread.join(250)
-            } catch (_: InterruptedException) {
-                interrupted = true
+            fun finishDrain(thread: Thread) {
+                val joinDeadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500)
+                while (thread.isAlive && System.nanoTime() < joinDeadline) {
+                    try {
+                        thread.join(TimeUnit.NANOSECONDS.toMillis(joinDeadline - System.nanoTime()).coerceAtLeast(1))
+                    } catch (_: InterruptedException) { interrupted = true }
+                }
             }
+            finishDrain(outThread)
+            finishDrain(errThread)
             if (outThread.isAlive || errThread.isAlive) {
                 // A pipe close may wait on the same monitor as a blocked read. Do not let
                 // teardown make the caller unbounded; retain at most these two daemon

@@ -183,11 +183,35 @@ def injection(spec, options, cache):
     msbuild = shutil.which('msbuild.exe') or shutil.which('msbuild')
     if not msbuild:
         raise ValueError('WindowInjection.dll missing; source build needs MSBuild or TUNNEL_WINDOW_INJECTION_DLL')
-    subprocess.run([msbuild, str(project), '/m', '/p:Configuration=Release', '/p:Platform=x64',
-                    '/p:TargetVersion=Windows10'], cwd=project.parent.parent, check=True, timeout=600)
-    dll = unique_file(project.parent / 'x64/Release', 'WindowInjection.dll')
+    # The pinned upstream vcxproj requests v142 (VS2019). The canonical Tunnel
+    # host initializes VS2022/v143, which does not necessarily install v142.
+    # Select the initialized compiler rather than failing with MSB8020 halfway
+    # through packaging; an explicit toolset remains available to asset owners.
+    toolset = os.environ.get('TUNNEL_WINDOW_INJECTION_TOOLSET')
+    if not toolset:
+        vs_major = os.environ.get('VisualStudioVersion', '').split('.')[0]
+        toolset = {'17': 'v143', '16': 'v142', '15': 'v141'}.get(vs_major)
+        if not toolset:
+            compiler = os.environ.get('VCToolsVersion', '')
+            if compiler.startswith(('14.3', '14.4')):
+                toolset = 'v143'
+            elif compiler.startswith('14.2'):
+                toolset = 'v142'
+    if toolset and not re.fullmatch(r'v[0-9]{3}', toolset):
+        raise ValueError('TUNNEL_WINDOW_INJECTION_TOOLSET must be a VS toolset such as v143')
+    output = project.parent / 'x64/Release'
+    intermediate = project.parent / 'x64/Intermediate'
+    arguments = [msbuild, str(project), '/m', '/p:Configuration=Release', '/p:Platform=x64',
+                 '/p:TargetVersion=Windows10', '/p:OutDir=' + str(output) + os.sep,
+                 '/p:IntDir=' + str(intermediate) + os.sep]
+    if toolset:
+        arguments.append('/p:PlatformToolset=' + toolset)
+    print('Build WindowInjection with toolset ' + (toolset or 'upstream project default'), flush=True)
+    subprocess.run(arguments, cwd=project.parent.parent, check=True, timeout=600)
+    dll = unique_file(output, 'WindowInjection.dll')
     require_x64_dll(dll)
     provenance['source'] = 'fixed-commit-source-built'
+    provenance['platformToolset'] = toolset or 'upstream-project-default'
     provenance['dllSha256'] = sha256(dll)
     return dll, provenance
 

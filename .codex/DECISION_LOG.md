@@ -1,5 +1,13 @@
 # Tunnel Decision Log
 
+## D-020：Tunnel 私有 ADB daemon 与真实接收反馈
+
+- 2026-10-03；accepted implementation；T008用户授权修复配对/重试/交互，沿用ADR-0016/0017的会话授权。
+- 所有本机ADB调用用app filesDir私有localfilesystem socket与原HOME/key，避免共享5037串用LADB daemon；不复制别的app密钥、不kill-server。
+- 远程请求发送、手机ACK、配对、连接、nonce uid2000是不同阶段；取消后可再次操作，未ACK不声称手机正在执行。MainService资格由当前Rust权限门显式刷新，非历史CM通知唯一依赖。
+- 取舍：旧版若实际使用LADB daemon密钥，改为私有daemon后须为Tunnel重新配对；正确性依赖正式Android11—16设备验证。固定上游source支持-L，binary/ROM执行尚未验证。
+- 证据与回滚：docs/plans/ADB_RELIABILITY_REPAIR_TASK.md；V0源码，不是运行通过。回滚需Spec/probe/P0统一，不能一部分仍指5037。
+
 ## D-017：远程ADB先完成全链源码，再集中服务器验收
 
 - 日期：2026-10-03；accepted；Approved by：当前用户明确要求直接完成P0—P6之后自行编译测试。

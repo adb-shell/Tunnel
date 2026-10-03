@@ -1739,8 +1739,8 @@ class TunnelStatusMonitor extends StatelessWidget {
   final TunnelStatusModel tunnelStatusModel;
   TunnelStatusMonitor(this.tunnelStatusModel);
 
-  Widget _textRow(String label, String value, {Color? color}) => Tooltip(
-    message: value,
+  Widget _textRow(String label, String value, {Color? color, String? detail}) => Tooltip(
+    message: detail == null || detail.isEmpty ? value : detail,
     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Expanded(flex: 10, child: Text(label,
         style: const TextStyle(color: Color.fromARGB(255, 210, 210, 210)),
@@ -1757,43 +1757,23 @@ class TunnelStatusMonitor extends StatelessWidget {
     if (ffi == null || !ffi.ffiModel.isPeerAndroid) return [];
     final m = ffi.androidModeModel;
     final pair = m.pairing;
-    const modes = <String, String>{
-      'UNKNOWN': '待检测', 'IDLE': '普通共享', 'NORMAL': '普通共享',
-      'REQUESTING': '请求中', 'PREPARING': '准备中', 'READY': '准备完成',
-      'CANDIDATE_READY': '切换中', 'PRESENT_FRAME': '确认画面',
-      'WAITING_PRESENTED': '确认画面', 'COMMITTED': 'ADB 投屏',
-      'ROLLING_BACK': '恢复普通共享', 'STOPPING': '停止中',
-      'RECONFIGURE': '调整画面', 'OTHER_WINDOW': '其他窗口控制',
-      'ERROR': '操作失败', 'FAILED': '操作失败',
-    };
-    const sources = <String, String>{
-      'NONE': '无', 'ADB_LIVE': '实时投屏', 'ADB_SNAPSHOT': '无视截图',
-      'ADB_HIERARCHY': '穿透节点', 'MEDIA_PROJECTION': '普通共享',
-    };
-    final source = m.state['actualFrameSource']?.toString() ?? 'NONE';
     final adbReady = m.state['localAdbReady'];
-    final adbInput = m.state['inputReady'];
-    final consentActive = m.consentActive;
-    const pairingPhases = <String, String>{
-      'PAIR_STARTING': '准备中', 'PAIRING': '验证配对码', 'CONNECTING': '连接中',
-      'VERIFYING': '验证权限', 'VERIFIED': '已连接', 'PAIRED_CONNECT_REQUIRED': '待填连接端口',
-      'REVOKING': '撤销授权中', 'CANCELLING': '取消确认中',
-      'CANCEL_UNCONFIRMED': '取消未确认', 'CANCELLED': '已取消', 'DISCONNECTED': '已断线',
-      'TIMEOUT': '操作超时', 'PAIR_FAILED': '操作失败',
-    };
+    final failed = pair.errorText.isNotEmpty;
+    final connection = pair.busy ? '处理中' : failed ? '操作失败'
+        : adbReady == true ? (m.consentActive == true ? '可用' : '待授权')
+        : adbReady == false ? '未连接' : '未检测';
+    final mode = m.phase == 'OTHER_WINDOW' ? '其他窗口'
+        : m.busy || m.inputFrozen ? '切换中'
+        : m.reason.isNotEmpty ? '操作失败'
+        : m.usingAdb ? (m.state['capturePaused'] == true ? 'ADB 暂停' : 'ADB') : '普通共享';
     return [
       const Divider(color: Colors.white24, height: 12),
-      _row('ADB 连接：', adbReady is bool ? adbReady : null,
-        positiveText: '已验证', negativeText: '未连接'),
-      _textRow('投屏模式：', modes[m.phase] ?? m.phase),
-      _textRow('ADB 画面：', m.state['capturePaused'] == true ? '已暂停' : (sources[source] ?? source)),
-      _row('ADB 输入：', m.usingAdb && adbInput is bool ? adbInput : null,
-        positiveText: '就绪', negativeText: '不可用'),
-      _textRow('ADB 授权：', consentActive == null ? '待检测' : consentActive ? '本次会话有效' : '未授权'),
-      if (pair.phase != 'IDLE') _textRow('ADB 配对：', pairingPhases[pair.phase] ?? pair.phase,
-        color: pair.phase == 'VERIFIED' ? Colors.green : null),
-      if (pair.errorText.isNotEmpty) _textRow('配对错误：', pair.errorText, color: Colors.redAccent),
-      if (m.reason.isNotEmpty) _textRow('ADB 提示：', m.reason, color: Colors.orangeAccent),
+      _textRow('ADB：', connection,
+        detail: failed ? pair.errorText : pair.busy ? pair.statusText : '',
+        color: failed ? Colors.redAccent
+            : adbReady == true && m.consentActive == true ? Colors.green : null),
+      _textRow('投屏模式：', mode, detail: m.reasonText,
+        color: m.reason.isNotEmpty ? Colors.orangeAccent : null),
     ];
   }
 

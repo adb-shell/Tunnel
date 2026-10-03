@@ -5,13 +5,13 @@ import android.os.Build
 import android.os.SystemClock
 import com.tunnel.app.BuildConfig
 import com.tunnel.app.adb.TunnelAdbManager
+import com.tunnel.app.adb.LocalAdbProcessSpec
 import com.tunnel.app.adb.probe.BoundedProcessRunner
 import com.tunnel.app.adb.probe.LocalAdbIdentityProbe
 import com.tunnel.app.adb.probe.LocalAdbTargetPolicy
 import com.tunnel.adb.protocol.AdbWire
 import com.tunnel.app.adb.mirror.PackagedAdbHelper.hex
 import java.io.Closeable
-import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.net.InetAddress
@@ -80,11 +80,8 @@ object TunnelAdbPrototype {
         var remoteDir: String? = null
         var remoteCreated = false
         var prefix: List<String>? = null
-        val environment = mapOf(
-            "HOME" to run.context.filesDir.absolutePath, "TMPDIR" to run.context.cacheDir.absolutePath,
-            "PATH" to "/system/bin:/system/xbin", "ANDROID_ROOT" to "/system", "ANDROID_DATA" to "/data",
-            "LD_LIBRARY_PATH" to run.context.applicationInfo.nativeLibraryDir,
-        )
+        val spec = LocalAdbProcessSpec(run.context)
+        val environment = spec.environment
         var terminalReason = "PROTOTYPE_FAILED"
         try {
             val probe = LocalAdbIdentityProbe(run.context).probe(run.serial)
@@ -94,8 +91,7 @@ object TunnelAdbPrototype {
             artifact = try { PackagedAdbHelper.load(run.context) } catch (_: Exception) {
                 throw Failure("HELPER_ASSET_INVALID_OR_MISSING")
             }
-            val adbPrefix = listOf(File(run.context.applicationInfo.nativeLibraryDir, "libadb.so").absolutePath,
-                "-H", "127.0.0.1", "-P", "5037", "-s", target.serial)
+            val adbPrefix = spec.command(target, emptyList())
             prefix = adbPrefix
             // The path is generated internally; no shell argument is supplied by Flutter/PC.
             val suffix = ByteArray(16).also { random.nextBytes(it) }.hex()

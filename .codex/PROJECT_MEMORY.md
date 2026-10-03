@@ -1,5 +1,9 @@
 # Tunnel Project Memory
 
+- 2026-10-03 T008：用户实测ADB/PC交互/打包失败后修复；LADB官方固定commit的55文本在仓外../ladb-reference，manifest记录hash/license。ADB改私有localfilesystem daemon，修取消后永久unavailable/首条NSD/服务重建身份；PC输入租约、双入口弹窗、ACK与执行超时分离、检测两行；Windows工具集/x64/staging与自解压错误传播。详见docs/plans/ADB_RELIABILITY_REPAIR_TASK.md及两份使用指南。V0通过，真实配对/构建/运行待验；未提交推送。
+
+- 2026-10-03 T007：Windows统一CMD入口默认pause，NoPause/CI用于自动化；VS前launcher日志，PS追加transcript、真实退出码与独立清理。用户launcher日志定位Rust release后Flutter旧ADB配对窗类型失败；test/0720e49有T006修复，服务器HEAD未知，需核对实际源码后重编。新增source commit/tracked changes/关键Dart SHA256及stderr消息显示；源码V0，后续driver/package/runtime未验；WINDOWS_BUILD_GUIDE/EXIT_FIX_TASK为入口。
+
 - 2026-10-03 T006：OverlayDialogManager.show的DialogBuilder仅接受CustomAlertDialog；ADB配对窗用私有CustomAlertDialog适配器override build承载原StatefulWidget，保留全窗口约束，避免直接AlertDialog content的intrinsic布局。源码V0，正式重编待验；见docs/plans/ADB_PAIRING_DIALOG_BUILD_FIX_TASK.md。
 
 最后更新：2026-10-03

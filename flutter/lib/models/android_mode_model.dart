@@ -24,6 +24,23 @@ class AndroidModeModel extends ChangeNotifier {
   bool busy = false;
   String phase = 'UNKNOWN';
   String reason = '';
+  String get reasonText {
+    const messages = <String, String>{
+      'HELPER_ASSET_INVALID': '手机投屏组件缺失或版本不匹配，请更新 APK。',
+      'HELPER_DIRECTORY_FAILED': '无法创建手机投屏组件目录。',
+      'HELPER_PUSH_FAILED': '投屏组件传送到手机失败。',
+      'HELPER_HASH_INVALID': '手机投屏组件校验失败，请更新 APK。',
+      'HELPER_LISTENER_FAILED': '无法建立手机本地投屏通道。',
+      'HELPER_PROCESS_START_FAILED': '手机投屏进程启动失败。',
+      'HELPER_BOOTSTRAP_FAILED': '手机投屏组件初始化失败。',
+      'HELPER_VIDEO_HANDSHAKE_FAILED': '手机视频通道连接失败。',
+      'HELPER_CONTROL_HANDSHAKE_FAILED': '手机控制通道连接失败。',
+      'HELPER_VIDEO_CHANNEL_FAILED': '手机视频通道已中断。',
+      'SESSION_ADB_AUTHORIZATION_REQUIRED': '请先打开远程 ADB 窗口连接并授权。',
+    };
+    final message = messages[reason];
+    return message == null ? reason : '$message ($reason)';
+  }
   String _startOperation = '';
   String _pendingOperation = '';
   String _statusOperation = '';

@@ -11,6 +11,9 @@ internal class LocalAdbProcessSpec(context: Context) {
     private val app = context.applicationContext
     val adbPath: String = File(app.applicationInfo.nativeLibraryDir, "libadb.so").absolutePath
     val workingDirectory: File = app.filesDir
+    // A TCP 5037 daemon can belong to LADB/Shizuku/another app and use that app's
+    // keys. Keep Tunnel's daemon and its HOME in the same private app sandbox.
+    val serverSocketPath: String = File(app.filesDir, "adb-server.sock").absolutePath
     val environment: Map<String, String> = mapOf(
         "HOME" to app.filesDir.absolutePath, "TMPDIR" to app.cacheDir.absolutePath,
         "PATH" to "/system/bin:/system/xbin", "ANDROID_ROOT" to "/system", "ANDROID_DATA" to "/data",
@@ -18,10 +21,9 @@ internal class LocalAdbProcessSpec(context: Context) {
         // Do not let the adb daemon auto-connect to arbitrary mDNS peers on the LAN.
         "ADB_MDNS_AUTO_CONNECT" to "0",
     )
-    // AOSP adb's tcp_host_is_local() recognizes only empty host / literal "localhost".
-    // -H 127.0.0.1 is considered a remote server and refuses daemon auto-start when
-    // port 5037 is closed. Keep the explicit local alias to permit initial start-server.
-    fun baseCommand(): List<String> = listOf(adbPath, "-H", "localhost", "-P", "5037")
+    // AOSP classifies localfilesystem as local, so -L supports automatic daemon
+    // startup as well as every subsequent client command. Never kill a shared server.
+    fun baseCommand(): List<String> = listOf(adbPath, "-L", "localfilesystem:$serverSocketPath")
     fun command(target: LocalAdbTarget, args: List<String>): List<String> {
         require(LocalAdbTargetPolicy.validate(target.serial) != null) { "TARGET_NOT_LOCAL" }
         return baseCommand() + listOf("-s", target.serial) + args
