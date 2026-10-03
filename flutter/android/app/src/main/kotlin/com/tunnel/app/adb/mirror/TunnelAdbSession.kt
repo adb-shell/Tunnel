@@ -35,6 +35,7 @@ internal class TunnelAdbSession(
         fun packet(packet: AdbWire.Packet): Boolean
         fun capabilities(mask: Int)
         fun videoState(taskId: Int, state: Int)
+        fun effectsState(applied: Int)
         fun ended(reason: String, cleanupComplete: Boolean)
     }
 
@@ -66,7 +67,7 @@ internal class TunnelAdbSession(
     fun setCapturePaused(paused: Boolean) { if (!paused) lastVideoAt = SystemClock.elapsedRealtime(); capturePaused = paused }
 
     fun videoTask(mode: Int, taskId: Int): CompletableFuture<AdbCommands.Result> {
-        require(mode in 0..3 && taskId > 0)
+        require(mode in 0..4 && taskId > 0)
         videoTaskId = taskId
         setCapturePaused(mode == 3)
         return operation(AdbCommands.VIDEO_TASK, mode, taskId)
@@ -101,8 +102,11 @@ internal class TunnelAdbSession(
         launch("watchdog") {
             while (!finished.get()) {
                 val now = SystemClock.elapsedRealtime()
+                // The writer may clear this volatile marker between two reads.
+                // Subtracting a second read of zero falsely kills a healthy helper.
+                val writeStarted = writeSince
                 if (!authenticated && now - startedAt > 45_000) fail("HELPER_START_TIMEOUT")
-                if (writeSince != 0L && now - writeSince > 2_000) fail("HELPER_WRITE_TIMEOUT")
+                if (writeStarted != 0L && now - writeStarted > 2_000) fail("HELPER_WRITE_TIMEOUT")
                 if (authenticated && !capturePaused && now - lastVideoAt > 15_000) {
                     val task = videoTaskId
                     capturePaused = true
@@ -185,6 +189,7 @@ internal class TunnelAdbSession(
                                 events.videoState(task, status)
                             }
                             AdbWire.PONG -> Unit
+                            AdbWire.EFFECTS_STATE -> events.effectsState(ByteBuffer.wrap(packet.payloadCopy()).int)
                             else -> throw IOException("CONTROL_INVALID")
                         }
                     }

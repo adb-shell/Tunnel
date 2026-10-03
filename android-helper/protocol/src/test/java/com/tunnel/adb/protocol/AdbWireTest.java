@@ -80,7 +80,7 @@ public class AdbWireTest {
             byte[] oldVersion = out.toByteArray(); oldVersion[5] = 3;
             rejects(() -> AdbWire.readBootstrap(new ByteArrayInputStream(oldVersion)));
         }
-        rejects(() -> new AdbWire.Bootstrap(secret(), 9, 1, 2, 1280, 30, 4000000, 0, 4));
+        rejects(() -> new AdbWire.Bootstrap(secret(), 9, 1, 2, 1280, 30, 4000000, 0, 5));
         assertEquals(AdbCommands.OVERLAY_BLACK, AdbCommands.Command.decode(
                 new AdbCommands.Command(1, AdbCommands.OVERLAY_BLACK, 1, 0, 0, 0, 0, 0).encode()).operation);
         rejects(() -> new AdbCommands.Command(1, AdbCommands.OVERLAY_BLACK, 2, 0, 0, 0, 0, 0));
@@ -103,7 +103,7 @@ public class AdbWireTest {
             rejects(() -> pair.server.write(AdbWire.Packet.of(AdbWire.VIDEO_FRAME, 0, 9, 2, 5, 2, 720, 1280, 10, new byte[]{5})));
         }
         rejects(() -> new AdbCommands.Command(1, AdbCommands.VIDEO_TASK, 0, 0, 0, 0, 0, 0));
-        rejects(() -> new AdbCommands.Command(1, AdbCommands.VIDEO_TASK, 4, 1, 0, 0, 0, 0));
+        rejects(() -> new AdbCommands.Command(1, AdbCommands.VIDEO_TASK, 5, 1, 0, 0, 0, 0));
         assertEquals(10, AdbCommands.Command.decode(new AdbCommands.Command(1,
                 AdbCommands.VIDEO_TASK, 3, 10, 0, 0, 0, 0).encode()).b);
         rejects(() -> AdbWire.Packet.of(AdbWire.VIDEO_CONFIG, 0, 9, 1, 1, 0, 720, 1280, 0, new byte[]{1}));
@@ -114,6 +114,31 @@ public class AdbWireTest {
             assertEquals(AdbWire.VIDEO_STATE, pair.client.read().kind);
             pair.client.write(AdbWire.Packet.command(AdbWire.PING, 9, 1));
             assertEquals(AdbWire.PING, pair.server.read().kind);
+        }
+    }
+
+    @Test(timeout = 10000) public void independentEffectsAndCombinedSourceAreAuthenticated() throws Exception {
+        assertEquals(4, AdbCommands.Command.decode(new AdbCommands.Command(1,
+                AdbCommands.VIDEO_TASK, 4, 12, 0, 0, 0, 0).encode()).a);
+        rejects(() -> new AdbCommands.Command(1, AdbCommands.TOUCH_BLOCK, 2, 0, 0, 0, 0, 0));
+        rejects(() -> new AdbCommands.Command(1, AdbCommands.TOUCH_BLOCK, 1, 1, 0, 0, 0, 0));
+        try (Pair pair = new Pair(AdbWire.CHANNEL_CONTROL, secret())) {
+            byte[] command = new AdbCommands.Command(1, AdbCommands.TOUCH_BLOCK, 1, 0, 0, 0, 0, 0).encode();
+            pair.client.write(AdbWire.Packet.of(AdbWire.OPERATION, 0, 9, 0, 1, 0, 0, 0, command));
+            assertEquals(AdbCommands.TOUCH_BLOCK, AdbCommands.Command.decode(pair.server.read().payloadCopy()).operation);
+            byte[] effects = java.nio.ByteBuffer.allocate(4).putInt(3).array();
+            pair.server.write(AdbWire.Packet.of(AdbWire.EFFECTS_STATE, 0, 9, 0, 1, 0, 0, 0, effects));
+            assertArrayEquals(effects, pair.client.read().payloadCopy());
+            rejects(() -> pair.client.write(AdbWire.Packet.of(AdbWire.EFFECTS_STATE, 0, 9, 0, 2, 0, 0, 0, effects)));
+        }
+        rejects(() -> AdbWire.Packet.of(AdbWire.EFFECTS_STATE, 0, 9, 0, 1, 0, 0, 0, new byte[3]));
+        rejects(() -> AdbWire.Packet.of(AdbWire.EFFECTS_STATE, 0, 9, 0, 1, 0, 0, 0,
+                java.nio.ByteBuffer.allocate(4).putInt(4).array()));
+        try (Pair pair = new Pair(AdbWire.CHANNEL_VIDEO, secret())) {
+            pair.server.write(AdbWire.Packet.of(AdbWire.VIDEO_CONFIG, 8, 9, 1, 1, 0, 720, 1280, 12, new byte[]{1}));
+            assertEquals(8, pair.client.read().flags);
+            pair.server.write(AdbWire.Packet.of(AdbWire.VIDEO_FRAME, 1, 9, 1, 2, 10, 720, 1280, 12, new byte[]{2}));
+            assertEquals(12, pair.client.read().taskId);
         }
     }
 

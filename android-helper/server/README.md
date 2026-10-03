@@ -10,6 +10,8 @@
 | `VideoEncoder.java` | 硬件 H264 Surface encoder、CSD/IDR、旋转重建和源切换 |
 | `ShellAutomation.java` | 独立 UiAutomation、固定输入、截图、节点和 semantic Canvas |
 | `BitmapSurface.java` | bitmap → EGL/GLES → encoder Surface；video 线程独占 GL |
+| `HierarchyFrame.java` | 多窗口、节点边界/关系线，截图叠加；空窗口不终止任务 |
+| `PhysicalTouchBlock.java` | 仅物理触屏 evdev grab，关闭 FD 自动恢复，不创建吞输入窗口 |
 | `BlackOverlay.java` | shell 黑色合成层；SKIP_SCREENSHOT 排除远端录制，不建立输入窗口 |
 | `DisplayPower.java` | 保留的 display 0 physical power 原语；侧栏黑屏不使用它 |
 | `H264AnnexB.java` | 有界 SPS/PPS/IDR 与 access unit 格式检查 |
@@ -29,20 +31,20 @@ APK listener 只能绑定 `127.0.0.1`。helper 依次连接 VIDEO、CONTROL，�
 - live：non-secure display mirror → hardware H264。
 - snapshot：UiAutomation screenshot → bounded bitmap → EGL → 同一 H264 wire。
 - hierarchy：UiAutomation 独立节点 → 有界 semantic Canvas → EGL → 同一 H264 wire。它是结构图，不是受保护像素捕获；password 文本不输出。
-- 单一 `captureMode` 互斥三者。选择 alternate 先取得真实 bitmap，失败保留当前模式；后续 provider 丢失或 EGL/codec 失败，仅停止该视频任务并报告失败，control/helper 保留；endpoint 接收仍运行的普通画面。
+- snapshot 与 hierarchy 开关独立；同时开启时生成截图底图+布局线条的组合帧。窗口暂时无节点时继续输出等待帧，截图暂不可用时组合源保留布局并标明缺少截图。再次开启 live 不清除已有覆盖源选择。关闭 live 只停止该源，截图/节点仍开启时继续输出，最后一个源关闭后回到已有普通画面；codec 故障不撤销控制权限。
 - 侧栏开/关共享只操作普通 MediaProjection。授权后单个 helper 持续拥有 UiAutomation、输入和黑罩，Bootstrap initialMode=3 启动；VIDEO_TASK 以 taskId 替换内部 encoder。关闭视频不关闭控制连接，禁止另外启动 UiAutomation 争抢同一服务。VIDEO read 由独立 control 心跳取消，静态画面先请求关键帧；视频超时不撤授权。
-- VIDEO_CONFIG flags 标识实际 helper source；源/尺寸/rotation 变化重建 codec、增加 revision、释放按住输入。Runtime 先冻结输入并通知 RECONFIGURE，Rust 给新 network epoch，然后发送 CONFIG/IDR。只有 PC decode ready → Activate → 真实 Presented ACK 后才确认视频源；输入使用独立控制与当前显示几何。收到 config、socket 通或服务活着均不算首帧。
+- VIDEO_CONFIG flags 标识实际 helper source；源/尺寸/rotation 变化重建 codec、增加 revision、释放按住输入。Runtime 先暂停新源提交并通知 RECONFIGURE，Rust 给新 network epoch，然后发送 CONFIG/IDR。只有 PC decode ready → Activate → 真实 Presented ACK 后才确认视频源；输入使用独立控制与当前显示几何。收到 config、socket 通或服务活着均不算首帧。
 - 不请求 secure display/buffer，不承诺 FLAG_SECURE、DRM 或 OEM 安全层可见。截图和树可用性按实际 API 结果变化。
 
 ## 有界资源与恢复
 
 启动 helper 15 秒、APK 含 probe/stage 45 秒；本机 control 每秒 PING，5 秒无有效 control 停止。每个方向 sequence 连续，command ID 严格递增；最多 64 条排队操作、每秒 240 条 control、操作 10 秒、写阻塞 2 秒。Runtime 控制者心跳 15 秒过期；生产 Bootstrap durationSeconds=0，无固定使用期限；断连/撤销/退出ADB/故障清理。有限诊断1—3600秒、P0 20秒，旋转不延期。
 
-VIDEO packet 拷贝 codec buffer，outputBuffer 总在 finally 释放；截图最长边 1280，树最多 1024 节点/depth32/text32KiB/JSON256KiB；跨线程 bitmap 槽最多一个，旧图 recycle。bitmap 与 GL 资源归明确线程所有。control 只有固定数值操作，没有远程任意命令解释器。
+VIDEO packet 拷贝 codec buffer，outputBuffer 总在 finally 释放；截图最长边 1280，树最多 32 窗口/1024 节点/depth32/text16KiB/JSON256KiB；跨线程 bitmap 槽最多一个，旧图 recycle。bitmap 与 GL 资源归明确线程所有。control 只有固定数值操作，没有远程任意命令解释器。
 
-停止释放输入、自己的 overlay/A11y pause、mirror/codec/GL/socket，关闭 UiAutomation，恢复自己关闭的物理 display；不清配对、不 kill-server、不重启 APK/core。清理 native binder/codec 卡住时 watchdog 最终只终止 helper PID。此时 physical display 恢复仍需真机验证，不能保证被杀死的 Java finally 能执行；物理电源键是本机恢复路径。
+断开/撤权/进程结束释放输入、自己的 overlay/触屏 FD/A11y pause、mirror/codec/GL/socket，关闭 UiAutomation，恢复自己关闭的物理 display；不清配对、不 kill-server、不重启 APK/core。清理 native binder/codec 卡住时 watchdog 最终只终止 helper PID。此时 physical display 恢复仍需真机验证，不能保证被杀死的 Java finally 能执行；物理电源键是本机恢复路径。
 
-屏幕电源以反射签名和 display0 physical address 识别；失败撤销 capability，不注入 POWER toggle。普通 APK overlay 不能可靠区分物理触摸与 ADB 注入，因此防触默认由宿主返回不支持，不伪报成功。无障碍管理按当前会话独立授权执行，不依赖视频是否开启；disableSelf 后的重新开启走本机设置确认，避免覆盖其他服务配置。
+屏幕电源以反射签名和 display0 physical address 识别；失败撤销 capability，不注入 POWER toggle。防触使用独立的 PhysicalTouchBlock：只读识别物理触屏，所有目标 EVIOCGRAB 成功才报告已开启，任一失败全释放；关闭、断连或进程退出关闭 FD 恢复。它不占用框架注入路径，且不改变设备权限。未知/虚拟/混合电源键设备、厂商访问限制明确失败；设备热插拔按维护周期检测，不能保证新设备出现瞬间已阻断。无障碍管理按当前会话独立授权执行，不依赖视频是否开启；disableSelf 后的重新开启走本机设置确认，避免覆盖其他服务配置。
 
 ## 服务器/真机验证需求（均未执行）
 

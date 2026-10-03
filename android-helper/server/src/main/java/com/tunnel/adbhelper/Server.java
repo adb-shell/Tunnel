@@ -147,7 +147,9 @@ public final class Server {
         private boolean controlOnly;
         private volatile int automationCapabilities;
         private volatile long operationSince;
+        private volatile long frameOperationSince;
         private volatile Thread automationThread;
+        private volatile Thread frameThread;
         static final class VideoTask {
             final int id, mode;
             VideoTask(int id, int mode) { this.id = id; this.mode = mode; }
@@ -207,7 +209,7 @@ public final class Server {
             Bitmap value = bitmap; bitmap = null; return value;
         }
         private synchronized void offerBitmap(Bitmap value, VideoTask expected) {
-            if (task != expected) { if (value != null) value.recycle(); return; }
+            if (task != expected || (stop.get() && value != null)) { if (value != null) value.recycle(); return; }
             if (bitmap != null) bitmap.recycle(); bitmap = value; bitmapTask = expected.id;
         }
         private synchronized boolean selectVideo(int id, int mode) {
@@ -271,9 +273,15 @@ public final class Server {
                     // Heartbeat, parent EOF and operation watchdogs still apply.
                     if (controlOnly && automationCapabilities != 0) deadline = 0;
                     sendCapabilities();
-                    long nextFrame = 0;
+                    startFrameWorker(automation);
+                    long nextEffectsCheck = 0;
+                    int lastEffects = -1;
                     while (!stop.get()) {
-                        if (releaseInput.getAndSet(false)) automation.releaseInput();
+                        if (releaseInput.getAndSet(false)) {
+                            operationSince = SystemClock.elapsedRealtime();
+                            try { automation.releaseInput(); }
+                            finally { operationSince = 0; }
+                        }
                         AdbCommands.Command command = operations.poll(40, TimeUnit.MILLISECONDS);
                         if (command != null) {
                             operationSince = SystemClock.elapsedRealtime();
@@ -282,35 +290,97 @@ public final class Server {
                                 boolean accepted = selectVideo(command.b, command.a);
                                 reply = new AdbCommands.Result(command.id,
                                         accepted ? AdbCommands.OK : AdbCommands.REJECTED, new byte[0]);
-                                nextFrame = 0;
                                 if (accepted && command.a == 3) videoState(command.b, 0);
                             } else if (command.operation == AdbCommands.CAPTURE_MODE) {
-                                // Protocol 5 tasks require a new explicit identity.
+                                // Video tasks require a new explicit identity.
                                 reply = new AdbCommands.Result(command.id, AdbCommands.REJECTED, new byte[0]);
                             } else reply = automation.execute(command);
                             operationSince = 0;
                             result(reply);
                         }
-                        VideoTask current = task;
-                        if ((current.mode == 1 || current.mode == 2) && SystemClock.elapsedRealtime() >= nextFrame) {
+                        if (SystemClock.elapsedRealtime() >= nextEffectsCheck) {
                             operationSince = SystemClock.elapsedRealtime();
-                            try { offerBitmap(automation.frame(current.mode), current); }
-                            catch (Exception lost) {
-                                automation.revokeMode(current.mode);
-                                videoTaskFailed(current);
-                            }
+                            try { automation.maintainEffects(); }
                             finally { operationSince = 0; }
-                            nextFrame = SystemClock.elapsedRealtime() + (current.mode == 2 ? 500 : 200);
+                            nextEffectsCheck = SystemClock.elapsedRealtime() + 500;
                         }
                         int next = automation.capabilities();
                         if (next != automationCapabilities) { automationCapabilities = next; sendCapabilities(); }
+                        int effects = automation.effectState();
+                        if (effects != lastEffects) {
+                            synchronized (controlWriteLock) {
+                                writeControl(AdbWire.Packet.of(AdbWire.EFFECTS_STATE, 0, epoch, 0,
+                                        ++controlSequence, 0, 0, 0, ByteBuffer.allocate(4).putInt(effects).array()));
+                            }
+                            lastEffects = effects;
+                        }
                     }
                 } catch (Exception failure) {
                     if (!stop.get()) stop("OPERATION_CHANNEL_FAILED");
-                } finally { automation.close(); offerBitmap(null, task); }
+                } finally {
+                    // UiAutomation is shared with the frame worker. A stuck OEM
+                    // Binder call must not race disconnect/dispose on this thread.
+                    stop("OPERATION_CHANNEL_ENDED");
+                    if (awaitFrameWorker()) automation.close();
+                    // If the worker ignored interruption, process exit/watchdog
+                    // reclaims the connection and FDs instead of unsafe close().
+                    offerBitmap(null, task);
+                }
             }, "tunnel-adb-operations");
             automationThread.setDaemon(true);
             automationThread.start();
+        }
+
+        private void startFrameWorker(ShellAutomation automation) {
+            frameThread = new Thread(() -> {
+                VideoTask previous = null;
+                long nextFrame = 0;
+                try {
+                    while (!stop.get()) {
+                        VideoTask current = task;
+                        if (current != previous) { previous = current; nextFrame = 0; }
+                        if ((current.mode != 1 && current.mode != 2 && current.mode != 4)
+                                || SystemClock.elapsedRealtime() < nextFrame) {
+                            Thread.sleep(40);
+                            continue;
+                        }
+                        boolean failed = false;
+                        frameOperationSince = SystemClock.elapsedRealtime();
+                        try { offerBitmap(automation.frame(current.mode), current); }
+                        catch (Exception unavailable) {
+                            automation.revokeMode(current.mode);
+                            failed = true;
+                        } finally { frameOperationSince = 0; }
+                        if (failed && !stop.get()) videoTaskFailed(current);
+                        nextFrame = SystemClock.elapsedRealtime() + (current.mode == 2 ? 500 : 200);
+                    }
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    frameOperationSince = 0;
+                    if (!stop.get()) stop("FRAME_WORKER_ENDED");
+                }
+            }, "tunnel-adb-frame-acquisition");
+            frameThread.setDaemon(true);
+            frameThread.start();
+        }
+
+        private boolean awaitFrameWorker() {
+            Thread worker = frameThread;
+            if (worker == null) return true;
+            worker.interrupt();
+            // stop() interrupts the operation owner as well. Clear that flag
+            // temporarily so shutdown actually gets its bounded join window.
+            boolean interrupted = Thread.interrupted();
+            long until = SystemClock.elapsedRealtime() + 750;
+            while (worker.isAlive()) {
+                long remaining = until - SystemClock.elapsedRealtime();
+                if (remaining <= 0) break;
+                try { worker.join(remaining); }
+                catch (InterruptedException cancellation) { interrupted = true; }
+            }
+            if (interrupted) Thread.currentThread().interrupt();
+            return !worker.isAlive();
         }
 
         private void sendCapabilities(int codecMask, int capabilityMask) throws IOException {
@@ -380,6 +450,13 @@ public final class Server {
             Thread watchdog = new Thread(() -> {
                 while (!finished.get()) {
                     long now = SystemClock.elapsedRealtime();
+                    // Read each volatile start marker once: a concurrent reset
+                    // to zero between the guard and subtraction is not a timeout.
+                    long controlOperation = operationSince;
+                    long frameOperation = frameOperationSince;
+                    long codecProgress = videoProgressAt;
+                    long controlWrite = controlWriteSince;
+                    long videoWrite = videoWriteSince;
                     if (stop.get()) {
                         if (now - stoppedAt > 2000) {
                             // Last resort if an OEM codec/framework call ignores cancellation.
@@ -390,16 +467,18 @@ public final class Server {
                         stop(captureRunning ? (frames.get() > 0 ? "DURATION_COMPLETE" : "NO_FRAME_BEFORE_TIMEOUT") : "STARTUP_TIMEOUT");
                     } else if (lastControl != 0 && now - lastControl > 5000) {
                         stop("HEARTBEAT_TIMEOUT");
-                    } else if (operationSince != 0 && now - operationSince > 10000) {
+                    } else if (controlOperation != 0 && now - controlOperation > 10000) {
                         stop("OPERATION_TIMEOUT");
-                    } else if (videoProgressAt != 0 && now - videoProgressAt > 15000) {
+                    } else if (frameOperation != 0 && now - frameOperation > 10000) {
+                        stop("FRAME_WORKER_BLOCKED");
+                    } else if (codecProgress != 0 && now - codecProgress > 15000) {
                         // An OEM codec that never returns cannot be interrupted
                         // safely inside Java. Recreate the helper, not the daemon
                         // or the remote authorization, so a new request can run.
                         stop("CODEC_WORKER_BLOCKED");
-                    } else if (controlWriteSince != 0 && now - controlWriteSince > 2000) {
+                    } else if (controlWrite != 0 && now - controlWrite > 2000) {
                         stop("CONTROL_WRITE_TIMEOUT");
-                    } else if (videoWriteSince != 0 && now - videoWriteSince > 5000) {
+                    } else if (videoWrite != 0 && now - videoWrite > 5000) {
                         // A broken local socket is distinct from an encoder task
                         // failure. A partially written authenticated record cannot
                         // be resumed; the APK must recreate this helper, keeping
@@ -423,6 +502,8 @@ public final class Server {
             operations.clear();
             Thread operationsOwner = automationThread;
             if (operationsOwner != null) operationsOwner.interrupt();
+            Thread frameOwner = frameThread;
+            if (frameOwner != null) frameOwner.interrupt();
             synchronized (sockets) {
                 for (Socket socket : sockets) {
                     try { socket.close(); } catch (IOException ignored) { }

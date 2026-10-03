@@ -52,6 +52,12 @@ Tunnel自有AdbWire升级VERSION3并同步HMAC域：Bootstrap durationSeconds=0�
 
 Tunnel 自有 Bootstrap 增加 initialMode，记录从 70 扩为 74 字节；新增 OVERLAY_BLACK 固定操作和 CAP_OVERLAY，APK/helper/Gradle/供应清单同步为协议 4。黑屏侧按钮不再调用物理 power 操作。BlackOverlay 使用独立 shell SurfaceControl 色层及 setSkipScreenshot；依据 [AOSP Android 12 SurfaceControl](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android12-release/core/java/android/view/SurfaceControl.java) 和 [Android 16 固定 tag](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-16.0.0_r1/core/java/android/view/SurfaceControl.java) 的截图、镜像与录制排除语义自行实现，未复制上游文件。隐藏 API 运行时反射探测；不支持则返回失败，不使用 secure layer 或物理关屏替代。源码核对不代表 OEM 真机验证。
 
-## 当前协议 5：控制与视频任务分离
+## 协议 5：控制与视频任务分离
 
 本次为 Tunnel 自有协议修改：Bootstrap 保持 74 字节，视频包头增加 taskId 后为 56 字节；VIDEO_TASK 替换或停止视频任务，VIDEO_STATE 单独报告任务结果。控制 helper 持续存活，同模式再次开启也会重建视频任务；编码、截图失败不撤销远程授权。只有进程或认证通道故障才回收该 helper，APK 保留独立授权并有界重建。仍仅有一个 UiAutomation 所有者，不新增上游代码；新增协议回归测试源码，正式编译及真机验证尚未执行。
+
+## 当前协议 6：独立效果与物理防触
+
+新增 Tunnel 自有 `HierarchyFrame`、`PhysicalTouchBlock`，未复制外部实现。TOUCH_BLOCK 与 EFFECTS_STATE、截图+节点组合源同步 APK/helper/Gradle；画面与控制分别工作，黑屏/防触按独立意愿维护。节点配置参照 [UiAutomation.getWindows](https://developer.android.com/reference/android/app/UiAutomation#getWindows())，空/stale 窗口不会关闭节点源。
+
+物理防触的源码依据：[Android 16 adbd AID_INPUT](https://android.googlesource.com/platform/packages/modules/adb/+/android-16.0.0_r1/daemon/main.cpp)、[Android 11 shell policy](https://android.googlesource.com/platform/system/sepolicy/+/android-11.0.0_r1/public/shell.te)、[Android 16 shell policy](https://android.googlesource.com/platform/system/sepolicy/+/android-16.0.0_r1/private/shell.te)、[Android 11 ioctlInt](https://android.googlesource.com/platform/libcore/+/android-11.0.0_r1/luni/src/main/java/android/system/Os.java)、[Android 16 native ioctlInt](https://android.googlesource.com/platform/libcore/+/android-16.0.0_r1/luni/src/main/native/libcore_io_Linux.cpp)、[固定内核 evdev grab/release](https://android.googlesource.com/kernel/common/+/3a7d1771d4925a56f7eeb8a5ba1faff0c544a9ef/drivers/input/evdev.c)。只抓取确认的物理触屏，关闭 FD 自动释放，禁止 chmod、停驱动或抓取电源/键盘。AOSP 权限与签名证据不等于 OEM 运行证明；设备身份不可判定或 ioctl 被拒绝时返回失败。黑层无法确认 OEM 排除录制效果、热插拔窗口与进程恢复间隙均保留真机验收要求。

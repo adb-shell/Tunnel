@@ -30,6 +30,9 @@ class AndroidAdbMenu extends StatelessWidget {
               m.pairing.revoke();
             } else if (op == 'show_actions') {
               m.setAdbActionsVisible(true);
+            } else if (op == 'stop' && m.consentActive == true) {
+              // Stop live capture without clearing independently enabled layout/screenshot sources.
+              m.request('start', payload: {'sourceAction': 'live_off'});
             } else {
               m.request(op);
             }

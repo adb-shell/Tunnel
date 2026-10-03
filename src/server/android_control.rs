@@ -95,7 +95,7 @@ pub fn parse(json: &str) -> Option<Request> {
                 if !["ADB_CAPTURE", "IGNORE_CAPTURE", "HIERARCHY_CAPTURE"].contains(&source.as_str()?) { return None; }
             }
             if let Some(action) = payload.get("sourceAction") {
-                if !["ignore_on", "ignore_off", "hierarchy_on", "hierarchy_off"].contains(&action.as_str()?) { return None; }
+                if !["ignore_on", "ignore_off", "hierarchy_on", "hierarchy_off", "live_off"].contains(&action.as_str()?) { return None; }
             }
         }
         "accessibility_action" => {
@@ -868,6 +868,7 @@ mod endpoint {
                     return Some(message(value.to_string()));
                 }
                 let mut should_rollback = false;
+                let mut normal_stop = None;
                 let mut reconfigure = None;
                 if let Some(lease) = state.lease.as_mut().filter(|lease| lease.conn == conn
                     && !matches!(lease.phase, Phase::Frozen | Phase::Rollback)) {
@@ -881,6 +882,12 @@ mod endpoint {
                     if value.get("epoch").and_then(Value::as_u64) == Some(lease.epoch)
                         && value.get("generation").and_then(Value::as_u64) == Some(lease.generation) {
                         match value.get("phase").and_then(Value::as_str) {
+                            Some("IDLE") if value.get("videoStopped").and_then(Value::as_bool) == Some(true)
+                                && value.get("code").and_then(Value::as_str) == Some("STOPPED") => {
+                                // Closing the final selected source is a successful
+                                // stop, not a helper/video failure. Consent survives.
+                                normal_stop = Some(lease.operation_id.clone());
+                            }
                             Some("COMMITTED") if lease.phase == Phase::Presented => lease.phase = Phase::Active,
                             Some("WAITING_PRESENTED") if lease.phase == Phase::Activating => lease.phase = Phase::AwaitingPresentation,
                             Some("RECONFIGURE") if lease.phase != Phase::Rollback => {
@@ -917,7 +924,9 @@ mod endpoint {
                         "generation":generation,"operationId":request.operation_id,"inputReady":false}).to_string()));
                 }
                 drop(state);
-                if should_rollback {
+                if let Some(operation_id) = normal_stop {
+                    rollback(conn, &operation_id);
+                } else if should_rollback {
                     fail_video(conn, value.get("code").and_then(Value::as_str)
                         .filter(|code| !code.is_empty()).unwrap_or("ADB_VIDEO_FAILED"));
                 }
@@ -1074,7 +1083,7 @@ mod tests {
                 "payload":{"initialSource":source}}).to_string()).is_some());
         }
         assert!(parse(r#"{"v":1,"op":"start","operationId":"s","payload":{"initialSource":"AUTO"}}"#).is_none());
-        for action in ["ignore_on", "ignore_off", "hierarchy_on", "hierarchy_off"] {
+        for action in ["ignore_on", "ignore_off", "hierarchy_on", "hierarchy_off", "live_off"] {
             assert!(parse(&json!({"v":1,"op":"start","operationId":"s",
                 "payload":{"sourceAction":action}}).to_string()).is_some());
         }

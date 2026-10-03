@@ -1794,6 +1794,7 @@ class TunnelStatusMonitor extends StatelessWidget {
     const sourceLabels = {'ADB_LIVE': 'ADB 视频', 'ADB_CAPTURE': 'ADB 视频',
       'ADB_SNAPSHOT': 'ADB 截图', 'IGNORE_CAPTURE': 'ADB 截图',
       'ADB_HIERARCHY': 'ADB 穿透', 'HIERARCHY_CAPTURE': 'ADB 穿透',
+      'ADB_SNAPSHOT_HIERARCHY': 'ADB 截图与穿透',
       'MEDIA_PROJECTION': '屏幕共享', 'NONE': '等待画面'};
     final mode = m.phase == 'OTHER_WINDOW' ? '其他窗口'
         : sourceLabels[source] ?? (m.usingAdb ? 'ADB 视频' : '等待画面');

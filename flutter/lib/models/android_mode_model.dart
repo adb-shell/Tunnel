@@ -24,6 +24,7 @@ class AndroidModeModel extends ChangeNotifier {
   bool usingAdb = false;
   bool busy = false;
   bool adbActionsVisible = true;
+  final List<DateTime> _videoRecoveries = [];
   final Map<String, Timer> _actionDeadlines = {};
   final Map<String, String> _actionKeys = {};
   bool _canRestartStoppedVideo = false;
@@ -78,6 +79,16 @@ class AndroidModeModel extends ChangeNotifier {
       'LOCAL_ADB_REQUIRED': '手机 ADB 连接已失效，请重新连接已配对设备。',
       'OWNER_BUSY': 'ADB 功能由另一个远程会话使用，请先结束该会话操作。',
       'OVERLAY_UNAVAILABLE': '手机未能创建 ADB 黑屏遮罩，请检查手机端状态。',
+      'PHYSICAL_TOUCH_BLOCK_UNAVAILABLE': '手机暂未接管全部物理触屏，防触尚未生效。组件会重试，点击关防触可取消。',
+      'INPUT_PERMISSION_DENIED': '手机系统拒绝访问物理触屏，ADB 防触未生效。',
+      'INPUT_DEVICE_BUSY': '物理触屏已被其他组件占用，防触暂未生效，正在重试。',
+      'INPUT_DEVICE_CHANGED': '触屏设备发生变化，正在重新检测防触能力。',
+      'INPUT_IOCTL_UNAVAILABLE': '当前系统不支持所需的触屏控制接口，防触未生效。',
+      'INPUT_ENUMERATION_UNAVAILABLE': '无法完整枚举手机输入设备，防触未生效。',
+      'INPUT_IDENTITY_UNAVAILABLE': '无法确认物理触屏身份，防触未生效。',
+      'INPUT_TOUCH_CLASSIFICATION_UNAVAILABLE': '无法准确区分触屏与其他输入设备，防触未生效。',
+      'INPUT_DEVICE_NOT_EXCLUSIVELY_TOUCH': '触屏与硬件按键混合或身份无法确认，未启用防触。',
+      'PHYSICAL_TOUCH_BLOCK_UNSUPPORTED': '未找到可独立接管的物理触屏，防触未生效。',
       'ADB_ACTION_FAILED': '手机执行 ADB 命令失败，请检查本地 LADB 连接。',
       'OPERATION_UNSUPPORTED': '当前手机投屏组件尚不支持此操作。',
     };
@@ -132,7 +143,7 @@ class AndroidModeModel extends ChangeNotifier {
     }
   }
 
-  Future<void> request(String op, {Map<String, dynamic> payload = const {}}) async {
+  Future<void> request(String op, {Map<String, dynamic> payload = const {}, bool automaticRecovery = false}) async {
     final ffi = parent.target;
     final action = op == 'side_action' || op == 'accessibility_action' ||
         op.startsWith('accessibility_');
@@ -172,10 +183,8 @@ class AndroidModeModel extends ChangeNotifier {
       _report('ADB 投屏由其他窗口控制，请在该窗口操作');
       return;
     }
-    if (pairing.busy && op != 'status' && op != 'stop') {
-      _report('上一项 ADB 操作仍在进行，请等待结果后重试');
-      return;
-    }
+    // Pairing owns a separate bounded client. It must not stall an already
+    // authorized controller's video/effect requests or helper recovery.
     final operation = Uuid().v4();
     if (op != 'status') {
       busy = true;
@@ -190,6 +199,7 @@ class AndroidModeModel extends ChangeNotifier {
       });
     }
     if (op == 'start') {
+      if (!automaticRecovery) _videoRecoveries.clear();
       // A new generation supersedes an unfinished video attempt. Stale frame
       // callbacks and heartbeats must not acknowledge the replacement source.
       _presentation = null;
@@ -229,9 +239,15 @@ class AndroidModeModel extends ChangeNotifier {
       update = Map<String, dynamic>.from(raw is String ? jsonDecode(raw) : raw);
     } catch (_) { return; }
     if (update['v'] != 1) return;
+    void updateEffects() {
+      for (final key in const ['overlayBlack', 'overlayBlackRequested', 'touchBlocked', 'touchBlockRequested']) {
+        if (update[key] is bool) state[key] = update[key];
+      }
+    }
     final actionId = update['requestOperationId'] ?? update['operationId'];
     if (actionId is String && _actionDeadlines.containsKey(actionId)) {
       _updateConsent(update);
+      updateEffects();
       if (update['operationComplete'] == false) {
         notifyListeners();
         return;
@@ -242,7 +258,27 @@ class AndroidModeModel extends ChangeNotifier {
       if (reason.isNotEmpty) showToast(reasonText);
       return;
     }
-    if (update['kind'] == 'action' || update['phase'] == 'ACTION_RESULT') return;
+    if (update['kind'] == 'action' || update['phase'] == 'ACTION_RESULT') {
+      _updateConsent(update);
+      updateEffects();
+      // Recover only an explicitly enabled persistent source, using a new video
+      // generation. An intervening stop/start makes this notification stale.
+      if (update['resumeVideo'] == true && update['resumeGeneration'] == _generation &&
+          consentActive == true && !_observingOtherWindow) {
+        final now = DateTime.now();
+        _videoRecoveries.removeWhere((time) => now.difference(time).inSeconds >= 60);
+        if (_videoRecoveries.length < 3) {
+          _videoRecoveries.add(now);
+          // Preserve base-live off when only a persistent screenshot/layout source was active.
+          request('start', payload: update['baseLiveRequested'] == true ? const {} : const {'sourceAction': 'live_off'},
+            automaticRecovery: true);
+        } else {
+          reason = '手机画面组件连续异常，已暂停自动恢复，可重新点击开启投屏';
+        }
+      }
+      notifyListeners();
+      return;
+    }
     final previousPairPhase = pairing.phase;
     if (pairing.onEvent(update)) {
       if (pairing.lastEventAccepted) {
@@ -490,6 +526,7 @@ class AndroidModeModel extends ChangeNotifier {
   }
 
   void reset() {
+    _videoRecoveries.clear();
     pairing.reset();
     for (final timer in _actionDeadlines.values) { timer.cancel(); }
     _actionDeadlines.clear();

@@ -1,28 +1,23 @@
 package com.tunnel.adbhelper;
 
 import android.app.UiAutomation;
+import android.accessibilityservice.AccessibilityServiceInfo;
+import android.view.accessibility.AccessibilityEvent;
 import android.graphics.Bitmap;
-import android.graphics.Rect;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
-import android.view.accessibility.AccessibilityNodeInfo;
 
 import com.tunnel.adb.protocol.AdbCommands;
 import com.tunnel.adb.protocol.AdbWire;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Owns one UiAutomation connection, never suppresses the user's accessibility services.
  * Hidden constructor/connect signatures checked against AOSP android-16.0.0_r1 UiAutomation.java.
@@ -33,10 +28,12 @@ final class ShellAutomation implements AutoCloseable {
     private DisplayCapture display;
     private final DisplayPower power = new DisplayPower();
     private final BlackOverlay overlay = new BlackOverlay();
+    private final PhysicalTouchBlock touchBlock = new PhysicalTouchBlock();
     private long touchDown;
     private float touchX, touchY;
     private final Map<Integer, Long> pressedKeys = new HashMap<>();
-    private volatile int capabilities;
+    // Frame acquisition and control/effect maintenance use separate workers.
+    private final AtomicInteger capabilities = new AtomicInteger();
 
     void connect() throws Exception {
         Class<?> connectionType = Class.forName("android.app.IUiAutomationConnection");
@@ -45,59 +42,97 @@ final class ShellAutomation implements AutoCloseable {
                 .newInstance(Looper.getMainLooper(), connection);
         UiAutomation.class.getMethod("connect", int.class).invoke(automation,
                 UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
-        if (automation.getServiceInfo() == null) throw new IllegalStateException("AUTOMATION_UNAVAILABLE");
+        AccessibilityServiceInfo info = automation.getServiceInfo();
+        if (info == null) throw new IllegalStateException("AUTOMATION_UNAVAILABLE");
+        // These are this UiAutomation connection's flags only. Never alter the
+        // user's AccessibilityService configuration or suppress their services.
+        info.flags |= AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                | AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+                | AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
+        info.eventTypes |= AccessibilityEvent.TYPE_WINDOWS_CHANGED
+                | AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED | AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED;
+        try { automation.setServiceInfo(info); }
+        catch (RuntimeException unsupportedFlags) { /* Keep shell input and active-root fallback available. */ }
         display = new DisplayCapture();
         display.snapshot();
-        capabilities = AdbWire.CAP_INPUT;
-        if (power.probe()) capabilities |= AdbWire.CAP_DISPLAY;
-        if (overlay.prepare()) capabilities |= AdbWire.CAP_OVERLAY;
+        capabilities.set(AdbWire.CAP_INPUT);
+        if (power.probe()) addCapabilities(AdbWire.CAP_DISPLAY);
+        if (overlay.prepare()) addCapabilities(AdbWire.CAP_OVERLAY);
+        try { if (touchBlock.probe()) addCapabilities(AdbWire.CAP_TOUCH_BLOCK); }
+        catch (RuntimeException unsupportedProvider) { /* Optional protection must not disable ADB input/video. */ }
     }
 
-    int capabilities() { return capabilities; }
-    void revokeMode(int mode) { capabilities &= ~(mode == 1 ? AdbWire.CAP_SCREENSHOT : mode == 2 ? AdbWire.CAP_TREE : 0); }
+    int capabilities() { return capabilities.get(); }
+    private void addCapabilities(int bits) { capabilities.updateAndGet(current -> current | bits); }
+    private void removeCapabilities(int bits) { capabilities.updateAndGet(current -> current & ~bits); }
+    void revokeMode(int mode) { removeCapabilities(mode == 1 ? AdbWire.CAP_SCREENSHOT : mode == 2 ? AdbWire.CAP_TREE : 0); }
 
-    /** Owned bitmap for the encoder; node mode draws semantic bounds, never protected pixels. */
+    /** Refresh only our own desired effect; transient display changes are retryable. */
+    void maintainEffects() {
+        if (automation == null || display == null) return;
+        try { overlay.refresh(display.snapshot().layerStack); }
+        catch (Exception displayTransition) { /* Next periodic refresh retries without changing intent/capabilities. */ }
+        try { touchBlock.refresh(); }
+        catch (RuntimeException inputTransition) { /* Independent provider retries on the next maintenance tick. */ }
+    }
+
+    int effectState() { return (overlay.isEnabled() ? 1 : 0) | (touchBlock.isEnabled() ? 2 : 0); }
+
+    /** Owned bitmap for the encoder; hierarchy is semantic layout, never protected pixels. */
     Bitmap frame(int mode) throws Exception {
-        if (automation == null) throw new IllegalStateException("AUTOMATION_UNAVAILABLE");
-        if (mode == 1) {
-            Bitmap original = automation.takeScreenshot();
-            if (original == null) throw new IllegalStateException("SCREENSHOT_UNAVAILABLE");
-            Bitmap scaled = original;
-            try {
-                int longest = Math.max(original.getWidth(), original.getHeight());
-                if (longest > 1280) scaled = Bitmap.createScaledBitmap(original,
-                        Math.max(1, original.getWidth() * 1280 / longest), Math.max(1, original.getHeight() * 1280 / longest), true);
-                // GLUtils cannot upload a hardware Bitmap directly on every vendor driver.
-                Bitmap result = scaled.copy(Bitmap.Config.ARGB_8888, false);
-                if (result == null) throw new IllegalStateException("SCREENSHOT_UNAVAILABLE");
-                capabilities |= AdbWire.CAP_SCREENSHOT; return result;
-            } finally { if (scaled != original) scaled.recycle(); original.recycle(); }
-        }
-        if (mode != 2) throw new IllegalArgumentException("MODE_INVALID");
-        JSONObject document = new JSONObject(new String(tree(), StandardCharsets.UTF_8));
-        int physicalWidth = document.getInt("width"), physicalHeight = document.getInt("height");
-        float scale = Math.min(1f, 1280f / Math.max(physicalWidth, physicalHeight));
-        Bitmap result = Bitmap.createBitmap(Math.max(1, (int) (physicalWidth * scale)),
-                Math.max(1, (int) (physicalHeight * scale)), Bitmap.Config.ARGB_8888);
+        if (automation == null || display == null) throw new IllegalStateException("AUTOMATION_UNAVAILABLE");
+        if (mode == 1) return screenshotFrame();
+        if (mode != 2 && mode != 4) throw new IllegalArgumentException("MODE_INVALID");
+        DisplayCapture.Snapshot size = display.snapshot();
+        Bitmap result = null;
+        boolean screenshotAvailable = false;
+        boolean transferred = false;
         try {
-            Canvas canvas = new Canvas(result); canvas.drawColor(Color.BLACK); canvas.scale(scale, scale);
-            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG); paint.setTextSize(18 / scale);
-            JSONArray nodes = document.getJSONArray("nodes");
-            for (int i = 0; i < nodes.length(); i++) {
-                JSONObject node = nodes.getJSONObject(i);
-                float left = Math.max(0, node.getInt("left")), top = Math.max(0, node.getInt("top"));
-                float right = Math.min(physicalWidth, node.getInt("right")), bottom = Math.min(physicalHeight, node.getInt("bottom"));
-                if (left >= right || top >= bottom) continue;
-                paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1 / scale);
-                paint.setColor(node.getBoolean("clickable") ? Color.CYAN : Color.DKGRAY);
-                canvas.drawRect(left, top, right, bottom, paint);
-                paint.setStyle(Paint.Style.FILL); paint.setColor(Color.WHITE);
-                canvas.save(); canvas.clipRect(left, top, right, bottom);
-                canvas.drawText(node.getBoolean("password") ? "" : node.getString("text"), left + 2, top + 20 / scale, paint);
-                canvas.restore();
+            if (mode == 4) {
+                try {
+                    result = screenshotFrame();
+                    // A rotation between display metadata and screenshot capture must
+                    // not stretch old-orientation pixels under new node coordinates.
+                    if (Math.abs((long) result.getWidth() * size.height - (long) result.getHeight() * size.width)
+                            > 32L * Math.max(size.width, size.height)) {
+                        result.recycle(); result = null;
+                    } else screenshotAvailable = true;
+                } catch (Exception screenshotUnavailable) {
+                    if (result != null) { result.recycle(); result = null; }
+                    removeCapabilities(AdbWire.CAP_SCREENSHOT);
+                    // Mode 4 remains active: collect/draw hierarchy on a neutral background.
+                }
             }
-            capabilities |= AdbWire.CAP_TREE; return result;
-        } catch (Exception failure) { result.recycle(); throw failure; }
+            if (result == null) {
+                float scale = Math.min(1f, 1280f / Math.max(size.width, size.height));
+                result = Bitmap.createBitmap(Math.max(1, (int) (size.width * scale)),
+                        Math.max(1, (int) (size.height * scale)), Bitmap.Config.ARGB_8888);
+                result.eraseColor(Color.BLACK);
+            }
+            HierarchyFrame.collect(automation, size.width, size.height).draw(result, mode == 4, screenshotAvailable);
+            addCapabilities(AdbWire.CAP_TREE);
+            transferred = true;
+            return result;
+        } finally {
+            // Until return, this worker owns every fallback/composition allocation.
+            if (!transferred && result != null) result.recycle();
+        }
+    }
+
+    private Bitmap screenshotFrame() throws Exception {
+        Bitmap original = automation.takeScreenshot();
+        if (original == null) throw new IllegalStateException("SCREENSHOT_UNAVAILABLE");
+        Bitmap scaled = original;
+        try {
+            int longest = Math.max(original.getWidth(), original.getHeight());
+            if (longest > 1280) scaled = Bitmap.createScaledBitmap(original,
+                    Math.max(1, original.getWidth() * 1280 / longest), Math.max(1, original.getHeight() * 1280 / longest), true);
+            // Mutable software pixels support Canvas overlays and all vendor GL upload paths.
+            Bitmap result = scaled.copy(Bitmap.Config.ARGB_8888, true);
+            if (result == null) throw new IllegalStateException("SCREENSHOT_UNAVAILABLE");
+            addCapabilities(AdbWire.CAP_SCREENSHOT);
+            return result;
+        } finally { if (scaled != original) scaled.recycle(); original.recycle(); }
     }
 
     AdbCommands.Result execute(AdbCommands.Command command) {
@@ -112,20 +147,23 @@ final class ShellAutomation implements AutoCloseable {
                     return result(command, press(navigation[command.a]) ? AdbCommands.OK : AdbCommands.REJECTED);
                 case AdbCommands.SCREENSHOT:
                     byte[] screenshot = screenshot();
-                    capabilities |= AdbWire.CAP_SCREENSHOT;
+                    addCapabilities(AdbWire.CAP_SCREENSHOT);
                     return new AdbCommands.Result(command.id, AdbCommands.OK, screenshot);
                 case AdbCommands.TREE:
                     byte[] tree = tree();
-                    capabilities |= AdbWire.CAP_TREE;
+                    addCapabilities(AdbWire.CAP_TREE);
                     return new AdbCommands.Result(command.id, AdbCommands.OK, tree);
                 case AdbCommands.DISPLAY:
                     boolean powered = power.set(command.a == 1);
-                    if (!powered) capabilities &= ~AdbWire.CAP_DISPLAY;
+                    if (!powered) removeCapabilities(AdbWire.CAP_DISPLAY);
                     return result(command, powered ? AdbCommands.OK : AdbCommands.UNSUPPORTED);
                 case AdbCommands.OVERLAY_BLACK:
                     boolean covered = overlay.set(command.a == 1, display.snapshot().layerStack);
-                    if (!covered) capabilities &= ~AdbWire.CAP_OVERLAY;
                     return result(command, covered ? AdbCommands.OK : AdbCommands.UNSUPPORTED);
+                case AdbCommands.TOUCH_BLOCK:
+                    if (touchBlock.set(command.a == 1)) return result(command, AdbCommands.OK);
+                    return new AdbCommands.Result(command.id, AdbCommands.UNSUPPORTED,
+                            touchBlock.failureCode().getBytes(java.nio.charset.StandardCharsets.US_ASCII));
                 case AdbCommands.RELEASE_INPUT:
                     releaseInput(); return result(command, AdbCommands.OK);
                 default: return result(command, AdbCommands.REJECTED);
@@ -214,39 +252,9 @@ final class ShellAutomation implements AutoCloseable {
         } finally { if (scaled != bitmap) scaled.recycle(); bitmap.recycle(); }
     }
 
-    private static final class Node { final AccessibilityNodeInfo value; final int depth;
-        Node(AccessibilityNodeInfo value, int depth) { this.value = value; this.depth = depth; } }
-
     private byte[] tree() throws Exception {
-        AccessibilityNodeInfo root = automation.getRootInActiveWindow();
-        if (root == null) throw new IllegalStateException("TREE_UNAVAILABLE");
-        ArrayDeque<Node> pending = new ArrayDeque<>();
-        pending.add(new Node(root, 0));
-        JSONArray nodes = new JSONArray();
-        int textBudget = 32 * 1024;
-        long deadline = SystemClock.uptimeMillis() + 1000;
-        try {
-            while (!pending.isEmpty() && nodes.length() < 1024 && SystemClock.uptimeMillis() < deadline) {
-                Node entry = pending.removeFirst(); AccessibilityNodeInfo node = entry.value;
-                try {
-                    Rect bounds = new Rect(); node.getBoundsInScreen(bounds);
-                    String label = node.isPassword() || node.getText() == null ? "" : node.getText().toString();
-                    int length = Math.min(Math.min(label.length(), 256), textBudget);
-                    label = label.substring(0, length); textBudget -= length;
-                    nodes.put(new JSONObject().put("left", bounds.left).put("top", bounds.top)
-                            .put("right", bounds.right).put("bottom", bounds.bottom).put("depth", entry.depth)
-                            .put("text", label).put("clickable", node.isClickable()).put("password", node.isPassword()));
-                    if (entry.depth < 32) for (int i = 0; i < Math.min(node.getChildCount(), 128) && pending.size() + nodes.length() < 1024; i++) {
-                        AccessibilityNodeInfo child = node.getChild(i); if (child != null) pending.add(new Node(child, entry.depth + 1));
-                    }
-                } finally { node.recycle(); }
-            }
-            DisplayCapture.Snapshot size = display.snapshot();
-            byte[] bytes = new JSONObject().put("width", size.width).put("height", size.height)
-                    .put("nodes", nodes).toString().getBytes(StandardCharsets.UTF_8);
-            if (bytes.length > 256 * 1024) throw new IllegalStateException("TREE_TOO_LARGE");
-            return bytes;
-        } finally { while (!pending.isEmpty()) pending.removeFirst().value.recycle(); }
+        DisplayCapture.Snapshot size = display.snapshot();
+        return HierarchyFrame.collect(automation, size.width, size.height).json();
     }
 
     private static AdbCommands.Result result(AdbCommands.Command c, int code) {
@@ -254,11 +262,13 @@ final class ShellAutomation implements AutoCloseable {
         catch (java.io.IOException impossible) { throw new IllegalStateException(impossible); }
     }
 
+    /** Server must stop/join frame and control workers before disposing this shared connection. */
     @Override public void close() {
         releaseInput();
-        overlay.close();
-        power.close();
-        capabilities = 0;
+        try { overlay.close(); } catch (RuntimeException ignored) { }
+        try { touchBlock.close(); } catch (RuntimeException ignored) { }
+        try { power.close(); } catch (RuntimeException ignored) { }
+        capabilities.set(0);
         if (automation != null) {
             try { UiAutomation.class.getMethod("disconnect").invoke(automation); } catch (Exception ignored) { }
             automation = null;

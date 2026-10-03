@@ -10,16 +10,31 @@ import java.lang.reflect.Method;
  * this with a secure window which would black out the controller's video too.
  */
 final class BlackOverlay implements AutoCloseable {
+    // This belongs to the user's black-screen request, not a video task or codec.
+    // A compositor layer may need replacement without revoking that request.
+    private boolean requestedEnabled;
+    private boolean visibleApplied;
     private SurfaceControl layer;
-    private Method skipScreenshot, layerStack, color;
+    private Method skipScreenshot, layerStack, color, crop, remove;
+    private static final Rect COVERAGE = new Rect(0, 0, 16384, 16384);
 
-    boolean prepare() {
-        if (layer != null) return true;
+    /** Probe/create a hidden layer. Capability discovery must never black a phone. */
+    synchronized boolean prepare() {
+        if (layer != null && layer.isValid()) return true;
+        releaseLayer();
         try {
             Class<?> transaction = SurfaceControl.Transaction.class;
             skipScreenshot = transaction.getMethod("setSkipScreenshot", SurfaceControl.class, boolean.class);
             layerStack = transaction.getMethod("setLayerStack", SurfaceControl.class, int.class);
             color = transaction.getMethod("setColor", SurfaceControl.class, float[].class);
+            remove = transaction.getMethod("remove", SurfaceControl.class);
+            try {
+                // Public crop API on recent Android; retain the old spelling for
+                // Android 11/vendor frameworks. Neither path uses FLAG_SECURE.
+                crop = transaction.getMethod("setCrop", SurfaceControl.class, Rect.class);
+            } catch (NoSuchMethodException olderFramework) {
+                crop = transaction.getMethod("setWindowCrop", SurfaceControl.class, Rect.class);
+            }
             Class<?> builderType = Class.forName("android.view.SurfaceControl$Builder");
             Object builder = builderType.getConstructor().newInstance();
             builderType.getMethod("setName", String.class).invoke(builder, "Tunnel ADB black overlay");
@@ -28,38 +43,89 @@ final class BlackOverlay implements AutoCloseable {
             layer = (SurfaceControl) builderType.getMethod("build").invoke(builder);
             if (layer == null || !layer.isValid()) throw new IllegalStateException();
             try (SurfaceControl.Transaction t = new SurfaceControl.Transaction()) {
-                skipScreenshot.invoke(t, layer, true);
-                color.invoke(t, layer, new float[]{0f, 0f, 0f});
                 // Cover either orientation without racing a display-rotation callback.
                 // The compositor clips the layer to the physical display bounds.
-                transaction.getMethod("setWindowCrop", SurfaceControl.class, Rect.class)
-                        .invoke(t, layer, new Rect(0, 0, 16384, 16384));
-                t.setLayer(layer, Integer.MAX_VALUE - 1).setAlpha(layer, 1f).setVisibility(layer, false).apply();
+                configure(t);
+                t.setVisibility(layer, false).apply();
             }
             return true;
-        } catch (Exception unavailable) { close(); return false; }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError unavailable) {
+            releaseLayer();
+            return false;
+        }
     }
 
-    boolean set(boolean enabled, int displayLayerStack) {
-        if (!enabled && layer == null) return true;
+    synchronized boolean set(boolean enabled, int displayLayerStack) {
+        requestedEnabled = enabled;
+        if (!enabled) return releaseLayer();
+        return refresh(displayLayerStack);
+    }
+
+    /** Last successfully applied visibility, never the requested intent alone. */
+    synchronized boolean isEnabled() {
+        return visibleApplied && layer != null && layer.isValid();
+    }
+
+    /** Called by the automation owner, including while no video task is active.
+     * Rebind the logical display's current layer stack after display changes.
+     * A late refresh cannot resurrect a request already disabled by set(false).
+     */
+    synchronized boolean refresh(int displayLayerStack) {
+        if (!requestedEnabled) { visibleApplied = false; return true; }
+        if (displayLayerStack < 0) { visibleApplied = false; return false; }
         if (!prepare()) return false;
         try (SurfaceControl.Transaction t = new SurfaceControl.Transaction()) {
             layerStack.invoke(t, layer, displayLayerStack);
-            skipScreenshot.invoke(t, layer, true);
-            t.setVisibility(layer, enabled);
+            configure(t);
+            t.setVisibility(layer, true);
             t.apply();
+            visibleApplied = true;
             return true;
-        } catch (Exception rejected) { close(); return false; }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError rejected) {
+            // The next maintenance pass may recreate a lost/invalid layer. Keep
+            // request state; never substitute display power or a secure window.
+            releaseLayer();
+            return false;
+        }
     }
 
-    @Override public void close() {
+    private void configure(SurfaceControl.Transaction t) throws ReflectiveOperationException {
+        // Exclusion and black fill are in the same transaction as visibility.
+        // No transient unexcluded frame is exposed during creation/recreation.
+        skipScreenshot.invoke(t, layer, true);
+        color.invoke(t, layer, new float[]{0f, 0f, 0f});
+        crop.invoke(t, layer, COVERAGE);
+        t.setPosition(layer, 0f, 0f).setLayer(layer, Integer.MAX_VALUE - 1).setAlpha(layer, 1f);
+    }
+
+    private boolean releaseLayer() {
+        visibleApplied = false;
         SurfaceControl previous = layer;
         layer = null;
-        if (previous == null) return;
-        try (SurfaceControl.Transaction t = new SurfaceControl.Transaction()) {
-            SurfaceControl.Transaction.class.getMethod("remove", SurfaceControl.class).invoke(t, previous);
-            t.apply();
-        } catch (Exception ignored) { }
-        finally { previous.release(); }
+        if (previous == null) return true;
+        boolean released = true;
+        try {
+            if (previous.isValid()) {
+                try (SurfaceControl.Transaction t = new SurfaceControl.Transaction()) {
+                    // Hide before removing, including cleanup after partial setup.
+                    t.setVisibility(previous, false);
+                    Method removal = remove != null ? remove : SurfaceControl.Transaction.class
+                            .getMethod("remove", SurfaceControl.class);
+                    removal.invoke(t, previous);
+                    t.apply();
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+            released = false;
+        } finally {
+            try { previous.release(); }
+            catch (RuntimeException | LinkageError ignored) { released = false; }
+        }
+        return released;
+    }
+
+    @Override public synchronized void close() {
+        requestedEnabled = false;
+        releaseLayer();
     }
 }

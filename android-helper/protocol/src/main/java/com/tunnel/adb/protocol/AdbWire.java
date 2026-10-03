@@ -22,17 +22,18 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class AdbWire {
     public static final String LOOPBACK_HOST = "127.0.0.1";
-    public static final int VERSION = 5, CHANNEL_VIDEO = 1, CHANNEL_CONTROL = 2;
+    public static final int VERSION = 6, CHANNEL_VIDEO = 1, CHANNEL_CONTROL = 2;
     /** Production sessions end on cancellation/disconnect, not elapsed usage time. */
     public static final int SESSION_DURATION = 0;
     public static final int CAPABILITIES = 1, VIDEO_CONFIG = 2, VIDEO_FRAME = 3;
     public static final int REQUEST_KEYFRAME = 4, STOP = 5, PING = 6, PONG = 7;
-    public static final int OPERATION = 8, RESULT = 9, VIDEO_STATE = 10;
+    public static final int OPERATION = 8, RESULT = 9, VIDEO_STATE = 10, EFFECTS_STATE = 11;
     public static final int FLAG_KEY_FRAME = 1, CODEC_H264 = 1;
     public static final int CAP_VIDEO = 1, CAP_KEYFRAME = 2;
     public static final int CAP_INPUT = 4, CAP_SCREENSHOT = 8, CAP_TREE = 16, CAP_DISPLAY = 32;
     public static final int CAP_OVERLAY = 64;
-    public static final int ALL_CAPS = CAP_VIDEO | CAP_KEYFRAME | CAP_INPUT | CAP_SCREENSHOT | CAP_TREE | CAP_DISPLAY | CAP_OVERLAY;
+    public static final int CAP_TOUCH_BLOCK = 128;
+    public static final int ALL_CAPS = CAP_VIDEO | CAP_KEYFRAME | CAP_INPUT | CAP_SCREENSHOT | CAP_TREE | CAP_DISPLAY | CAP_OVERLAY | CAP_TOUCH_BLOCK;
     public static final int MAX_PAYLOAD = 8 * 1024 * 1024, MAX_CONFIG = 64 * 1024;
     public static final int MAX_SIDE = 4096, MAX_PIXELS = 8 * 1024 * 1024;
     private static final int MAGIC = 0x54414442, HEADER_SIZE = 56, NONCE_SIZE = 32; // TADB
@@ -56,7 +57,7 @@ public final class AdbWire {
                     || controlPort < 1 || controlPort > 65535 || videoPort == controlPort
                     || maxSize < 256 || maxSize > 1920 || fps < 1 || fps > 60
                     || bitrate < 128000 || bitrate > 16000000 || durationSeconds < SESSION_DURATION || durationSeconds > 3600
-                    || initialMode < 0 || initialMode > 3)
+                    || initialMode < 0 || initialMode > 4)
                 throw invalid("bootstrap bounds");
             this.secret = secret.clone(); this.epoch = epoch;
             this.videoPort = videoPort; this.controlPort = controlPort; this.maxSize = maxSize;
@@ -110,6 +111,8 @@ public final class AdbWire {
                 int task = state.getInt(), value = state.getInt();
                 if (task <= 0 || value < 0 || value > 2) throw invalid("video state");
             }
+            if (kind == EFFECTS_STATE && (bytes(payload).getInt() & ~3) != 0)
+                throw invalid("effects state");
             if (kind == CAPABILITIES) {
                 ByteBuffer b = bytes(payload);
                 if ((b.getInt() & ~CODEC_H264) != 0 || (b.getInt() & ~ALL_CAPS) != 0)
@@ -242,7 +245,7 @@ public final class AdbWire {
             boolean allowed = channel == CHANNEL_VIDEO
                     ? !fromClient && (kind == VIDEO_CONFIG || kind == VIDEO_FRAME)
                     : fromClient ? kind == REQUEST_KEYFRAME || kind == STOP || kind == PING || kind == OPERATION
-                    : kind == CAPABILITIES || kind == PONG || kind == RESULT || kind == VIDEO_STATE;
+                    : kind == CAPABILITIES || kind == PONG || kind == RESULT || kind == VIDEO_STATE || kind == EFFECTS_STATE;
             if (!allowed) throw invalid("channel or direction");
         }
         private void ensureOpen() throws IOException { if (closed) throw invalid("closed session"); }
@@ -283,11 +286,12 @@ public final class AdbWire {
         if (kind == VIDEO_CONFIG || kind == VIDEO_FRAME) {
             if (config == 0 || width <= 0 || height <= 0 || width > MAX_SIDE || height > MAX_SIDE
                     || (long) width * height > MAX_PIXELS || length == 0) throw invalid("video bounds");
-            if (kind == VIDEO_CONFIG ? (flags != 0 && flags != 2 && flags != 4) || pts != 0 || length > MAX_CONFIG
+            if (kind == VIDEO_CONFIG ? (flags != 0 && flags != 2 && flags != 4 && flags != 8) || pts != 0 || length > MAX_CONFIG
                     : (flags & ~FLAG_KEY_FRAME) != 0) throw invalid("video flags");
         } else {
             if (flags != 0 || config != 0 || pts != 0 || width != 0 || height != 0) throw invalid("control metadata");
             if (kind == CAPABILITIES || kind == VIDEO_STATE) { if (length != 8) throw invalid("capability size"); }
+            else if (kind == EFFECTS_STATE) { if (length != 4) throw invalid("effects size"); }
             else if (kind == OPERATION) { if (length != AdbCommands.COMMAND_SIZE) throw invalid("operation size"); }
             else if (kind == RESULT) { if (length < 12 || length > 4 * 1024 * 1024) throw invalid("result size"); }
             else if (kind == REQUEST_KEYFRAME || kind == STOP || kind == PING || kind == PONG) {
