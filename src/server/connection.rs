@@ -618,9 +618,12 @@ impl Connection {
                                 if barrier.action == 2 { conn.refresh_video_display(None); }
                             }
                         }
-                        // A blocked video write must not hold the helper/input lease forever.
-                        if !matches!(time::timeout(Duration::from_secs(3), conn.stream.send(&message)).await, Ok(Ok(()))) {
-                            conn.on_close("Android ADB channel write timeout", false).await;
+                        // Use the same transport timeout as ordinary RustDesk
+                        // video. A separate 3s ADB deadline was disconnecting the
+                        // whole session on a brief network stall. Never cancel a
+                        // partial framed write and continue on the same stream.
+                        if conn.stream.send(&message).await.is_err() {
+                            conn.on_close("Android ADB channel write failed", false).await;
                             break;
                         }
                     }

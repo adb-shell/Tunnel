@@ -17,6 +17,8 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.nio.ByteBuffer
 import java.security.SecureRandom
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -47,6 +49,15 @@ internal class TunnelAdbSession(
     private val threads = mutableListOf<Thread>()
     private val writeLock = Any()
     private val ids = AtomicLong()
+    private val lastKeyframeRequest = AtomicLong()
+    private val videoStalled = AtomicBoolean()
+    // Never let a slow JNI/remote consumer back up the authenticated loopback
+    // reader. Four bounded records; overflow keeps only config + a fresh IDR.
+    private val videoQueue = ArrayBlockingQueue<AdbWire.Packet>(4)
+    private val videoQueueLock = Any()
+    private var deliveryConfig: AdbWire.Packet? = null
+    private var awaitingKeyframe = true
+    private var needsConfiguration = true
     private data class Pending(val since: Long, val result: CompletableFuture<AdbCommands.Result>)
     private val pending = ConcurrentHashMap<Long, Pending>()
     @Volatile private var control: AdbWire.Session? = null
@@ -68,12 +79,91 @@ internal class TunnelAdbSession(
 
     fun videoTask(mode: Int, taskId: Int): CompletableFuture<AdbCommands.Result> {
         require(mode in 0..4 && taskId > 0)
-        videoTaskId = taskId
-        setCapturePaused(mode == 3)
+        synchronized(videoQueueLock) {
+            // A retry uses a new operation ID but the same video identity. Keep
+            // its decoder configuration, queued frames and freshness intact.
+            // A stale retry must never rewind the currently selected task either.
+            if (taskId > videoTaskId) {
+                videoTaskId = taskId
+                videoQueue.clear()
+                deliveryConfig = null
+                awaitingKeyframe = true
+                needsConfiguration = true
+                videoStalled.set(false)
+                setCapturePaused(mode == 3)
+            }
+        }
         return operation(AdbCommands.VIDEO_TASK, mode, taskId)
     }
 
-    fun keyframe() { try { write(AdbWire.REQUEST_KEYFRAME) } catch (_: Exception) { fail("CONTROL_FAILED") } }
+    fun keyframe() {
+        val now = SystemClock.elapsedRealtime()
+        val last = lastKeyframeRequest.get()
+        if (now - last < 500 || !lastKeyframeRequest.compareAndSet(last, now)) return
+        try { write(AdbWire.REQUEST_KEYFRAME) } catch (_: Exception) { fail("CONTROL_FAILED") }
+    }
+
+    private fun enqueueVideo(packet: AdbWire.Packet) {
+        var requestKey = false
+        synchronized(videoQueueLock) {
+            if (packet.taskId != videoTaskId || capturePaused) return
+            if (packet.kind == AdbWire.VIDEO_CONFIG) {
+                videoQueue.clear()
+                deliveryConfig = packet
+                needsConfiguration = true
+                awaitingKeyframe = true
+                // Configuration and its first IDR enter the delivery queue together.
+                // This prevents overflow from retaining an undecodable P-frame tail.
+                requestKey = true
+            } else {
+                val config = deliveryConfig
+                if (config == null || config.configRevision != packet.configRevision) return
+                val key = packet.flags and AdbWire.FLAG_KEY_FRAME != 0
+                if (awaitingKeyframe && !key) { requestKey = true }
+                else {
+                    val required = if (needsConfiguration) 2 else 1
+                    val queuedBytes = videoQueue.sumOf { it.payloadLength().toLong() }
+                    val nextBytes = packet.payloadLength().toLong() + if (needsConfiguration) config.payloadLength() else 0
+                    if (videoQueue.remainingCapacity() < required
+                        || queuedBytes + nextBytes > AdbWire.MAX_PAYLOAD.toLong() + AdbWire.MAX_CONFIG) {
+                        videoQueue.clear()
+                        needsConfiguration = true
+                        awaitingKeyframe = true
+                    }
+                    if (!awaitingKeyframe || key) {
+                        if (needsConfiguration) videoQueue.offer(config)
+                        videoQueue.offer(packet)
+                        needsConfiguration = false
+                        awaitingKeyframe = false
+                    } else requestKey = true
+                }
+            }
+        }
+        if (requestKey) keyframe()
+    }
+
+    private fun startVideoDelivery() = launch("video-delivery") {
+        while (!closed.get()) {
+            val packet = videoQueue.poll(100, TimeUnit.MILLISECONDS) ?: continue
+            if (packet.taskId != videoTaskId || capturePaused) continue
+            // A temporarily unavailable JNI/remote consumer has no authority to
+            // tear down the local shell, input or producer.
+            val accepted = try { events.packet(packet) } catch (_: Exception) { false }
+            if (accepted) {
+                if (packet.taskId == videoTaskId && packet.kind == AdbWire.VIDEO_FRAME
+                    && videoStalled.compareAndSet(true, false))
+                    events.videoState(packet.taskId, 1)
+            } else {
+                synchronized(videoQueueLock) {
+                    if (packet.taskId != videoTaskId) return@synchronized
+                    videoQueue.clear()
+                    awaitingKeyframe = true
+                    needsConfiguration = true
+                }
+                keyframe()
+            }
+        }
+    }
 
     fun operation(operation: Int, a: Int = 0, b: Int = 0, c: Int = 0, d: Int = 0, e: Int = 0, f: Int = 0): CompletableFuture<AdbCommands.Result> {
         val result = CompletableFuture<AdbCommands.Result>()
@@ -109,9 +199,10 @@ internal class TunnelAdbSession(
                 if (writeStarted != 0L && now - writeStarted > 2_000) fail("HELPER_WRITE_TIMEOUT")
                 if (authenticated && !capturePaused && now - lastVideoAt > 15_000) {
                     val task = videoTaskId
-                    capturePaused = true
-                    // A stalled encoder owns no authority over the control channel.
-                    events.videoState(task, 2)
+                    // Loss of frames is telemetry, never an implicit OFF. The
+                    // helper retains this task and retries its provider/codec.
+                    if (videoStalled.compareAndSet(false, true)) events.videoState(task, 2)
+                    keyframe()
                 }
                 pending.entries.filter { now - it.value.since > 10_000 }.forEach { entry ->
                     if (pending.remove(entry.key, entry.value))
@@ -185,7 +276,10 @@ internal class TunnelAdbSession(
                             AdbWire.VIDEO_STATE -> {
                                 val state = ByteBuffer.wrap(packet.payloadCopy())
                                 val task = state.int; val status = state.int
-                                if (task == videoTaskId && status != 1) capturePaused = true
+                                if (task == videoTaskId) {
+                                    if (status == 0) capturePaused = true
+                                    if (status == 2) videoStalled.set(true)
+                                }
                                 events.videoState(task, status)
                             }
                             AdbWire.PONG -> Unit
@@ -199,15 +293,12 @@ internal class TunnelAdbSession(
                 }
                 keyframe()
                 failureStage = "HELPER_VIDEO_CHANNEL_FAILED"
-                var dropping = false
+                startVideoDelivery()
                 while (!closed.get()) {
                     val packet = video.read()
-                    lastVideoAt = SystemClock.elapsedRealtime()
-                    val config = packet.kind == AdbWire.VIDEO_CONFIG
-                    val key = packet.flags and AdbWire.FLAG_KEY_FRAME != 0
-                    if (dropping && !config && !key) continue
-                    if (events.packet(packet)) { if (key) dropping = false }
-                    else { dropping = true; keyframe() }
+                    if (packet.taskId == videoTaskId && packet.kind == AdbWire.VIDEO_FRAME)
+                        lastVideoAt = SystemClock.elapsedRealtime()
+                    enqueueVideo(packet)
                 }
             } finally { secret.fill(0) }
         } catch (e: Exception) { if (!closed.get()) fail(if (e is SessionFailure) e.code else failureStage)
@@ -310,6 +401,7 @@ internal class TunnelAdbSession(
     private fun fail(code: String) { if (!closed.get()) failure = code; close() }
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
+        synchronized(videoQueueLock) { videoQueue.clear(); deliveryConfig = null }
         // Closing raw sockets first interrupts any blocked protocol read/write.
         val owned = synchronized(resources) { resources.toList() }
         // Socket.close() interrupts streams without waiting on protocol monitors.

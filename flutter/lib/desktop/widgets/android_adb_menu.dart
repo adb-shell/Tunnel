@@ -62,7 +62,7 @@ class AndroidAdbMenu extends StatelessWidget {
           child: Container(
             width: 32, height: 32,
             decoration: BoxDecoration(
-              color: m.usingAdb ? MyTheme.button : Colors.grey[800],
+              color: m.adbFramePresent ? MyTheme.button : Colors.grey[800],
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(Icons.adb_rounded, color: Colors.white, size: 21),

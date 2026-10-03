@@ -35,6 +35,7 @@ final class VideoEncoder {
     private byte[] sentConfig;
     private boolean waitForKey = true;
     private int currentMode;
+    private long deliveredFrames;
     private Server.Lifecycle.VideoTask currentTask;
 
     VideoEncoder(AdbWire.Bootstrap options, Server.Lifecycle lifecycle, AdbWire.Session output) {
@@ -44,23 +45,36 @@ final class VideoEncoder {
     }
 
     void run() throws Exception {
+        int failures = 0;
+        Server.Lifecycle.VideoTask previous = null;
         while (!lifecycle.stopped()) {
             currentTask = lifecycle.videoTask();
+            if (currentTask != previous) { failures = 0; previous = currentTask; }
             if (currentTask.mode == 3) { Thread.sleep(40); continue; }
             currentMode = currentTask.mode;
             lifecycle.videoProgress();
+            long before = deliveredFrames;
+            boolean retry = false;
             try { captureOnce(); }
             catch (DisplayChanged replacement) { lifecycle.displayChanged(); }
             catch (Exception videoFailure) {
-                // Codec/provider failure ends only this video task. Input and
-                // overlay continue on the authenticated control connection.
-                lifecycle.videoTaskFailed(currentTask);
+                // Keep the selected task alive across transient codec/display
+                // errors. captureOnce's finally releases every old resource before
+                // the next attempt; there is still exactly one encoder owner.
+                lifecycle.videoTaskInterrupted(currentTask);
+                failures = deliveredFrames > before ? 1 : Math.min(5, failures + 1);
+                retry = true;
             }
             finally {
                 if (sentConfig != null) { Arrays.fill(sentConfig, (byte) 0); sentConfig = null; }
                 waitForKey = true;
                 lastPts = 0;
                 lifecycle.videoIdle();
+            }
+            if (retry) {
+                long until = SystemClock.elapsedRealtime() + Math.min(3000, 125L << failures);
+                while (!lifecycle.stopped() && currentTask == lifecycle.videoTask()
+                        && SystemClock.elapsedRealtime() < until) Thread.sleep(40);
             }
         }
     }
@@ -91,7 +105,9 @@ final class VideoEncoder {
             format.setInteger(MediaFormat.KEY_FRAME_RATE, options.fps);
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
             format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2);
-            format.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 100_000);
+            // Snapshot/hierarchy produce their own cadence. Repeating an old
+            // bitmap would disguise a failed provider as a healthy fresh frame.
+            if (currentMode == 0) format.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 100_000);
             format.setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED);
             format.setInteger(MediaFormat.KEY_PRIORITY, 0);
             format.setInteger(MediaFormat.KEY_LATENCY, 1);
@@ -129,6 +145,8 @@ final class VideoEncoder {
         H264AnnexB configuration = new H264AnnexB();
         long nextDisplayCheck = 0;
         long lastKeyRequest = 0;
+        long lastOutput = SystemClock.elapsedRealtime();
+        long lastBitmapSubmitted = 0;
         while (!lifecycle.stopped()) {
             lifecycle.videoProgress();
             long now = SystemClock.elapsedRealtime();
@@ -136,7 +154,10 @@ final class VideoEncoder {
             if (painter != null) {
                 Bitmap bitmap = lifecycle.takeBitmap(currentTask);
                 if (bitmap != null) {
-                    try { painter.draw(bitmap, System.nanoTime()); } finally { bitmap.recycle(); }
+                    try {
+                        painter.draw(bitmap, System.nanoTime());
+                        lastBitmapSubmitted = SystemClock.elapsedRealtime();
+                    } finally { bitmap.recycle(); }
                 }
             }
             if (now >= nextDisplayCheck) {
@@ -163,7 +184,15 @@ final class VideoEncoder {
                 publishConfiguration(configuration, width, height);
                 continue;
             }
-            if (index < 0) continue;
+            if (index < 0) {
+                // Rebuild only the codec when it stops producing output despite
+                // receiving frames. A temporarily missing screenshot is retried by
+                // its independent worker, not turned into a helper/process stop.
+                if (now - lastOutput > 10_000 && (painter == null
+                        || (lastBitmapSubmitted > lastOutput && now - lastBitmapSubmitted < 2000)))
+                    throw new IOException("ENCODER_OUTPUT_STALLED");
+                continue;
+            }
             try {
                 if ((info.flags & MediaCodec.BUFFER_FLAG_PARTIAL_FRAME) != 0) {
                     throw new IOException("PARTIAL_ACCESS_UNIT_UNSUPPORTED");
@@ -191,7 +220,9 @@ final class VideoEncoder {
                             }
                             send(AdbWire.Packet.of(AdbWire.VIDEO_FRAME, key ? AdbWire.FLAG_KEY_FRAME : 0,
                                     options.epoch, configRevision, ++sequence, info.presentationTimeUs, width, height, currentTask.id, bytes));
-                            lifecycle.frameSent();
+                            lifecycle.frameSent(currentTask);
+                            deliveredFrames++;
+                            lastOutput = SystemClock.elapsedRealtime();
                             lastPts = info.presentationTimeUs;
                             waitForKey = false;
                         }
@@ -227,6 +258,7 @@ final class VideoEncoder {
 
     private void ensureRunning() throws IOException {
         if (lifecycle.stopped()) throw new IOException("STOPPED");
+        if (currentTask != lifecycle.videoTask()) throw new IOException("TASK_REPLACED");
     }
 
     private static byte[] copy(ByteBuffer source, int limit) throws IOException {

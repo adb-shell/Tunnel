@@ -40,7 +40,6 @@ object TunnelAdbRuntime {
     private val lock = Any()
     private var context: Context? = null
     private var hooks: Hooks? = null
-    private var watchdogStarted = false
     private var generation = 1L
     private var owner = 0
     private var lastVideoOwner = 0
@@ -66,7 +65,7 @@ object TunnelAdbRuntime {
     private var videoReady = false
     private var mask = 0
     private var pausedByUs = false
-    private var lastHeartbeat = 0L
+    private var lastEncodedFrameAt = 0L
     private var lastInputSequence = 0L
     private var session: TunnelAdbSession? = null
     private var stopping = false
@@ -82,10 +81,11 @@ object TunnelAdbRuntime {
     private var videoTaskId = 0
     private var videoTaskCounter = 0
     private var issuedTaskId = 0
-    private val attemptedModes = mutableSetOf<Int>()
+    private var videoDispatchRetries = 0
     private var snapshotEnabled = false
     private var hierarchyEnabled = false
     private var videoRecoveryPending = false
+    private var scheduledRecoveryEpoch = -1L
     private var videoRequested = false
     private var geometryRevision = 0L
     private var geometryKey = ""
@@ -130,18 +130,8 @@ object TunnelAdbRuntime {
     @JvmStatic fun initialize(value: Context, callbacks: Hooks) = synchronized(lock) {
         context = value.applicationContext
         hooks = callbacks
-        if (!watchdogStarted) {
-            watchdogStarted = true
-            Thread({
-                while (true) {
-                    Thread.sleep(500)
-                    val unresponsive = synchronized(lock) {
-                        if (session != null && !stopping && owner != 0 && requestedMode != 3 && SystemClock.elapsedRealtime() - lastHeartbeat > 30_000) owner else 0
-                    }
-                    if (unresponsive != 0) stopOwner(unresponsive, "HEARTBEAT_LOST", true)
-                }
-            }, "tunnel-adb-lease").apply { isDaemon = true; start() }
-        }
+        // The authenticated connection owns this lifetime. Delayed PC video
+        // heartbeats are not a stop command. Disconnect/revoke still clean up.
     }
 
     /** Authenticated explicit action; video stop does not revoke the connection's grant. */
@@ -218,7 +208,11 @@ object TunnelAdbRuntime {
             synchronized(lock) {
                 val signature = request.toString()
                 val replayKey = "$connId:$id:$op:${request.optLong("epoch", 0)}"
-                completed[replayKey]?.let { previous ->
+                // These are repeatable signals, not one-shot mutations. Caching
+                // a heartbeat or keyframe request previously disabled all later
+                // calls with the same video operation identity.
+                val cacheable = op !in setOf("status", "heartbeat", "keyframe", "input")
+                (if (cacheable) completed[replayKey] else null)?.let { previous ->
                     return@synchronized if (previous.first == signature) previous.second else snapshot("OPERATION_REPLAY")
                 }
                 if (op == "status") { requireKeys(payload, emptySet()); return@synchronized snapshot() }
@@ -273,17 +267,19 @@ object TunnelAdbRuntime {
                     lastConfig = null; configSent = false
                     frameOverride = selectedOverride(); capturePaused = false; requestedMode = frameOverride
                     videoRequested = requestedMode != 3
-                    videoTaskId = nextTaskId(); issuedTaskId = 0; attemptedModes.clear()
+                    videoTaskId = nextTaskId(); issuedTaskId = 0; videoDispatchRetries = 0
                     revision = 0; error = ""; stopping = false
                     phase = "PREPARING"; videoReady = false
                     // Keep the currently displayed source until the replacement's first real frame.
-                    lastHeartbeat = SystemClock.elapsedRealtime(); lastInputSequence = 0
+                    lastEncodedFrameAt = 0; lastInputSequence = 0
                     if (requestedMode == 3) stopLocked("STOPPED")
                     else if (context == null || (session == null && TunnelAdbManager.selectedLocalSerial() == null)) {
                         // An off action must clear intent even while ADB is offline.
                         // Keep only the remaining explicitly enabled providers recoverable.
                         failLocked(if (context == null) "RUNTIME_UNAVAILABLE" else "LOCAL_ADB_REQUIRED")
-                        videoRecoveryPending = snapshotEnabled || hierarchyEnabled
+                        videoRecoveryPending = videoRequested
+                        helperOwner = connId
+                        scheduleControlRecoveryLocked(connId, helperEpoch)
                     }
                     else { ensureControlLocked(connId); dispatchVideoTaskLocked() }
                 } else {
@@ -308,7 +304,7 @@ object TunnelAdbRuntime {
                             pendingKey?.let { if (forward(it)) { videoReady = true; phase = "READY" } }
                             pendingKey = null
                         }
-                        "heartbeat" -> { requireKeys(payload, emptySet()); lastHeartbeat = SystemClock.elapsedRealtime() }
+                        "heartbeat" -> { requireKeys(payload, emptySet()) }
                         "keyframe" -> { requireKeys(payload, emptySet()); session?.keyframe() }
                         "activate" -> {
                             requireKeys(payload, emptySet())
@@ -336,7 +332,9 @@ object TunnelAdbRuntime {
                         else -> return@synchronized snapshot("OPERATION_UNSUPPORTED")
                     }
                 }
-                val result = snapshot(); completed[replayKey] = signature to result; result
+                val result = snapshot()
+                if (cacheable) completed[replayKey] = signature to result
+                result
             }
         } catch (_: Exception) { synchronized(lock) { snapshot("REQUEST_INVALID") } }
         return try {
@@ -468,7 +466,6 @@ object TunnelAdbRuntime {
                 }
                 dispatchVideoTaskLocked()
                 val resume = videoRecoveryPending && bits != 0
-                if (resume) videoRecoveryPending = false
                 JSONObject(actionNotice(id, "control-ready"))
                     .put("resumeVideo", resume).put("resumeGeneration", generation)
                     .put("baseLiveRequested", baseLive).toString()
@@ -478,7 +475,9 @@ object TunnelAdbRuntime {
         override fun videoState(taskId: Int, state: Int) {
             val notice = synchronized(lock) {
                 if (helperOwner != id || helperEpoch != expectedEpoch || taskId != videoTaskId || owner == 0) return
-                if (state == 2) { fallbackVideoLocked("VIDEO_TASK_FAILED"); snapshot() } else null
+                // Helper retries the same desired task after releasing its old
+                // codec. A temporary provider failure must not cancel that task.
+                if (state == 2) { lastEncodedFrameAt = 0; snapshot() } else null
             }
             notice?.let { hooks?.onState(id, it) }
         }
@@ -495,6 +494,7 @@ object TunnelAdbRuntime {
             var notice: String? = null
             val accepted = synchronized(lock) {
                 if (helperOwner != id || helperEpoch != expectedEpoch || owner != id || packet.taskId != videoTaskId || stopping || requestedMode == 3) return true
+                if (packet.kind == AdbWire.VIDEO_FRAME) lastEncodedFrameAt = SystemClock.elapsedRealtime()
                 if (packet.kind == AdbWire.VIDEO_CONFIG) {
                     if (requestedMode == 3) return true
                     capturePaused = false; session?.setCapturePaused(false)
@@ -535,7 +535,7 @@ object TunnelAdbRuntime {
                 if (helperOwner != id || helperEpoch != expectedEpoch) return
                 // Pending command failures may already have stopped the old task.
                 // Recovery follows user intent, not that failed task's mode.
-                val resume = owner == id && videoRequested && (snapshotEnabled || hierarchyEnabled)
+                val resume = owner == id && videoRequested
                 session = null; helperStarting = false; controlReady = false; mask = 0; blackEnabled = false; touchBlockEnabled = false
                 blackSentVersion = -1; touchBlockSentVersion = -1
                 if (owner == id && requestedMode != 3) failLocked(reason)
@@ -608,8 +608,8 @@ object TunnelAdbRuntime {
     private fun stopOwner(id: Int, reason: String, revoke: Boolean) {
         val notice = synchronized(lock) {
             if (id <= 0 || owner != id) return
-            if (revoke && reason != "HEARTBEAT_LOST" && consentOwner == id) clearConsentLocked()
-            if (reason == "HEARTBEAT_LOST") failLocked(reason) else stopLocked(reason)
+            if (revoke && consentOwner == id) clearConsentLocked()
+            stopLocked(reason)
             snapshot()
         }
         hooks?.onState(id, notice)
@@ -617,6 +617,7 @@ object TunnelAdbRuntime {
     private fun stopLocked(reason: String) {
         videoRecoveryPending = false
         videoRequested = false
+        lastEncodedFrameAt = 0
         phase = "IDLE"; error = reason; videoReady = false; stopping = false
         pendingConfig = null; pendingKey = null; freezeFrames = false; lastConfig = null; configSent = false
         // Explicit stop suspends output, but does not reset independent source choices.
@@ -627,23 +628,8 @@ object TunnelAdbRuntime {
         owner = 0
         source = if (hooks?.normalCaptureReady() == true) "MEDIA_PROJECTION" else "NONE"
     }
-    private fun fallbackVideoLocked(reason: String) {
-        val next = listOfNotNull(
-            if (snapshotEnabled && hierarchyEnabled) 4 else null,
-            if (hierarchyEnabled) 2 else null,
-            if (snapshotEnabled) 1 else null,
-            if (baseLive) 0 else null,
-        ).firstOrNull { it !in attemptedModes }
-        if (next == null || !controlReady || session == null) { failLocked(reason); return }
-        // One bounded attempt per provider for this explicit start. A new CONFIG
-        // preserves revision history so Rust obtains a fresh decoder epoch.
-        requestedMode = next; frameOverride = next; videoTaskId = nextTaskId(); issuedTaskId = 0
-        videoReady = false; capturePaused = false; error = ""
-        phase = "PREPARING"; freezeFrames = false; pendingConfig = null; pendingKey = null
-        lastConfig = null; configSent = false
-        dispatchVideoTaskLocked()
-    }
     private fun failLocked(reason: String) {
+        lastEncodedFrameAt = 0
         phase = "FAILED"; error = reason; videoReady = false; stopping = false
         pendingConfig = null; pendingKey = null; freezeFrames = false; lastConfig = null; configSent = false
         requestedMode = 3; videoTaskId = nextTaskId(); issuedTaskId = 0
@@ -669,6 +655,10 @@ object TunnelAdbRuntime {
             .put("generation", 0).put("epoch", 0).put("code", code)
             .put("overlayBlack", blackEnabled).put("overlayBlackRequested", blackRequested)
             .put("touchBlocked", touchBlockEnabled).put("touchBlockRequested", touchBlockRequested)
+            .put("baseLiveRequested", baseLive).put("snapshotEnabled", snapshotEnabled).put("hierarchyEnabled", hierarchyEnabled)
+            .put("resumeVideo", videoRecoveryPending && controlReady && mask != 0).put("resumeGeneration", generation)
+            .put("localAdbReady", TunnelAdbManager.snapshot().shellReady)
+            .put("adbVideoPresent", framePresent(0)).put("adbSpecialPresent", framePresent(1, 4))
             .put("inputReady", inputReady())
             .put("consentConnId", if (hasConsent(connId)) connId else 0)
             .put("consentActive", hasConsent(connId)).put("consentLifetime", "session").toString()
@@ -844,6 +834,7 @@ object TunnelAdbRuntime {
                 }
                 helperStarting = false
                 if (lease == null) {
+                    videoRecoveryPending = videoRequested
                     scheduleControlRecoveryLocked(connId, expected)
                     if (owner == connId) { failLocked("LOCAL_ADB_BUSY"); snapshot() }
                     else actionNotice(connId, "control-start", "LOCAL_ADB_BUSY")
@@ -852,6 +843,7 @@ object TunnelAdbRuntime {
                     null
                 } catch (_: Exception) {
                     lease?.close(); session = null
+                    videoRecoveryPending = videoRequested
                     scheduleControlRecoveryLocked(connId, expected)
                     if (owner == connId) { failLocked("HELPER_START_FAILED"); snapshot() }
                     else actionNotice(connId, "control-start", "HELPER_START_FAILED")
@@ -863,16 +855,28 @@ object TunnelAdbRuntime {
     private fun dispatchVideoTaskLocked() {
         val active = session ?: return
         if (!controlReady || videoTaskId <= 0 || issuedTaskId == videoTaskId) return
-        val task = videoTaskId; val mode = requestedMode; val recipient = owner
+        val task = videoTaskId; val mode = requestedMode; val recipient = helperOwner
         issuedTaskId = task
-        if (mode != 3) attemptedModes.add(mode)
         active.videoTask(mode, task).whenComplete { result, failure ->
-            val notice = synchronized(lock) {
-                if (session !== active || task != videoTaskId || mode == 3) return@whenComplete
-                if (failure == null && result.code == AdbCommands.OK) return@whenComplete
-                fallbackVideoLocked("VIDEO_TASK_REJECTED"); snapshot()
+            synchronized(lock) {
+                if (session !== active || task != videoTaskId) return@whenComplete
+                if (failure == null && result.code == AdbCommands.OK) {
+                    videoDispatchRetries = 0
+                    return@whenComplete
+                }
+                // Retry the same idempotent task, including OFF. Congested
+                // control must not change providers or strand a running encoder.
+                issuedTaskId = 0
+                val delay = longArrayOf(250, 500, 1000, 2000)[videoDispatchRetries.coerceAtMost(3)]
+                videoDispatchRetries = (videoDispatchRetries + 1).coerceAtMost(3)
+                Thread({
+                    Thread.sleep(delay)
+                    synchronized(lock) {
+                        if (session === active && task == videoTaskId && issuedTaskId == 0 &&
+                            helperOwner == recipient && hasConsent(recipient)) dispatchVideoTaskLocked()
+                    }
+                }, "tunnel-adb-video-request").apply { isDaemon = true; start() }
             }
-            if (recipient > 0) hooks?.onState(recipient, notice)
         }
     }
     private fun closeAuxiliaryLocked() {
@@ -963,18 +967,29 @@ object TunnelAdbRuntime {
     }
     private fun scheduleControlRecoveryLocked(connId: Int, expectedEpoch: Long) {
         if (!hasConsent(connId) || hooks?.connectionAuthorized(connId) != true) return
+        if (scheduledRecoveryEpoch == expectedEpoch) return
+        scheduledRecoveryEpoch = expectedEpoch
         val now = SystemClock.elapsedRealtime()
         if (now - controlRetryWindow > 60_000) { controlRetryWindow = now; controlRetryCount = 0 }
-        if (controlRetryCount >= 3) return
-        val delay = longArrayOf(250, 750, 2000)[controlRetryCount++]
+        val delays = longArrayOf(500, 1000, 2000, 5000, 10000)
+        val delay = delays[controlRetryCount.coerceAtMost(delays.lastIndex)]
+        controlRetryCount = (controlRetryCount + 1).coerceAtMost(delays.lastIndex)
         Thread({
             Thread.sleep(delay)
             synchronized(lock) {
-                if (helperEpoch == expectedEpoch && session == null && !helperStarting && hasConsent(connId))
+                if (scheduledRecoveryEpoch == expectedEpoch) scheduledRecoveryEpoch = -1
+                if (helperEpoch == expectedEpoch && session == null && !helperStarting && hasConsent(connId)) {
                     ensureControlLocked(connId)
+                    // Wireless ADB may temporarily have no selected serial.
+                    // Keep one backed-off retry; never create parallel helpers.
+                    if (session == null && !helperStarting) scheduleControlRecoveryLocked(connId, expectedEpoch)
+                }
             }
         }, "tunnel-adb-control-recovery").apply { isDaemon = true; start() }
     }
+    private fun framePresent(vararg modes: Int): Boolean = session != null && requestedMode in modes &&
+        lastEncodedFrameAt != 0L && SystemClock.elapsedRealtime() - lastEncodedFrameAt < 5_000
+
     private fun snapshot(code: String? = null): String = JSONObject()
         .put("v", 1).put("phase", phase).put("operationId", operationId).put("ownerConnId", owner)
         .put("sourceOperationId", operationId)
@@ -982,6 +997,9 @@ object TunnelAdbRuntime {
         .put("width", width).put("height", height).put("actualFrameSource", source)
         .put("candidateFrameSource", candidateSource)
         .put("capturePaused", capturePaused).put("baseMode", if (baseLive) "live" else "stopped")
+        .put("baseLiveRequested", baseLive)
+        .put("resumeVideo", videoRecoveryPending && controlReady && mask != 0).put("resumeGeneration", generation)
+        .put("adbVideoPresent", framePresent(0)).put("adbSpecialPresent", framePresent(1, 4))
         .put("videoStopped", phase == "IDLE" || (stopping && error == "STOPPED"))
         .put("overlayBlack", blackEnabled).put("overlayBlackRequested", blackRequested)
         .put("touchBlocked", touchBlockEnabled).put("touchBlockRequested", touchBlockRequested)

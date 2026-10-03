@@ -234,7 +234,7 @@ mod endpoint {
     struct Lease {
         conn: i32, epoch: u64, generation: u64, operation_id: String, phase: Phase,
         revision: u64, sequence: u64, input_sequence: u64, client_input_sequence: u64, width: u32, height: u32,
-        deadline: Instant, heartbeat: Instant, normal_ready: bool, rollback_failed: bool,
+        deadline: Instant, normal_ready: bool,
         touch_down: bool, mouse_position: Option<(i32, i32)>,
         barrier_sent: bool, present_min_sequence: u64,
         failure_code: String,
@@ -603,8 +603,8 @@ mod endpoint {
             state.lease = Some(Lease { conn, epoch: request.epoch, generation: request.generation,
                 operation_id: request.operation_id.clone(), phase: Phase::Preparing,
                 revision: 0, sequence: 0, input_sequence: 0, client_input_sequence: 0, width: 0, height: 0,
-                deadline: now + Duration::from_secs(60), heartbeat: now,
-                normal_ready, rollback_failed: false, touch_down: false, mouse_position: None,
+                deadline: now + Duration::from_secs(60),
+                normal_ready, touch_down: false, mouse_position: None,
                 barrier_sent: false, present_min_sequence: 0, failure_code: String::new(), explicitly_stopped: false });
             encoded::begin(request.epoch);
         } else if request.op != "status" {
@@ -651,9 +651,8 @@ mod endpoint {
                     if !forward(conn, &request) { return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE")); }
                     return None;
                 }
-                if lease.phase != Phase::Rollback && Instant::now() > lease.deadline {
-                    return Some(error(&request.operation_id, "ACK_EXPIRED"));
-                }
+                // Delayed presentation still belongs to this exact generation,
+                // epoch and barrier. Network delay alone cannot expire it.
                 if request.op == "activate" {
                     if matches!(lease.phase, Phase::Activating | Phase::AwaitingPresentation | Phase::Presented) { return None; }
                     if lease.phase != Phase::Preparing { return Some(error(&request.operation_id, "INVALID_PHASE")); }
@@ -700,7 +699,6 @@ mod endpoint {
                 lease.input_sequence = lease.input_sequence.saturating_add(1);
                 request.sequence = lease.input_sequence;
             } else if request.op == "heartbeat" {
-                lease.heartbeat = now;
                 if lease.phase == Phase::Rollback { return None; }
             } else if request.op == "keyframe" && lease.phase == Phase::Rollback {
                 state.normal_refresh.insert(conn);
@@ -772,7 +770,6 @@ mod endpoint {
         lease.sequence = 0;
         lease.deadline = Instant::now() + Duration::from_secs(10);
         lease.normal_ready = false;
-        lease.rollback_failed = false;
         lease.failure_code.clear();
         lease.touch_down = false;
         lease.mouse_position = None;
@@ -807,10 +804,15 @@ mod endpoint {
     pub fn poll(conn: i32, access: Access) -> Option<Message> {
         let owner = STATE.lock().unwrap().lease.as_ref().map_or(false, |lease| lease.conn == conn);
         if owner && encoded::take_state_overflow() {
-            // A lost RECONFIGURE/input-freeze transition cannot be repaired by
-            // continuing the current source. Stop the helper and return safely.
-            fail_video(conn, "ANDROID_STATE_BACKPRESSURE");
-            return Some(error("state-overflow", "ANDROID_STATE_BACKPRESSURE"));
+            // Congestion may drop a state notification, not the local capture
+            // task. Discard obsolete snapshots and ask for current authority and
+            // transition state; no barrier is inferred from a missing message.
+            encoded::forget_state(conn);
+            let refresh = STATE.lock().unwrap().lease.as_ref().filter(|l| l.conn == conn).map(|l|
+                Request { v: 1, op: "status".into(), operation_id: l.operation_id.clone(),
+                    generation: l.generation, epoch: l.epoch, revision: l.revision,
+                    sequence: 0, input_frozen: true, payload: json!({}) });
+            if let Some(request) = refresh { let _ = forward(conn, &request); }
         }
         // Permission loss revokes control consent; video failure alone does not.
         if access.control_error().is_some() {
@@ -826,7 +828,7 @@ mod endpoint {
                 fail_video(conn, access.control_error().unwrap_or("ADB_VIDEO_SUBSCRIPTION_REQUIRED"));
             }
         }
-        let timeout = {
+        let refresh = {
             let mut state = STATE.lock().unwrap();
             state.lease.as_mut().filter(|lease| lease.conn == conn).and_then(|lease| {
                 // After an explicit stop there is no running ADB helper lease to
@@ -834,17 +836,20 @@ mod endpoint {
                 // the phone may grant/start MediaProjection later. Disconnect
                 // still cleans this state; a newer explicit start may replace it.
                 let awaiting_normal = lease.explicitly_stopped && lease.phase == Phase::Rollback;
-                if !awaiting_normal && lease.phase != Phase::Frozen && !lease.rollback_failed
-                    && (lease.heartbeat.elapsed() > Duration::from_secs(15)
-                    || (lease.phase != Phase::Active && Instant::now() > lease.deadline)) {
-                    lease.rollback_failed = true;
-                    Some((lease.operation_id.clone(), lease.phase == Phase::Rollback))
+                if !awaiting_normal && !matches!(lease.phase, Phase::Frozen | Phase::Active)
+                    && Instant::now() > lease.deadline {
+                    // Probe the same transaction instead of stopping Android
+                    // capture. Authentication/revoke/disconnect still own its
+                    // lifetime; a late PC ACK cannot keep an obsolete task alive.
+                    lease.deadline = Instant::now() + Duration::from_secs(10);
+                    Some(Request { v: 1, op: "status".into(), operation_id: lease.operation_id.clone(),
+                        generation: lease.generation, epoch: lease.epoch, revision: lease.revision,
+                        sequence: 0, input_frozen: true, payload: json!({}) })
                 } else { None }
             })
         };
-        if let Some((operation_id, _already_rollback)) = timeout {
-            fail_video(conn, "LEASE_OR_TRANSITION_TIMEOUT");
-            return Some(error(&operation_id, "LEASE_OR_TRANSITION_TIMEOUT"));
+        if let Some(request) = refresh {
+            let _ = forward(conn, &request);
         }
         if let Some(raw) = encoded::pop_state(conn) {
             if let Ok(mut value) = serde_json::from_str::<Value>(&raw) {

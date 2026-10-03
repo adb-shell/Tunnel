@@ -144,6 +144,7 @@ public final class Server {
         private volatile long controlWriteSince;
         private volatile long stoppedAt;
         private volatile boolean captureRunning;
+        private VideoTask unavailableTask;
         private boolean controlOnly;
         private volatile int automationCapabilities;
         private volatile long operationSince;
@@ -213,17 +214,24 @@ public final class Server {
             if (bitmap != null) bitmap.recycle(); bitmap = value; bitmapTask = expected.id;
         }
         private synchronized boolean selectVideo(int id, int mode) {
-            if (id <= task.id) return false;
+            // A lost reply may cause the APK to resend the exact command. ACK
+            // that identity without disposing the bitmap/codec or changing intent.
+            if (id == task.id) return mode == task.mode;
+            if (id < task.id) return false;
             if (bitmap != null) bitmap.recycle(); bitmap = null;
             task = new VideoTask(id, mode); captureRunning = false;
             keyframe.set(true);
             return true;
         }
-        void videoTaskFailed(VideoTask expected) {
+        void videoTaskInterrupted(VideoTask expected) {
             synchronized (this) {
-                if (task != expected || expected.mode == 3) return;
-                task = new VideoTask(expected.id, 3); captureRunning = false;
-                if (bitmap != null) bitmap.recycle(); bitmap = null;
+                if (task != expected || expected.mode == 3 || unavailableTask == expected) return;
+                // A transient provider failure is not a user stop. Keep this task's
+                // identity/intent and let its sole worker recover without spawning.
+                unavailableTask = expected;
+                captureRunning = false;
+                if (bitmap != null) bitmap.recycle();
+                bitmap = null;
             }
             try { videoState(expected.id, 2); sendCapabilities(); }
             catch (IOException closed) { stop("CONTROL_CLOSED"); }
@@ -236,7 +244,17 @@ public final class Server {
             }
         }
 
-        void frameSent() { frames.incrementAndGet(); }
+        void frameSent(VideoTask expected) throws IOException {
+            boolean recovered;
+            synchronized (this) {
+                if (task != expected) return;
+                frames.incrementAndGet();
+                recovered = unavailableTask == expected;
+                unavailableTask = null;
+                captureRunning = true;
+            }
+            if (recovered) { videoState(expected.id, 1); sendCapabilities(); }
+        }
         void videoProgress() { videoProgressAt = SystemClock.elapsedRealtime(); }
         void videoIdle() { videoProgressAt = 0; }
         boolean stopped() { return stop.get(); }
@@ -335,10 +353,11 @@ public final class Server {
             frameThread = new Thread(() -> {
                 VideoTask previous = null;
                 long nextFrame = 0;
+                int consecutiveFailures = 0;
                 try {
                     while (!stop.get()) {
                         VideoTask current = task;
-                        if (current != previous) { previous = current; nextFrame = 0; }
+                        if (current != previous) { previous = current; nextFrame = 0; consecutiveFailures = 0; }
                         if ((current.mode != 1 && current.mode != 2 && current.mode != 4)
                                 || SystemClock.elapsedRealtime() < nextFrame) {
                             Thread.sleep(40);
@@ -346,13 +365,20 @@ public final class Server {
                         }
                         boolean failed = false;
                         frameOperationSince = SystemClock.elapsedRealtime();
-                        try { offerBitmap(automation.frame(current.mode), current); }
-                        catch (Exception unavailable) {
-                            automation.revokeMode(current.mode);
+                        try {
+                            offerBitmap(automation.frame(current.mode), current);
+                            consecutiveFailures = 0;
+                        } catch (Exception unavailable) {
+                            // Rotation, animation and a temporarily unavailable
+                            // screenshot may fail one call. Retry the same provider,
+                            // not a different source, until explicit replacement/off.
+                            consecutiveFailures = Math.min(5, consecutiveFailures + 1);
                             failed = true;
                         } finally { frameOperationSince = 0; }
-                        if (failed && !stop.get()) videoTaskFailed(current);
-                        nextFrame = SystemClock.elapsedRealtime() + (current.mode == 2 ? 500 : 200);
+                        if (failed && !stop.get()) videoTaskInterrupted(current);
+                        nextFrame = SystemClock.elapsedRealtime() + (failed
+                                ? Math.min(1000, 100L << consecutiveFailures)
+                                : current.mode == 2 ? 500 : 200);
                     }
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();

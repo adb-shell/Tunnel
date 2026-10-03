@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/mobile/pages/server_page.dart';
 import 'package:flutter_hbb/web/settings_page.dart';
-import 'package:get/get.dart';
 import '../../common.dart';
 import '../../models/platform_model.dart';
 import '../../models/state_model.dart';
@@ -104,18 +103,11 @@ class HomePageState extends State<HomePage> {
         },
         child: Scaffold(
           // backgroundColor: MyTheme.grayBg,
-          appBar: AppBar(
-            centerTitle: true,
-            elevation: 0,
-            leading: _selectedIndex == 1 ? IconButton(
-              tooltip: '返回主页', icon: const Icon(Icons.arrow_back),
-              onPressed: () => _pageController.animateToPage(0,
-                duration: const Duration(milliseconds: 220), curve: Curves.easeOut),
-            ) : null,
-            title: appTitle(),
-            actions: _pages.elementAt(_selectedIndex).appBarActions,
-          ),
-          body: PageView(
+          appBar: _pages.elementAt(_selectedIndex).appBarActions.isEmpty
+              ? null
+              : AppBar(automaticallyImplyLeading: false, elevation: 0,
+                  actions: _pages.elementAt(_selectedIndex).appBarActions),
+          body: SafeArea(child: PageView(
             controller: _pageController,
             // Home remains the initial page; swipe right to reveal local LADB.
             reverse: isAndroid,
@@ -126,55 +118,8 @@ class HomePageState extends State<HomePage> {
               });
             },
             children: _pages,
-          ),
+          )),
         ));
-  }
-
-  Widget appTitle() {
-    final currentUser = gFFI.chatModel.currentUser;
-    final currentKey = gFFI.chatModel.currentKey;
-    if (isChatPageCurrentTab &&
-        currentUser != null &&
-        currentKey.peerId.isNotEmpty) {
-      final connected =
-          gFFI.serverModel.clients.any((e) => e.id == currentKey.connId);
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Tooltip(
-            message: currentKey.isOut
-                ? translate('Outgoing connection')
-                : translate('Incoming connection'),
-            child: Icon(
-              currentKey.isOut
-                  ? Icons.call_made_rounded
-                  : Icons.call_received_rounded,
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    "${currentUser.firstName}   ${currentUser.id}",
-                  ),
-                  if (connected)
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color.fromARGB(255, 133, 246, 199)),
-                    ).marginSymmetric(horizontal: 2),
-                ],
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-    return Text(_selectedIndex == 1 ? 'LADB' : '隧道');
   }
 }
 

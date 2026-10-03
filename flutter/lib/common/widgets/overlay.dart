@@ -1767,45 +1767,25 @@ class TunnelStatusMonitor extends StatelessWidget {
   final TunnelStatusModel tunnelStatusModel;
   TunnelStatusMonitor(this.tunnelStatusModel);
 
-  Widget _textRow(String label, String value, {Color? color, String? detail}) => Tooltip(
-    message: detail == null || detail.isEmpty ? value : detail,
-    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(flex: 10, child: Text(label,
-        style: const TextStyle(color: Color.fromARGB(255, 210, 210, 210)),
-        textAlign: TextAlign.right)),
-      const Spacer(flex: 1),
-      Expanded(flex: 6, child: Text(value, maxLines: 3,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: color ?? const Color.fromARGB(255, 210, 210, 210)))),
-    ]),
-  );
-
   List<Widget> _adbRows() {
     final ffi = tunnelStatusModel.parent.target;
     if (ffi == null || !ffi.ffiModel.isPeerAndroid) return [];
     final m = ffi.androidModeModel;
-    final pair = m.pairing;
-    final adbReady = m.state['localAdbReady'];
-    final failed = pair.errorText.isNotEmpty;
-    final connection = pair.busy ? '处理中' : failed ? '操作失败'
-        : adbReady == true ? (m.consentActive == true ? '可用' : '待授权')
-        : adbReady == false ? '未连接' : '未检测';
-    final source = m.state['actualFrameSource'];
-    const sourceLabels = {'ADB_LIVE': 'ADB 视频', 'ADB_CAPTURE': 'ADB 视频',
-      'ADB_SNAPSHOT': 'ADB 截图', 'IGNORE_CAPTURE': 'ADB 截图',
-      'ADB_HIERARCHY': 'ADB 穿透', 'HIERARCHY_CAPTURE': 'ADB 穿透',
-      'ADB_SNAPSHOT_HIERARCHY': 'ADB 截图与穿透',
-      'MEDIA_PROJECTION': '屏幕共享', 'NONE': '等待画面'};
-    final mode = m.phase == 'OTHER_WINDOW' ? '其他窗口'
-        : sourceLabels[source] ?? (m.usingAdb ? 'ADB 视频' : '等待画面');
+    bool? flag(String key) => m.state[key] is bool ? m.state[key] as bool : null;
+    final debugging = flag('localAdbReady');
     return [
       const Divider(color: Colors.white24, height: 12),
-      _textRow('ADB：', connection,
-        detail: failed ? pair.errorText : pair.busy ? pair.statusText : '',
-        color: failed ? Colors.redAccent
-            : adbReady == true && m.consentActive == true ? Colors.green : null),
-      _textRow('当前画面：', mode, detail: m.reasonText,
-        color: m.reason.isNotEmpty ? Colors.orangeAccent : null),
+      const Padding(padding: EdgeInsets.only(bottom: 3),
+        child: Center(child: Text('ADB', style: TextStyle(color: Colors.white70, fontSize: 12)))),
+      _row('视频状态：', m.adbVideoPresent, positiveText: '存在', negativeText: '丢失'),
+      _row('特殊状态：', m.adbSpecialPresent, positiveText: '存在', negativeText: '丢失'),
+      _row('投屏状态：', flag('baseLiveRequested')),
+      _row('无视状态：', flag('snapshotEnabled')),
+      _row('黑屏状态：', flag('overlayBlack')),
+      _row('穿透状态：', flag('hierarchyEnabled')),
+      _row('防触状态：', flag('touchBlocked')),
+      Tooltip(message: m.pairing.errorText.isNotEmpty ? m.pairing.errorText : m.reasonText,
+        child: _row('调试状态：', debugging, positiveText: '可用', negativeText: '不可用')),
     ];
   }
 

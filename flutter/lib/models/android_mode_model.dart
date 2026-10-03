@@ -16,6 +16,30 @@ class AndroidModeModel extends ChangeNotifier {
   Map<String, dynamic>? _presentation;
   Timer? _heartbeat;
   Timer? _deadline;
+  Timer? _statusRefresh;
+  DateTime? _lastAdbDecodedAt;
+  DateTime? _lastRenderedAt;
+  bool _displayedAdb = false;
+  bool _lastReportedFramePresent = false;
+
+  bool get adbFramePresent {
+    final decoded = _lastAdbDecodedAt;
+    final rendered = _lastRenderedAt;
+    final now = DateTime.now();
+    return _displayedAdb && decoded != null && rendered != null &&
+        now.difference(decoded).inMilliseconds < 5000 &&
+        now.difference(rendered).inMilliseconds < 5000;
+  }
+  bool get adbVideoPresent => adbFramePresent && state['adbVideoPresent'] == true;
+  bool get adbSpecialPresent => adbFramePresent && state['adbSpecialPresent'] == true;
+
+  void _notifyFramePresence() {
+    final present = adbFramePresent;
+    if (present == _lastReportedFramePresent) return;
+    _lastReportedFramePresent = present;
+    notifyListeners();
+  }
+
   int _generation = 0;
   int _epoch = 0;
   int _revision = 0;
@@ -24,7 +48,7 @@ class AndroidModeModel extends ChangeNotifier {
   bool usingAdb = false;
   bool busy = false;
   bool adbActionsVisible = true;
-  final List<DateTime> _videoRecoveries = [];
+  int _lastRecoveryGeneration = -1;
   final Map<String, Timer> _actionDeadlines = {};
   final Map<String, String> _actionKeys = {};
   bool _canRestartStoppedVideo = false;
@@ -116,6 +140,14 @@ class AndroidModeModel extends ChangeNotifier {
     if (_statusRequested) return;
     _statusRequested = true;
     WidgetsBinding.instance.addPostFrameCallback((_) => _send('status'));
+    // One timer per remote window: expiry is based on real decoded/rendered
+    // frames, while status refresh also works with no active video heartbeat.
+    var tick = 0;
+    _statusRefresh ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      if (parent.target?.closed != false) return;
+      _notifyFramePresence();
+      if (++tick % 3 == 0 && !_observingOtherWindow) _send('status');
+    });
   }
 
   Future<void> _send(String op, {Map<String, dynamic> payload = const {},
@@ -154,11 +186,15 @@ class AndroidModeModel extends ChangeNotifier {
     // Side controls are independent of video transitions and carry their own
     // request deadlines; the endpoint serializes conflicting native work.
     if (action) {
-      final key = '$op:${payload['action'] ?? ''}';
-      if (_actionKeys.containsValue(key)) {
-        _report('此操作仍在执行，请等待手机返回结果');
-        return;
-      }
+      final actionName = (payload['action'] ?? '').toString();
+      final feature = actionName.replaceFirst(RegExp(r'_(on|off)$'), '');
+      final key = '$op:$feature';
+      // A retry or opposite toggle supersedes its previous UI deadline. Native
+      // feature versions serialize the actual effect; stale callbacks cannot
+      // keep a newly requested toggle disabled for the old 25-second timeout.
+      final superseded = _actionKeys.entries.where((entry) => entry.value == key)
+          .map((entry) => entry.key).toList();
+      for (final previous in superseded) { _finishAction(previous); }
       if (_actionDeadlines.length >= 32) {
         _report('待处理操作过多，请等待手机返回结果后重试');
         return;
@@ -199,7 +235,7 @@ class AndroidModeModel extends ChangeNotifier {
       });
     }
     if (op == 'start') {
-      if (!automaticRecovery) _videoRecoveries.clear();
+      if (!automaticRecovery) _lastRecoveryGeneration = -1;
       // A new generation supersedes an unfinished video attempt. Stale frame
       // callbacks and heartbeats must not acknowledge the replacement source.
       _presentation = null;
@@ -239,10 +275,49 @@ class AndroidModeModel extends ChangeNotifier {
       update = Map<String, dynamic>.from(raw is String ? jsonDecode(raw) : raw);
     } catch (_) { return; }
     if (update['v'] != 1) return;
+    if (update['kind'] == 'video_frame') {
+      // These events originate from the local decoder, never the Android
+      // request state. They must not reset a pending presentation handshake.
+      if (update['adb'] == true) {
+        if (update['generation'] != _generation ||
+            update['epoch'] is! int || (update['epoch'] as int) < _epoch) return;
+        _lastAdbDecodedAt = DateTime.now();
+        _displayedAdb = true;
+      } else if (update['adb'] == false) {
+        _displayedAdb = false;
+        _lastAdbDecodedAt = null;
+      } else {
+        return;
+      }
+      _notifyFramePresence();
+      return;
+    }
     void updateEffects() {
-      for (final key in const ['overlayBlack', 'overlayBlackRequested', 'touchBlocked', 'touchBlockRequested']) {
+      for (final key in const ['overlayBlack', 'overlayBlackRequested', 'touchBlocked', 'touchBlockRequested',
+          'baseLiveRequested', 'snapshotEnabled', 'hierarchyEnabled', 'localAdbReady',
+          'adbVideoPresent', 'adbSpecialPresent']) {
         if (update[key] is bool) state[key] = update[key];
       }
+    }
+    // Recovery is also advertised by status polling, so a dropped action
+    // notification cannot permanently strand an enabled source. Require both
+    // current local consent and an explicit matching endpoint assertion.
+    if (update['resumeVideo'] == true &&
+        update['resumeGeneration'] is int && update['resumeGeneration'] == _generation &&
+        (update['generation'] == null || update['generation'] == 0 || update['generation'] == _generation) &&
+        update['baseLiveRequested'] is bool && update['consentActive'] == true &&
+        consentActive == true && _startOperation.isNotEmpty && !_observingOtherWindow &&
+        _lastRecoveryGeneration != _generation) {
+      _lastRecoveryGeneration = _generation;
+      updateEffects();
+      final completedAction = update['requestOperationId'] ?? update['operationId'];
+      if (completedAction is String && update['operationComplete'] != false &&
+          _actionDeadlines.containsKey(completedAction)) _finishAction(completedAction);
+      // Android owns the single helper and retry backoff. Start establishes a
+      // new generation synchronously; do not apply the old status after it.
+      request('start', payload: update['baseLiveRequested'] == true ? const {} : const {'sourceAction': 'live_off'},
+        automaticRecovery: true);
+      return;
     }
     final actionId = update['requestOperationId'] ?? update['operationId'];
     if (actionId is String && _actionDeadlines.containsKey(actionId)) {
@@ -261,21 +336,6 @@ class AndroidModeModel extends ChangeNotifier {
     if (update['kind'] == 'action' || update['phase'] == 'ACTION_RESULT') {
       _updateConsent(update);
       updateEffects();
-      // Recover only an explicitly enabled persistent source, using a new video
-      // generation. An intervening stop/start makes this notification stale.
-      if (update['resumeVideo'] == true && update['resumeGeneration'] == _generation &&
-          consentActive == true && !_observingOtherWindow) {
-        final now = DateTime.now();
-        _videoRecoveries.removeWhere((time) => now.difference(time).inSeconds >= 60);
-        if (_videoRecoveries.length < 3) {
-          _videoRecoveries.add(now);
-          // Preserve base-live off when only a persistent screenshot/layout source was active.
-          request('start', payload: update['baseLiveRequested'] == true ? const {} : const {'sourceAction': 'live_off'},
-            automaticRecovery: true);
-        } else {
-          reason = '手机画面组件连续异常，已暂停自动恢复，可重新点击开启投屏';
-        }
-      }
       notifyListeners();
       return;
     }
@@ -346,7 +406,7 @@ class AndroidModeModel extends ChangeNotifier {
       busy = false;
       _heartbeat?.cancel();
       _heartbeat = null;
-      state = update;
+      state.addAll(update);
       phase = 'OTHER_WINDOW';
       reason = 'ADB 视频请求来自其他窗口';
       notifyListeners();
@@ -358,7 +418,7 @@ class AndroidModeModel extends ChangeNotifier {
         _stopOperation = '';
         _updateConsent(update);
         _observingOtherWindow = false;
-        state = update;
+        state.addAll(update);
         inputFrozen = false;
         usingAdb = false;
         busy = false;
@@ -375,7 +435,7 @@ class AndroidModeModel extends ChangeNotifier {
       // A fresh status may describe an idle endpoint or another owner. It must
       // never resurrect an old lease, heartbeat or presentation after reconnect.
       if (freshStatus && !usingAdb && !busy) {
-        state = update;
+        state.addAll(update);
         _updateConsent(update);
         reason = update['code']?.toString() ?? '';
         phase = 'IDLE';
@@ -477,6 +537,8 @@ class AndroidModeModel extends ChangeNotifier {
   int? get presentationToken => _presentation == null ? null : _presentationToken;
 
   void onFrameAvailable(int? deliveredToken) {
+    _lastRenderedAt = DateTime.now();
+    _notifyFramePresence();
     if (deliveredToken == null || deliveredToken != _presentationToken) return;
     final pending = _presentation;
     if (pending == null) return;
@@ -526,7 +588,13 @@ class AndroidModeModel extends ChangeNotifier {
   }
 
   void reset() {
-    _videoRecoveries.clear();
+    _lastRecoveryGeneration = -1;
+    _statusRefresh?.cancel();
+    _statusRefresh = null;
+    _lastAdbDecodedAt = null;
+    _lastRenderedAt = null;
+    _displayedAdb = false;
+    _lastReportedFramePresent = false;
     pairing.reset();
     for (final timer in _actionDeadlines.values) { timer.cancel(); }
     _actionDeadlines.clear();
@@ -565,6 +633,7 @@ class AndroidModeModel extends ChangeNotifier {
     _actionKeys.clear();
     _heartbeat?.cancel();
     _deadline?.cancel();
+    _statusRefresh?.cancel();
     pairing.dispose();
     super.dispose();
   }

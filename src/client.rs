@@ -1490,6 +1490,36 @@ impl AudioHandler {
     }
 }
 
+// Distinguish decoder buffering from real corruption without changing the
+// established failure policy for ordinary RustDesk streams.
+fn next_video_failure_count(adb: bool, first: bool, previous: usize, outcome: Result<bool, ()>) -> usize {
+    match outcome {
+        Ok(true) => 0,
+        // H264 decoders may consume valid input before yielding a picture.
+        Ok(false) if adb => previous,
+        _ if !adb && first && previous < MAX_DECODE_FAIL_COUNTER => MAX_DECODE_FAIL_COUNTER,
+        _ => previous.saturating_add(1),
+    }
+}
+
+#[cfg(test)]
+mod adb_decode_result_tests {
+    use super::*;
+
+    #[test]
+    fn buffering_is_not_an_adb_decode_failure() {
+        let mut failures = 0;
+        for frame in 0..10 {
+            failures = next_video_failure_count(true, frame == 0, failures, Ok(false));
+        }
+        assert_eq!(failures, 0);
+        assert_eq!(next_video_failure_count(true, true, 0, Err(())), 1);
+        assert_eq!(next_video_failure_count(true, false, 2, Ok(true)), 0);
+        assert_eq!(next_video_failure_count(false, true, 0, Ok(false)), MAX_DECODE_FAIL_COUNTER);
+        assert_eq!(next_video_failure_count(true, false, usize::MAX, Err(())), usize::MAX);
+    }
+}
+
 /// Video handler for the [`Client`].
 pub struct VideoHandler {
     decoder: Decoder,
@@ -1556,21 +1586,12 @@ impl VideoHandler {
                     pixelbuffer,
                     chroma,
                 );
-                if res.as_ref().is_ok_and(|x| *x) {
-                    self.fail_counter = 0;
-                } else {
-                    if self.fail_counter < usize::MAX {
-                        if self.first_frame && self.fail_counter < MAX_DECODE_FAIL_COUNTER {
-                            log::error!("decode first frame failed");
-                            self.fail_counter = MAX_DECODE_FAIL_COUNTER;
-                        } else {
-                            self.fail_counter += 1;
-                        }
-                        log::error!(
-                            "Failed to handle video frame, fail counter: {}",
-                            self.fail_counter
-                        );
-                    }
+                let adb = vf.android_video.as_ref().map_or(false, |metadata| matches!(metadata.phase, 1 | 2));
+                let previous = self.fail_counter;
+                self.fail_counter = next_video_failure_count(adb, self.first_frame, previous,
+                    res.as_ref().map(|decoded| *decoded).map_err(|_| ()));
+                if self.fail_counter > previous {
+                    log::error!("Failed to handle video frame, fail counter: {}", self.fail_counter);
                 }
                 self.first_frame = false;
                 if self.record {
@@ -2691,6 +2712,14 @@ pub enum MediaData {
 
 pub type MediaSender = mpsc::Sender<MediaData>;
 
+fn request_android_keyframe<T: InvokeUiSession>(session: &Session<T>, metadata: &AndroidVideoMetadata) {
+    session.send(Data::Message(crate::server::android_control::message(
+        serde_json::json!({"v":1,"op":"keyframe",
+            "operationId":format!("decode-{}-{}", metadata.epoch, metadata.sequence),
+            "epoch":metadata.epoch,"generation":metadata.generation,
+            "revision":metadata.revision,"payload":{}}).to_string())));
+}
+
 /// Start video thread.
 ///
 /// # Arguments
@@ -2725,6 +2754,11 @@ pub fn start_video_thread<F, T>(
         let mut adb_active = false;
         let mut adb_frozen = false;
         let mut rollback_waiting = false;
+        // Presentation/ownership ACKs describe a transaction, not continuing
+        // frame delivery. Report only decoded, displayed frames to the UI.
+        let mut last_frame_notice: Option<(bool, u64, u64, std::time::Instant)> = None;
+        let mut last_adb_refresh: Option<std::time::Instant> = None;
+        let mut adb_decoder_needs_key: Option<u64> = None;
         let mut count = 0;
         let mut duration = std::time::Duration::ZERO;
         let mut skip_beginning = 0;
@@ -2769,6 +2803,12 @@ pub fn start_video_thread<F, T>(
                             session.update_android_control(crate::server::android_control::video_event(&candidate_meta, "PRESENT_FRAME"));
                             if let Some(handler) = video_handler.as_mut() {
                                 video_callback(display, &mut handler.rgb, handler.texture.texture, pixelbuffer);
+                                session.update_android_control(serde_json::json!({"v":1,
+                                    "kind":"video_frame","phase":"FRAME_RECEIVED","adb":true,
+                                    "epoch":candidate_meta.epoch,"generation":candidate_meta.generation,
+                                    "revision":candidate_meta.revision,"sequence":candidate_meta.sequence}).to_string());
+                                last_frame_notice = Some((true, candidate_meta.epoch, candidate_meta.generation,
+                                    std::time::Instant::now()));
                             }
                         } else if barrier.action == 2 {
                             adb_frozen = false;
@@ -2834,6 +2874,24 @@ pub fn start_video_thread<F, T>(
                         // transaction. Only its strictly newer candidate may decode.
                         if adb_frozen && !android_metadata.as_ref().map_or(false, |metadata|
                             metadata.phase == 1 && metadata.epoch > adb_epoch) { continue; }
+                        let reset_adb_decoder = android_metadata.as_ref().map_or(false, |metadata|
+                            metadata.phase != 3 && adb_decoder_needs_key == Some(metadata.epoch));
+                        if reset_adb_decoder {
+                            let key = match &vf.union {
+                                Some(video_frame::Union::H264s(frames)) => frames.frames.iter().any(|frame| frame.key),
+                                _ => false,
+                            };
+                            if !key {
+                                if last_adb_refresh.map_or(true, |time| time.elapsed() >= std::time::Duration::from_secs(1)) {
+                                    last_adb_refresh = Some(std::time::Instant::now());
+                                    if let Some(metadata) = android_metadata.as_ref() {
+                                        request_android_keyframe(&session, metadata);
+                                    }
+                                }
+                                continue;
+                            }
+                            adb_decoder_needs_key = None;
+                        }
                         if let Some(metadata) = android_metadata.as_ref() {
                             if metadata.phase == 1 {
                                 if metadata.epoch <= adb_epoch { continue; }
@@ -2842,6 +2900,7 @@ pub fn start_video_thread<F, T>(
                                 }
                                 let Some((candidate, handler, pixelbuffer, ready)) = adb_candidate.as_mut() else { continue; };
                                 if candidate.revision != metadata.revision || handler.fail_counter == usize::MAX { continue; }
+                                if reset_adb_decoder { handler.reset(None); }
                                 let mut ignored_chroma = None;
                                 match handler.handle_frame(vf, pixelbuffer, &mut ignored_chroma) {
                                     Ok(true) => {
@@ -2860,7 +2919,7 @@ pub fn start_video_thread<F, T>(
                                             session.update_android_control(crate::server::android_control::video_event(candidate, "CANDIDATE_READY"));
                                         }
                                     }
-                                    Err(_) => {
+                                    Err(_) if !handler.decoder.valid() => {
                                         handler.fail_counter = usize::MAX;
                                         session.update_android_control(serde_json::json!({"v":1,"phase":"ERROR",
                                             "code":"CANDIDATE_DECODE_FAILED","operationId":metadata.operation_id,
@@ -2869,7 +2928,26 @@ pub fn start_video_thread<F, T>(
                                             serde_json::json!({"v":1,"op":"video_failed","operationId":metadata.operation_id,
                                                 "epoch":metadata.epoch,"generation":metadata.generation,"payload":{}}).to_string())));
                                     }
-                                    _ => {}
+                                    Err(_) => {
+                                        // A bounded queue may drop a GOP. Keep the local
+                                        // source alive and resume decoding at a fresh IDR.
+                                        if handler.fail_counter >= MAX_DECODE_FAIL_COUNTER {
+                                            adb_decoder_needs_key = Some(metadata.epoch);
+                                        }
+                                        if last_adb_refresh.map_or(true, |time| time.elapsed() >= std::time::Duration::from_secs(1)) {
+                                            last_adb_refresh = Some(std::time::Instant::now());
+                                            request_android_keyframe(&session, metadata);
+                                        }
+                                    }
+                                    Ok(false) => {
+                                        // Some H264 decoders buffer before producing output.
+                                        // Never reset/discard their following frames merely
+                                        // because the first decode has no picture yet.
+                                        if last_adb_refresh.map_or(true, |time| time.elapsed() >= std::time::Duration::from_secs(1)) {
+                                            last_adb_refresh = Some(std::time::Instant::now());
+                                            request_android_keyframe(&session, metadata);
+                                        }
+                                    }
                                 }
                                 continue;
                             }
@@ -2889,6 +2967,7 @@ pub fn start_video_thread<F, T>(
                             video_handler = Some(handler);
                         }
                         if let Some(handler) = video_handler.as_mut() {
+                            if reset_adb_decoder { handler.reset(None); }
                             let mut pixelbuffer = true;
                             let mut tmp_chroma = None;
                             let format_changed = handler.decoder.format() != format;
@@ -2923,6 +3002,22 @@ pub fn start_video_thread<F, T>(
                                         pixelbuffer,
                                     );
 
+                                    if adb_epoch != 0 || android_metadata.is_some() {
+                                        let is_adb = android_metadata.as_ref().map_or(false, |m| m.phase == 2);
+                                        let (epoch, generation, revision, sequence) = android_metadata.as_ref()
+                                            .map(|m| (m.epoch, m.generation, m.revision, m.sequence))
+                                            .unwrap_or((0, 0, 0, 0));
+                                        if last_frame_notice.as_ref().map_or(true, |(old_adb, old_epoch, old_generation, time)|
+                                            *old_adb != is_adb || *old_epoch != epoch || *old_generation != generation
+                                                || time.elapsed() >= std::time::Duration::from_secs(1)) {
+                                            session.update_android_control(serde_json::json!({"v":1,
+                                                "kind":"video_frame","phase":"FRAME_RECEIVED","adb":is_adb,
+                                                "epoch":epoch,"generation":generation,"revision":revision,
+                                                "sequence":sequence}).to_string());
+                                            last_frame_notice = Some((is_adb, epoch, generation, std::time::Instant::now()));
+                                        }
+                                    }
+
                                     // chroma
                                     if tmp_chroma.is_some() && last_chroma != tmp_chroma {
                                         last_chroma = tmp_chroma;
@@ -2952,7 +3047,20 @@ pub fn start_video_thread<F, T>(
                                     //
                                     // to-do: fix the error
                                     log::error!("handle video frame error, {}", e);
-                                    session.refresh_video(display as _);
+                                    if let Some(metadata) = android_metadata.as_ref().filter(|m| m.phase == 2) {
+                                        if handler.fail_counter >= MAX_DECODE_FAIL_COUNTER {
+                                            adb_decoder_needs_key = Some(metadata.epoch);
+                                        }
+                                        // The ordinary capture refresh cannot repair this H264
+                                        // stream. Ask its own encoder for an IDR, with bounded
+                                        // retries while damaged dependent frames are drained.
+                                        if last_adb_refresh.map_or(true, |time| time.elapsed() >= std::time::Duration::from_secs(1)) {
+                                            last_adb_refresh = Some(std::time::Instant::now());
+                                            request_android_keyframe(&session, metadata);
+                                        }
+                                    } else {
+                                        session.refresh_video(display as _);
+                                    }
                                 }
                                 _ => {}
                             }
@@ -2961,8 +3069,19 @@ pub fn start_video_thread<F, T>(
                         // check invalid decoders
                         let mut should_update_supported = false;
                         if let Some(handler) = video_handler.as_mut() {
+                            let adb_frame = android_metadata.as_ref().filter(|metadata| metadata.phase == 2);
+                            if let Some(metadata) = adb_frame {
+                                if handler.decoder.valid() && handler.fail_counter >= MAX_DECODE_FAIL_COUNTER {
+                                    // Ok(false) can be ordinary decoder buffering. Request
+                                    // recovery without destroying its pending output.
+                                    if last_adb_refresh.map_or(true, |time| time.elapsed() >= std::time::Duration::from_secs(1)) {
+                                        last_adb_refresh = Some(std::time::Instant::now());
+                                        request_android_keyframe(&session, metadata);
+                                    }
+                                }
+                            }
                             if !handler.decoder.valid()
-                                || handler.fail_counter >= MAX_DECODE_FAIL_COUNTER
+                                || (adb_frame.is_none() && handler.fail_counter >= MAX_DECODE_FAIL_COUNTER)
                             {
                                 let mut lc = session.lc.write().unwrap();
                                 let format = handler.decoder.format();
