@@ -17,6 +17,7 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
@@ -103,8 +104,12 @@
         <service
             android:name=".DFm8Y8iMScvB2YDw"
             android:enabled="true"
-            android:foregroundServiceType="mediaProjection"
-            android:stopWithTask="false" />
+            android:foregroundServiceType="specialUse|mediaProjection"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keep the user-enabled remote assistance endpoint online for authenticated incoming connections. Screen capture is separately authorized and uses the mediaProjection type only during projection." />
+        </service>
 
         <service
             android:name=".DFrLMwitwQbfu7AC"

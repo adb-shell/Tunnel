@@ -50,10 +50,15 @@ final class ShellAutomation implements AutoCloseable {
         info.flags |= AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
                 | AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
                 | AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
-        info.eventTypes |= AccessibilityEvent.TYPE_WINDOWS_CHANGED
-                | AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED | AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED;
+        info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK;
+        info.packageNames = null;
+        info.notificationTimeout = 50;
         try { automation.setServiceInfo(info); }
         catch (RuntimeException unsupportedFlags) { /* Keep shell input and active-root fallback available. */ }
+        automation.setOnAccessibilityEventListener(event -> {
+            try { hierarchy.contentChanged(event.getEventType()); }
+            finally { event.recycle(); }
+        });
         display = new DisplayCapture();
         display.snapshot();
         capabilities.set(AdbWire.CAP_INPUT);
@@ -266,6 +271,10 @@ final class ShellAutomation implements AutoCloseable {
         try { overlay.close(); } catch (RuntimeException ignored) { }
         try { power.close(); } catch (RuntimeException ignored) { }
         capabilities.set(0);
+        if (automation != null) {
+            try { automation.setOnAccessibilityEventListener(null); }
+            catch (RuntimeException disconnected) { }
+        }
         boolean collectorEnded = hierarchy.close();
         if (automation != null && collectorEnded) {
             try { UiAutomation.class.getMethod("disconnect").invoke(automation); } catch (Exception ignored) { }

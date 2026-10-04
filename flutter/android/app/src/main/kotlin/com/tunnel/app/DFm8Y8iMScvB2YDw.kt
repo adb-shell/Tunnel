@@ -970,24 +970,12 @@ class DFm8Y8iMScvB2YDw : Service() {
             val projectionResult = intent.getParcelableExtra<Intent>(EXT_MEDIA_PROJECTION_RES_INTENT)
             if (projectionResult != null) {
                 try {
-                    val mediaProjectionManager =
-                        getSystemService(p50.a(byteArrayOf(118, 104, 74, -67, 14, -83, 107, 127, 65, -66, 10, -111, 111, 100, 65, -70), byteArrayOf(27, 13, 46, -44, 111, -14))) as MediaProjectionManager
-
                     savedMediaProjectionIntent = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                         projectionResult.clone() as Intent
                     } else {
                         null
                     }
-                    mediaProjection =
-                        mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, projectionResult)
-                    mediaProjection?.registerCallback(object : MediaProjection.Callback() {
-                        override fun onStop() {
-                            Log.w("MainService", "MediaProjection stopped by system")
-                            Handler(Looper.getMainLooper()).post {
-                                handleProjectionStoppedKeepService("system-callback")
-                            }
-                        }
-                    }, Handler(Looper.getMainLooper()))
+                    acquireMediaProjection(projectionResult)
                     checkMediaPermission()
                     _isReady = true
                     createForegroundNotification()
@@ -1002,7 +990,7 @@ class DFm8Y8iMScvB2YDw : Service() {
                 } catch (e: Exception) {
                     Log.e("MainService", "onStartCommand: consume MediaProjection result failed", e)
                     finishScreenSharePermissionRequest("permission-consume-failed")
-                    handleProjectionStoppedKeepService("permission-consume-failed")
+                    handleProjectionStoppedKeepService("permission-consume-failed", stopProjection = true)
                 }
             } else {
                 Log.i("MainService", "onStartCommand: projection init without permission result, keep core service only")
@@ -1496,9 +1484,9 @@ class DFm8Y8iMScvB2YDw : Service() {
             Log.e("MainService", "finishFailedStartCapture: disable video raw failed", e)
         }
         oFtTiPzsqzBHGigp.rdClipboardManager?.setCaptureStarted(false)
-        checkMediaPermission()
-        ensureBackgroundKeepAlive()
-        startCoreKeepAliveTicker()
+        // A failed VirtualDisplay/encoder start must not leave a live projection
+        // (and its foreground service type) behind while the UI says stopped.
+        stopCapture2()
     }
 
     @Synchronized
@@ -1700,40 +1688,27 @@ class DFm8Y8iMScvB2YDw : Service() {
         }
         if (savedIntent != null) {
             try {
-                val mediaProjectionManager =
-                    getSystemService(Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                acquireMediaProjection(savedIntent.clone() as Intent)
 
-                val newProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, savedIntent.clone() as Intent)
-
-                if (newProjection != null) {
-                    try {
-                        virtualDisplay?.release()
-                    } catch (e: Exception) {
-                        Log.e("MainService", "restoreMediaProjection: stale VirtualDisplay release failed", e)
-                    }
-                    virtualDisplay = null
-                    mediaProjection = newProjection
-                    mediaProjection?.registerCallback(object : android.media.projection.MediaProjection.Callback() {
-                        override fun onStop() {
-                            Log.w("MainService", "MediaProjection stopped by system")
-                            Handler(Looper.getMainLooper()).post {
-                                handleProjectionStoppedKeepService("restore-callback")
-                            }
-                        }
-                    }, Handler(Looper.getMainLooper()))
-
-                    _isReady = true
-                    createForegroundNotification()
-                    ensureBackgroundKeepAlive()
-                    checkMediaPermission()
-
-                    val captureResult = startCapture()
-                    Log.i("MainService", "restoreMediaProjection: startCapture result=$captureResult (token reuse)")
-                    return
+                try {
+                    virtualDisplay?.release()
+                } catch (e: Exception) {
+                    Log.e("MainService", "restoreMediaProjection: stale VirtualDisplay release failed", e)
                 }
+                virtualDisplay = null
+
+                _isReady = true
+                createForegroundNotification()
+                ensureBackgroundKeepAlive()
+                checkMediaPermission()
+
+                val captureResult = startCapture()
+                Log.i("MainService", "restoreMediaProjection: startCapture result=$captureResult (token reuse)")
+                return
             } catch (e: Exception) {
                 Log.w("MainService", "restoreMediaProjection: token reuse failed", e)
                 savedMediaProjectionIntent = null
+                handleProjectionStoppedKeepService("token-reuse-failed", stopProjection = true)
             }
         }
 
@@ -2031,8 +2006,44 @@ class DFm8Y8iMScvB2YDw : Service() {
     }
 
 
+    /** Only called with a system consent result, never by startup or network recovery. */
+    @Synchronized
+    private fun acquireMediaProjection(result: Intent): MediaProjection {
+        try {
+            // Android requires the projection FGS before getMediaProjection(),
+            // not merely before creating the VirtualDisplay. Hold the same lock
+            // as keep-alive refreshes so they cannot downgrade this transition.
+            check(createForegroundNotification(projectionStarting = true)) {
+                "Unable to start the media projection foreground service"
+            }
+            val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            val projection = checkNotNull(manager.getMediaProjection(Activity.RESULT_OK, result))
+            mediaProjection = projection
+            suppressNextProjectionStoppedIgnore = false
+            projection.registerCallback(object : MediaProjection.Callback() {
+                override fun onStop() {
+                    mainHandler.post {
+                        synchronized(this@DFm8Y8iMScvB2YDw) {
+                            // A delayed callback from a stopped/replaced token
+                            // must not tear down a newly authorized projection.
+                            if (mediaProjection === projection) {
+                                handleProjectionStoppedKeepService("system-callback")
+                            }
+                        }
+                    }
+                }
+            }, mainHandler)
+            return projection
+        } finally {
+            // Failed acquisition returns to core-only; success keeps projection.
+            createForegroundNotification()
+        }
+    }
+
     @SuppressLint("WakelockTimeout")
-    private fun createForegroundNotification() {
+    @Synchronized
+    private fun createForegroundNotification(projectionStarting: Boolean = false): Boolean {
+        val projectionActive = projectionStarting || mediaProjection != null
         val intent = Intent(this, oFtTiPzsqzBHGigp::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
             action = Intent.ACTION_MAIN
@@ -2052,7 +2063,7 @@ class DFm8Y8iMScvB2YDw : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText("正在保持远程连接服务")
+            .setContentText(if (projectionActive) "正在共享屏幕" else "正在保持远程连接服务")
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setColor(Color.rgb(0, 113, 255))
@@ -2060,23 +2071,28 @@ class DFm8Y8iMScvB2YDw : Service() {
             .setWhen(0)
             .setShowWhen(false)
             .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && mediaProjection != null) {
-            try {
-                startForeground(DEFAULT_NOTIFY_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-            } catch (e: Exception) {
-                Log.e("MainService", "createForegroundNotification: mediaProjection startForeground failed", e)
-                try {
-                    startForeground(DEFAULT_NOTIFY_ID, notification)
-                } catch (fallback: Exception) {
-                    Log.e("MainService", "createForegroundNotification: fallback startForeground failed", fallback)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val coreType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                } else {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_NONE
                 }
-            }
-        } else {
-            try {
+                val serviceType = coreType or if (projectionActive) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                } else {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_NONE
+                }
+                // Never use the manifest default: it includes projection even
+                // while only waiting for an incoming connection. Replacing the
+                // mask also removes projection after stop without stopping core.
+                startForeground(DEFAULT_NOTIFY_ID, notification, serviceType)
+            } else {
                 startForeground(DEFAULT_NOTIFY_ID, notification)
-            } catch (e: Exception) {
-                Log.e("MainService", "createForegroundNotification: startForeground failed", e)
             }
+        } catch (e: Exception) {
+            Log.e("MainService", "createForegroundNotification failed: projection=$projectionActive", e)
+            return false
         }
 
         try {
@@ -2093,6 +2109,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         } catch (e: Exception) {
             Log.e("MainService", "wifiLock acquire failed", e)
         }
+        return true
     }
 
     private fun buildVoiceCallActivityIntent(clientID: Int): Intent {

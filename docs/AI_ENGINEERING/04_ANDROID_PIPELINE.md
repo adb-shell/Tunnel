@@ -139,6 +139,8 @@ runMobileApp()
 
 网络、`onTrimMemory`、`onLowMemory`、screen off 和 projection stop 都不应直接重启整个 core。
 
+前台服务类型按实际生命周期显式指定：Android 14+ 的在线待命使用 `specialUse`（Manifest 声明远程协助待命用途），Android 10–13 使用 `NONE`；Android 10 以下沿用旧前台服务 API。只有收到系统录屏授权结果后，才在 `getMediaProjection()` 前加入 `mediaProjection`，停止或获取失败后去掉该类型，核心服务继续在线。不得用双参数 `startForeground()` 在 Android 10+ 回退到 Manifest 的全部类型。通知区分“正在保持远程连接服务”和“正在共享屏幕”；此处描述普通 MediaProjection，ADB 与无障碍帧源仍独立管理。服务类型、系统录屏指示及第三方应用提示需要真机分别验证。
+
 ## 5. Screen share 与 MediaProjection
 
 ### 5.1 唯一可授权入口

@@ -398,7 +398,7 @@ public final class Server {
                         if (failed && !stop.get()) videoTaskInterrupted(current);
                         nextFrame = SystemClock.elapsedRealtime() + (failed
                                 ? Math.min(1000, 100L << consecutiveFailures)
-                                : current.mode == 2 ? 500 : 200);
+                                : 200);
                     }
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
