@@ -3121,7 +3121,6 @@ class TunnelStatusData {
   bool? ignore;
   bool? blank;
   bool? penetrate;
-  bool? touchblock;
   bool? accessibility;
 }
 
@@ -3178,7 +3177,6 @@ class TunnelStatusModel with ChangeNotifier {
         _data.ignore != null ||
         _data.blank != null ||
         _data.penetrate != null ||
-        _data.touchblock != null ||
         _data.accessibility != null;
     _data.video = null;
     _data.screenshot = null;
@@ -3186,7 +3184,6 @@ class TunnelStatusModel with ChangeNotifier {
     _data.ignore = null;
     _data.blank = null;
     _data.penetrate = null;
-    _data.touchblock = null;
     _data.accessibility = null;
     return changed;
   }
@@ -3213,7 +3210,6 @@ class TunnelStatusModel with ChangeNotifier {
       _data.ignore = readNullableBool('ignore', _data.ignore);
       _data.blank = readNullableBool('blank', _data.blank);
       _data.penetrate = readNullableBool('penetrate', _data.penetrate);
-      _data.touchblock = readNullableBool('touchblock', _data.touchblock);
       _data.accessibility =
           readNullableBool('accessibility', _data.accessibility);
       _lastUpdateTime = DateTime.now();

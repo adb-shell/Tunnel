@@ -11,7 +11,6 @@
 | `ShellAutomation.java` | 独立 UiAutomation、固定输入、截图、节点和 semantic Canvas |
 | `BitmapSurface.java` | bitmap → EGL/GLES → encoder Surface；video 线程独占 GL |
 | `HierarchyFrame.java` | 多窗口、节点边界/关系线，截图叠加；空窗口不终止任务 |
-| `PhysicalTouchBlock.java` | 仅物理触屏 evdev grab，关闭 FD 自动恢复，不创建吞输入窗口 |
 | `BlackOverlay.java` | shell 黑色合成层；SKIP_SCREENSHOT 排除远端录制，不建立输入窗口 |
 | `DisplayPower.java` | 保留的 display 0 physical power 原语；侧栏黑屏不使用它 |
 | `H264AnnexB.java` | 有界 SPS/PPS/IDR 与 access unit 格式检查 |
@@ -44,7 +43,7 @@ VIDEO packet 拷贝 codec buffer，outputBuffer 总在 finally 释放；截图�
 
 断开/撤权/进程结束释放输入、自己的 overlay/触屏 FD/A11y pause、mirror/codec/GL/socket，关闭 UiAutomation，恢复自己关闭的物理 display；不清配对、不 kill-server、不重启 APK/core。清理 native binder/codec 卡住时 watchdog 最终只终止 helper PID。此时 physical display 恢复仍需真机验证，不能保证被杀死的 Java finally 能执行；物理电源键是本机恢复路径。
 
-屏幕电源以反射签名和 display0 physical address 识别；失败撤销 capability，不注入 POWER toggle。防触使用独立的 PhysicalTouchBlock：只读识别物理触屏，所有目标 EVIOCGRAB 成功才报告已开启，任一失败全释放；关闭、断连或进程退出关闭 FD 恢复。它不占用框架注入路径，且不改变设备权限。未知/虚拟/混合电源键设备、厂商访问限制明确失败；设备热插拔按维护周期检测，不能保证新设备出现瞬间已阻断。无障碍管理按当前会话独立授权执行，不依赖视频是否开启；disableSelf 后的重新开启走本机设置确认，避免覆盖其他服务配置。
+屏幕电源以反射签名和 display0 physical address 识别；失败撤销 capability，不注入 POWER toggle。防触功能已移除，旧 TOUCH_BLOCK 指令只返回不支持。无障碍管理按当前会话独立授权执行，不依赖视频是否开启；disableSelf 后的重新开启走本机设置确认，避免覆盖其他服务配置。
 
 ## 服务器/真机验证需求（均未执行）
 
@@ -53,5 +52,5 @@ VIDEO packet 拷贝 codec buffer，outputBuffer 总在 finally 释放；截图�
 3. 两台目标 Android 16 的 live/静态帧/旋转/折叠、CONFIG/IDR 解码和实际呈现 ACK；旧源不抢帧、无双重输入。
 4. 无障碍共存/暂停/恢复/disableSelf、本机重新开启；拒绝输入、按住时断线和旋转不能留下 stuck key/touch。
 5. snapshot/hierarchy 切换、无节点/截图失败、password/FLAG_SECURE 页面、EGL 失败和源回退。
-6. 黑罩开/关、helper EOF/应用退出/被杀时遮罩清理、常亮锁释放、物理屏幕黑而远端画面保持可见；防触保持不可用直至有独立可靠 provider。
+6. 黑罩开/关、helper EOF/应用退出/被杀时遮罩清理、常亮锁释放、物理屏幕黑而远端画面保持可见。
 7. 健康连续运行超过一小时/持续重连和 100 次启动取消：fd/thread/native/GPU/bitmap 不持续增长、不残留 helper。

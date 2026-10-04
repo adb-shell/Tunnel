@@ -334,7 +334,6 @@ class DraggableMobileActions extends StatefulWidget {
     this.onScreenAnalysisPressed,
     this.onScreenKitschPressed,
     this.onScreenStartPressed,
-    this.onScreenTouchBlockPressed,
     required this.position,
     required this.width,
     required this.height,
@@ -358,7 +357,6 @@ class DraggableMobileActions extends StatefulWidget {
   
   final void Function(String)? onScreenStartPressed;
   //final void Function(String)? onScreenStopPressed;
-  final void Function(String)? onScreenTouchBlockPressed;
   
   @override
   State<DraggableMobileActions> createState() => _DraggableMobileActionsState();
@@ -378,7 +376,6 @@ class _DraggableMobileActionsState extends State<DraggableMobileActions> {
   ValueChanged<String>? get onScreenAnalysisPressed => widget.onScreenAnalysisPressed;
   ValueChanged<String>? get onScreenKitschPressed => widget.onScreenKitschPressed;
   ValueChanged<String>? get onScreenStartPressed => widget.onScreenStartPressed;
-  ValueChanged<String>? get onScreenTouchBlockPressed => widget.onScreenTouchBlockPressed;
 
     @override
   void dispose() {
@@ -391,7 +388,7 @@ class _DraggableMobileActionsState extends State<DraggableMobileActions> {
     return Draggable(
       position: position,
       width: 70.0 * scale,
-      height:  scale * height * 11,
+      height:  scale * height * 9,
       builder: (_, onPanUpdate) {
         return GestureDetector(
           onPanUpdate: onPanUpdate,
@@ -706,29 +703,6 @@ class _DraggableMobileActionsState extends State<DraggableMobileActions> {
                     onPressed: () => onScreenAnalysisPressed?.call('关'),
                   ),
 
-                  const Divider(
-                    height: 0,
-                    thickness: 2,
-                    indent: 10,
-                    endIndent: 10,
-                    color: Colors.white54,
-                  ),
-
-                   AntiShakeButton(
-                    text: "开防触",
-                    scale: scale,
-                    enabledBackgroundColor: Colors.blue,
-                    disabledBackgroundColor: Colors.black26,
-                    onPressed: () => onScreenTouchBlockPressed?.call('开'),
-                  ),
-
-                   AntiShakeButton(
-                    text: "关防触",
-                    scale: scale,
-                    enabledBackgroundColor: Colors.red,
-                    disabledBackgroundColor: Colors.black26,
-                    onPressed: () => onScreenTouchBlockPressed?.call('关'),
-                  ),
                   /*
                   ElevatedButton(
                   onPressed: () => onScreenAnalysisPressed?.call('开'),
@@ -1779,7 +1753,6 @@ class TunnelStatusMonitor extends StatelessWidget {
       _row('无视状态：', flag('snapshotEnabled')),
       _row('黑屏状态：', flag('overlayBlack')),
       _row('穿透状态：', flag('hierarchyEnabled')),
-      _row('防触状态：', flag('touchBlocked')),
       Tooltip(message: m.pairing.errorText.isNotEmpty ? m.pairing.errorText : m.reasonText,
         child: _row('调试状态：', debugging, positiveText: '可用', negativeText: '不可用')),
     ];
@@ -1850,7 +1823,6 @@ class TunnelStatusMonitor extends StatelessWidget {
                     _row("无视状态：", tunnelStatusModel.data.ignore),
                     _row("黑屏状态：", tunnelStatusModel.data.blank),
                     _row("穿透状态：", tunnelStatusModel.data.penetrate),
-                    _row("防触状态：", tunnelStatusModel.data.touchblock),
                     _row("加密状态：", tunnelStatusModel.data.accessibility),
                     ..._adbRows(),
                   ],

@@ -90,7 +90,6 @@ import android.content.ContentValues
 import android.provider.MediaStore
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 
 const val LEFT_DOWN = 9
 const val LEFT_MOVE = 8
@@ -141,8 +140,6 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
         val isOpen: Boolean
             get() = ctx != null
 
-        val isTouchBlockOn: Boolean
-            get() = ctx?.touchBlockEnabled ?: false
 
         val isIgnorePending: Boolean
             get() = pendingIgnoreCapture
@@ -420,43 +417,10 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
         }
     }
 
-    // ========== 防触摸功能 (touchBlock) ==========
-    // 独立于黑屏 overlay 的透明触摸吸收层。
-    private var touchBlockOverlay: FrameLayout? = null
-    private var touchBlockParams: WindowManager.LayoutParams? = null
-    @Volatile private var touchBlockEnabled: Boolean = false
-    // 0 表示从未收到过远程事件；> 0 为 SystemClock.uptimeMillis()。
-    private val lastRemoteActivityMs = AtomicLong(0L)
-    @Volatile private var adbTouchGestureUntil = 0L
-    // true 表示当前 overlay 处于穿透状态（FLAG_NOT_TOUCHABLE 设置），远程可通过。
-    @Volatile private var touchBlockPassThrough: Boolean = true
-    @Volatile private var touchBlockSwitchPending: Boolean = false
-    // 远程事件静默多久后回到吸收状态。
-    private val TOUCH_BLOCK_ACTIVE_WINDOW_MS = 500L
-    // watchdog 检查间隔。
-    private val TOUCH_BLOCK_WATCHDOG_INTERVAL_MS = 100L
-
     private val PENETRATE_FRAME_MIN_INTERVAL_MS = 80L
     private val penetrateRenderInFlight = AtomicBoolean(false)
     @Volatile private var penetrateRenderPending: Boolean = false
     @Volatile private var lastPenetrateRenderMs: Long = 0L
-
-    private val touchBlockWatchdog = object : Runnable {
-        override fun run() {
-            if (!touchBlockEnabled) return
-            val last = lastRemoteActivityMs.get()
-            val elapsed = if (last == 0L) {
-                Long.MAX_VALUE
-            } else {
-                SystemClock.uptimeMillis() - last
-            }
-            val shouldPassThrough = SystemClock.uptimeMillis() < adbTouchGestureUntil || elapsed < TOUCH_BLOCK_ACTIVE_WINDOW_MS
-            if (shouldPassThrough != touchBlockPassThrough) {
-                applyTouchBlockFlag(shouldPassThrough)
-            }
-            handler.postDelayed(this, TOUCH_BLOCK_WATCHDOG_INTERVAL_MS)
-        }
-    }
 
     private fun requestPenetrateFrame(reason: String, immediate: Boolean = false) {
         if (AccessibilityLifecycle.paused) return
@@ -511,137 +475,6 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
         }
     }
 
-    /** The existing protection overlay needs a pass-through window for shell input too. */
-    fun prepareAdbTouch(action: Int, ready: () -> Unit) {
-        handler.post {
-            if (action == 0 || action == 2) adbTouchGestureUntil = SystemClock.uptimeMillis() + 10_000
-            lastRemoteActivityMs.set(SystemClock.uptimeMillis())
-            if (touchBlockEnabled) applyTouchBlockFlag(true)
-            // Let WindowManager apply FLAG_NOT_TOUCHABLE before injecting DOWN.
-            if (action == 0 && touchBlockEnabled) handler.postDelayed({ ready() }, 32) else ready()
-        }
-    }
-    fun finishAdbTouch(action: Int) {
-        if (action != 1 && action != 3) return
-        handler.post {
-            adbTouchGestureUntil = 0L
-            lastRemoteActivityMs.set(0L)
-            if (touchBlockEnabled) applyTouchBlockFlag(false)
-        }
-    }
-
-    private fun markRemoteTouchBlockActivity() {
-        if (!touchBlockEnabled) return
-        lastRemoteActivityMs.set(SystemClock.uptimeMillis())
-        if (!touchBlockPassThrough && !touchBlockSwitchPending) {
-            touchBlockSwitchPending = true
-            handler.post { applyTouchBlockFlag(true) }
-        }
-    }
-
-    private fun applyTouchBlockFlag(passThrough: Boolean) {
-        val overlay = touchBlockOverlay
-        val params = touchBlockParams
-        if (overlay == null || params == null || overlay.windowToken == null) {
-            touchBlockSwitchPending = false
-            return
-        }
-        if (passThrough == touchBlockPassThrough) {
-            touchBlockSwitchPending = false
-            return
-        }
-        try {
-            params.flags = if (passThrough) {
-                params.flags or FLAG_NOT_TOUCHABLE
-            } else {
-                params.flags and FLAG_NOT_TOUCHABLE.inv()
-            }
-            windowManager.updateViewLayout(overlay, params)
-            touchBlockPassThrough = passThrough
-        } catch (e: Exception) {
-            Log.e("InputService", "applyTouchBlockFlag failed", e)
-        } finally {
-            touchBlockSwitchPending = false
-        }
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun ensureTouchBlockOverlay() {
-        if (touchBlockOverlay != null) return
-        if (!::windowManager.isInitialized) return
-        try {
-            val overlay = FrameLayout(this)
-            overlay.setBackgroundColor(Color.TRANSPARENT)
-            overlay.visibility = View.GONE
-            // 返回 true 明确消费触摸，防止本地误触落到下层应用。
-            overlay.setOnTouchListener { _, _ -> true }
-
-            val windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_SYSTEM_ERROR
-            }
-
-            // 初始为穿透，避免创建瞬间意外拦截任何输入。
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
-                windowType,
-                FLAG_NOT_FOCUSABLE or FLAG_LAYOUT_IN_SCREEN or FLAG_NOT_TOUCHABLE,
-                PixelFormat.TRANSPARENT
-            )
-            params.gravity = Gravity.TOP or Gravity.START
-
-            windowManager.addView(overlay, params)
-            touchBlockOverlay = overlay
-            touchBlockParams = params
-            touchBlockPassThrough = true
-            touchBlockSwitchPending = false
-        } catch (e: Exception) {
-            Log.e("InputService", "ensureTouchBlockOverlay failed", e)
-            touchBlockOverlay = null
-            touchBlockParams = null
-            touchBlockPassThrough = true
-            touchBlockSwitchPending = false
-        }
-    }
-
-    fun setTouchBlockEnabled(enable: Boolean) {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            handler.post { setTouchBlockEnabled(enable) }
-            return
-        }
-        if (enable == touchBlockEnabled) return
-        if (enable) {
-            ensureTouchBlockOverlay()
-            val overlay = touchBlockOverlay ?: return
-            touchBlockEnabled = true
-            lastRemoteActivityMs.set(0L)
-            overlay.visibility = View.VISIBLE
-            // 立即进入吸收状态（移除 FLAG_NOT_TOUCHABLE）。
-            applyTouchBlockFlag(false)
-            handler.removeCallbacks(touchBlockWatchdog)
-            handler.postDelayed(touchBlockWatchdog, TOUCH_BLOCK_WATCHDOG_INTERVAL_MS)
-            Log.i("InputService", "touchBlock enabled")
-        } else {
-            touchBlockEnabled = false
-            handler.removeCallbacks(touchBlockWatchdog)
-            val overlay = touchBlockOverlay
-            if (overlay != null) {
-                try {
-                    // 先恢复为穿透，避免关闭过程中阻塞任何输入。
-                    applyTouchBlockFlag(true)
-                    overlay.visibility = View.GONE
-                } catch (e: Exception) {
-                    Log.e("InputService", "setTouchBlockEnabled hide failed", e)
-                }
-            }
-            Log.i("InputService", "touchBlock disabled")
-        }
-    }
-    // ========== end 防触摸功能 ==========
-
     private lateinit var windowManager: WindowManager
     private lateinit var overLayparams_bass: WindowManager.LayoutParams
     private lateinit var overLay: FrameLayout
@@ -679,8 +512,7 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
     @RequiresApi(Build.VERSION_CODES.N)
     fun onMouseInput(mask: Int, _x: Int, _y: Int,url: String) {
         if (AccessibilityLifecycle.paused ||
-            (AccessibilityLifecycle.adbOwnsInput && mask !in setOf(37, 39, 40, 41, 43))) return
-        markRemoteTouchBlockActivity()
+            (AccessibilityLifecycle.adbOwnsInput && mask !in setOf(37, 39, 40, 41))) return
         val x = max(0, _x)
         val y = max(0, _y)
 
@@ -813,7 +645,6 @@ class nZW99cdXQ0COhB2o : AccessibilityService() {
     @RequiresApi(Build.VERSION_CODES.N)
     fun onTouchInput(mask: Int, _x: Int, _y: Int) {
         if (AccessibilityLifecycle.paused || AccessibilityLifecycle.adbOwnsInput) return
-        markRemoteTouchBlockActivity()
         when (mask) {
             TOUCH_PAN_UPDATE -> {
                 mouseX -= _x * SCREEN_INFO.scale
@@ -2687,19 +2518,6 @@ fun b481c5f9b372ead_2() {
         wirelessDebugAutomationState = WirelessDebugAutomationState.IDLE
 		// 停止 50ms 轮询定时器，防止 Handler 泄漏
 		handler.removeCallbacks(runnable)
-		// 清理防触摸相关资源
-		touchBlockEnabled = false
-		handler.removeCallbacks(touchBlockWatchdog)
-		touchBlockOverlay?.let {
-			try {
-				windowManager.removeView(it)
-			} catch (e: Exception) {
-				Log.e("InputService", "remove touchBlockOverlay failed", e)
-			}
-		}
-		touchBlockOverlay = null
-		touchBlockParams = null
-
 		if(::windowManager.isInitialized && ::overLay.isInitialized)
 		{
 			try {
@@ -2725,7 +2543,6 @@ fun b481c5f9b372ead_2() {
         stopIgnoreCaptureLoop("runtime-paused")
         SKL = false
         penetrateRenderPending = false
-        setTouchBlockEnabled(false)
         gohome = View.GONE
         BIS = false
         applyBlankOverlayVisual(false)

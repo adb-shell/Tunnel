@@ -145,6 +145,9 @@ public final class Server {
         private volatile long stoppedAt;
         private volatile boolean captureRunning;
         private VideoTask unavailableTask;
+        private VideoTask diagnosedTask;
+        private String diagnosedCode;
+        private long diagnosedAt;
         private boolean controlOnly;
         private volatile int automationCapabilities;
         private volatile long operationSince;
@@ -235,6 +238,19 @@ public final class Server {
             }
             try { videoState(expected.id, 2); sendCapabilities(); }
             catch (IOException closed) { stop("CONTROL_CLOSED"); }
+        }
+
+        void videoFailure(VideoTask expected, String code) {
+            synchronized (this) {
+                if (task != expected || expected.mode == 3 || stop.get()) return;
+                long now = SystemClock.elapsedRealtime();
+                if (diagnosedTask == expected && code.equals(diagnosedCode)
+                        && now - diagnosedAt < 5000) return;
+                diagnosedTask = expected; diagnosedCode = code; diagnosedAt = now;
+            }
+            // Only local task identity and a caller-selected fixed code. Never
+            // write exception text, screen text, addresses or pairing credentials.
+            System.err.println("TUNNEL_ADB_VIDEO:" + expected.id + ':' + code);
         }
         private void videoState(int id, int state) throws IOException {
             if (id <= 0) return;
@@ -377,6 +393,7 @@ public final class Server {
                             // not a different source, until explicit replacement/off.
                             consecutiveFailures = Math.min(5, consecutiveFailures + 1);
                             failed = true;
+                            videoFailure(current, "FRAME_ACQUIRE_FAILED");
                         } finally { frameOperationSince = 0; }
                         if (failed && !stop.get()) videoTaskInterrupted(current);
                         nextFrame = SystemClock.elapsedRealtime() + (failed

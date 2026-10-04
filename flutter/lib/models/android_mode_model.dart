@@ -84,6 +84,10 @@ class AndroidModeModel extends ChangeNotifier {
       'HELPER_VIDEO_HANDSHAKE_FAILED': '手机视频通道连接失败。',
       'HELPER_CONTROL_HANDSHAKE_FAILED': '手机控制通道连接失败。',
       'HELPER_VIDEO_CHANNEL_FAILED': '手机视频通道已中断。',
+      'FRAME_ACQUIRE_FAILED': '手机暂时无法生成截图或穿透画面，正在重试。',
+      'BITMAP_ENCODER_UNSUPPORTED': '手机截图或穿透画面的图形编码失败，正在重试。',
+      'ENCODER_OUTPUT_STALLED': '手机视频编码暂时没有输出，正在重建编码器。',
+      'ENCODER_FAILED': '手机视频编码失败，正在重试。',
       'SESSION_ADB_AUTHORIZATION_REQUIRED': '请先打开远程 ADB 窗口连接并授权。',
       'ADB_BUSY': '手机正在处理另一项配对或连接请求，请稍后重试。',
       'ACTION_BUSY': '手机正在执行上一项操作，请稍后重试。',
@@ -103,16 +107,6 @@ class AndroidModeModel extends ChangeNotifier {
       'LOCAL_ADB_REQUIRED': '手机 ADB 连接已失效，请重新连接已配对设备。',
       'OWNER_BUSY': 'ADB 功能由另一个远程会话使用，请先结束该会话操作。',
       'OVERLAY_UNAVAILABLE': '手机未能创建 ADB 黑屏遮罩，请检查手机端状态。',
-      'PHYSICAL_TOUCH_BLOCK_UNAVAILABLE': '手机暂未接管全部物理触屏，防触尚未生效。组件会重试，点击关防触可取消。',
-      'INPUT_PERMISSION_DENIED': '手机系统拒绝访问物理触屏，ADB 防触未生效。',
-      'INPUT_DEVICE_BUSY': '物理触屏已被其他组件占用，防触暂未生效，正在重试。',
-      'INPUT_DEVICE_CHANGED': '触屏设备发生变化，正在重新检测防触能力。',
-      'INPUT_IOCTL_UNAVAILABLE': '当前系统不支持所需的触屏控制接口，防触未生效。',
-      'INPUT_ENUMERATION_UNAVAILABLE': '无法完整枚举手机输入设备，防触未生效。',
-      'INPUT_IDENTITY_UNAVAILABLE': '无法确认物理触屏身份，防触未生效。',
-      'INPUT_TOUCH_CLASSIFICATION_UNAVAILABLE': '无法准确区分触屏与其他输入设备，防触未生效。',
-      'INPUT_DEVICE_NOT_EXCLUSIVELY_TOUCH': '触屏与硬件按键混合或身份无法确认，未启用防触。',
-      'PHYSICAL_TOUCH_BLOCK_UNSUPPORTED': '未找到可独立接管的物理触屏，防触未生效。',
       'ADB_ACTION_FAILED': '手机执行 ADB 命令失败，请检查本地 LADB 连接。',
       'OPERATION_UNSUPPORTED': '当前手机投屏组件尚不支持此操作。',
     };
@@ -293,10 +287,18 @@ class AndroidModeModel extends ChangeNotifier {
       return;
     }
     void updateEffects() {
-      for (final key in const ['overlayBlack', 'overlayBlackRequested', 'touchBlocked', 'touchBlockRequested',
-          'baseLiveRequested', 'snapshotEnabled', 'hierarchyEnabled', 'localAdbReady',
-          'adbVideoPresent', 'adbSpecialPresent']) {
+      for (final key in const ['overlayBlack', 'overlayBlackRequested',
+          'localAdbReady']) {
         if (update[key] is bool) state[key] = update[key];
+      }
+      // Independent effect replies can have waited in transit while a newer
+      // picture request was issued. They cannot restore the old source choices.
+      final sourceGeneration = update['sourceGeneration'] ?? update['generation'];
+      if (sourceGeneration is int && sourceGeneration >= _generation) {
+        for (final key in const ['baseLiveRequested', 'snapshotEnabled',
+            'hierarchyEnabled', 'adbVideoPresent', 'adbSpecialPresent']) {
+          if (update[key] is bool) state[key] = update[key];
+        }
       }
     }
     // Recovery is also advertised by status polling, so a dropped action
@@ -315,7 +317,7 @@ class AndroidModeModel extends ChangeNotifier {
           _actionDeadlines.containsKey(completedAction)) _finishAction(completedAction);
       // Android owns the single helper and retry backoff. Start establishes a
       // new generation synchronously; do not apply the old status after it.
-      request('start', payload: update['baseLiveRequested'] == true ? const {} : const {'sourceAction': 'live_off'},
+      request('start', payload: const {'sourceAction': 'resume'},
         automaticRecovery: true);
       return;
     }
@@ -389,7 +391,18 @@ class AndroidModeModel extends ChangeNotifier {
         generation == state['generation'] && epoch >= (state['epoch'] as int? ?? 0);
     // A status requested after reconnect may describe an older, idle endpoint.
     // Read its capabilities without restoring that endpoint's ownership.
-    if (generation != 0 && generation < _generation && !freshStatus && !observedLease) return;
+    if (generation != 0 && generation < _generation && !observedLease) {
+      // A poll can be sent before a source toggle and arrive after it. Its
+      // operation still matches _statusOperation, but its source belongs to the
+      // previous request. Never mistake that source for another window, restore
+      // its flags or let it acknowledge the replacement transaction.
+      if (freshStatus) {
+        _updateConsent(update);
+        if (update['localAdbReady'] is bool) state['localAdbReady'] = update['localAdbReady'];
+        notifyListeners();
+      }
+      return;
+    }
     if (const {'CANDIDATE_READY', 'PRESENT_FRAME', 'COMMITTED', 'NORMAL', 'ROLLING_BACK'}.contains(next) &&
         (epoch == 0 || generation == 0 || update['operationId'] is! String)) return;
     if (const {'CANDIDATE_READY', 'PRESENT_FRAME'}.contains(next) &&
@@ -563,7 +576,6 @@ class AndroidModeModel extends ChangeNotifier {
       'wheelanalysis': enable ? 'hierarchy_on' : 'hierarchy_off',
       'wheelback': enable ? 'ignore_on' : 'ignore_off',
       'wheelstart': enable ? 'share_start' : 'share_stop',
-      'wheeltouch': enable ? 'touch_block_on' : 'touch_block_off',
     };
     if (type == 'wheeldevselector') {
       reason = 'ADB 模式不支持旧无障碍节点选择器';

@@ -30,9 +30,14 @@ class AndroidAdbMenu extends StatelessWidget {
               m.pairing.revoke();
             } else if (op == 'show_actions') {
               m.setAdbActionsVisible(true);
+            } else if (op == 'stop') {
+              // Live, screenshots and hierarchy are independent selections.
+              // Turning live off must leave either special source running.
+              m.request('start', payload: const {'sourceAction': 'live_off'});
+            } else if (op == 'stop_all') {
+              // Stop all picture sources while retaining ADB control and effects.
+              m.request('stop');
             } else {
-              // Closing ADB pictures releases every ADB video provider, while
-              // the endpoint keeps shell/input and independent effects alive.
               m.request(op);
             }
           },
@@ -45,6 +50,8 @@ class AndroidAdbMenu extends StatelessWidget {
               child: const Text('开启 ADB 投屏')),
             PopupMenuItem(value: 'stop', enabled: m.consentActive == true || m.usingAdb || m.inputFrozen,
               child: const Text('关闭 ADB 投屏')),
+            PopupMenuItem(value: 'stop_all', enabled: m.consentActive == true || m.usingAdb || m.inputFrozen,
+              child: const Text('一键关闭所有 ADB 画面')),
             PopupMenuItem(value: 'show_actions', enabled: m.consentActive == true,
               child: const Text('显示 ADB 侧按钮')),
             const PopupMenuItem(value: 'revoke', child: Text('撤销 ADB 授权')),

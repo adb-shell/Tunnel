@@ -1148,7 +1148,7 @@ makeMobileActionsOverlayEntry(VoidCallback? onHide, {FFI? ffi, bool adb = false}
     final session = ffi ?? gFFI;
     const double overlayW = 200;
     const double overlayH = 45;
-    const double actionRows = 11;
+    const double actionRows = 9;
     final screenSize = MediaQuery.of(context).size;
     final tabBarHeight = isDesktop ? kDesktopRemoteTabBarHeight : 0.0;
     final top = screenSize.height * 0.1;
@@ -1200,7 +1200,6 @@ makeMobileActionsOverlayEntry(VoidCallback? onHide, {FFI? ffi, bool adb = false}
       onScreenAnalysisPressed: (input) => adb ? side('wheelanalysis', input) : session.inputModel.onScreenAnalysis(input),
       onScreenKitschPressed: (input) => adb ? side('wheelback', input) : session.inputModel.onScreenKitsch(input),
       onScreenStartPressed: (input) => adb ? side('wheelstart', input) : session.inputModel.onScreenStart(input),
-      onScreenTouchBlockPressed: (input) => adb ? side('wheeltouch', input) : session.inputModel.onScreenTouchBlock(input),
       //onScreenStopPressed: (input) => session.inputModel.onScreenStop(input), 
       onHidePressed: onHide,
     );

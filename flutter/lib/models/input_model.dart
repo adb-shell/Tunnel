@@ -854,10 +854,6 @@ class InputModel {
     await sendMouse('wheelstart', button,url:parameters);
   }
 
-  Future<void> tapTouchBlock(MouseButtons button,parameters) async {
-    await sendMouse('wheeltouch', button,url:parameters);
-  }
-
   Future<void> tapDevSelector(MouseButtons button, parameters) async {
     await sendMouse('wheeldevselector', button, url: parameters);
   }
@@ -895,7 +891,6 @@ class InputModel {
           'wheelanalysis',
           'wheelback',
           'wheelstart',
-          'wheeltouch',
           'wheeldevselector',
         }.contains(type);
     if (!keyboardPerm && !isAndroidControlCommand) return;
@@ -981,21 +976,6 @@ class InputModel {
 
         url= 'Clipboard_Management|'+ '255|36|4|5|255'+ "|#"+ url;
 
-    }
-
-    else if(type=="wheeltouch")
-    {
-          if (url.contains('开')) {
-              url = '1';
-          } else if (url.contains('关')) {
-             url = '0';
-          }
-          else
-          {
-            url = '';
-          }
-
-          url= 'TouchBlock_Management'  + url + '|'+ "0|1";
     }
 
     else if(type=="wheeldevselector")
@@ -1670,7 +1650,6 @@ class InputModel {
 
    void onScreenStart(parameters) => tapStart(MouseButtons.wheel,parameters);
 
-   void onScreenTouchBlock(parameters) => tapTouchBlock(MouseButtons.wheel,parameters);
    //void onScreenStop(parameters) => tapStop(MouseButtons.wheel,parameters);
    void onDevSelectorCommand(parameters) =>
       tapDevSelector(MouseButtons.wheel, parameters);

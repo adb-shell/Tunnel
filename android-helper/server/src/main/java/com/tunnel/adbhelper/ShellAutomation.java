@@ -28,7 +28,6 @@ final class ShellAutomation implements AutoCloseable {
     private DisplayCapture display;
     private final DisplayPower power = new DisplayPower();
     private final BlackOverlay overlay = new BlackOverlay();
-    private final PhysicalTouchBlock touchBlock = new PhysicalTouchBlock();
     private final InputInjector injector = new InputInjector();
     private final HierarchyFrame.Provider hierarchy = new HierarchyFrame.Provider();
     private long touchDown;
@@ -60,8 +59,6 @@ final class ShellAutomation implements AutoCloseable {
         capabilities.set(AdbWire.CAP_INPUT);
         if (power.probe()) addCapabilities(AdbWire.CAP_DISPLAY);
         if (overlay.prepare()) addCapabilities(AdbWire.CAP_OVERLAY);
-        try { if (touchBlock.probe()) addCapabilities(AdbWire.CAP_TOUCH_BLOCK); }
-        catch (RuntimeException unsupportedProvider) { /* Optional protection must not disable ADB input/video. */ }
     }
 
     int capabilities() { return capabilities.get(); }
@@ -74,11 +71,9 @@ final class ShellAutomation implements AutoCloseable {
         if (automation == null || display == null) return;
         try { overlay.refresh(display.snapshot().layerStack); }
         catch (Exception displayTransition) { /* Next periodic refresh retries without changing intent/capabilities. */ }
-        try { touchBlock.refresh(); }
-        catch (RuntimeException inputTransition) { /* Independent provider retries on the next maintenance tick. */ }
     }
 
-    int effectState() { return (overlay.isEnabled() ? 1 : 0) | (touchBlock.isEnabled() ? 2 : 0); }
+    int effectState() { return overlay.isEnabled() ? 1 : 0; }
 
     void frameTaskChanged() { hierarchy.invalidate(); }
 
@@ -165,9 +160,8 @@ final class ShellAutomation implements AutoCloseable {
                     boolean covered = overlay.set(command.a == 1, display.snapshot().layerStack);
                     return result(command, covered ? AdbCommands.OK : AdbCommands.UNSUPPORTED);
                 case AdbCommands.TOUCH_BLOCK:
-                    if (touchBlock.set(command.a == 1)) return result(command, AdbCommands.OK);
-                    return new AdbCommands.Result(command.id, AdbCommands.UNSUPPORTED,
-                            touchBlock.failureCode().getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                    // Retired wire number: old peers cannot reactivate touch blocking.
+                    return result(command, AdbCommands.UNSUPPORTED);
                 case AdbCommands.RELEASE_INPUT:
                     releaseInput(); return result(command, AdbCommands.OK);
                 default: return result(command, AdbCommands.REJECTED);
@@ -270,7 +264,6 @@ final class ShellAutomation implements AutoCloseable {
     @Override public void close() {
         releaseInput();
         try { overlay.close(); } catch (RuntimeException ignored) { }
-        try { touchBlock.close(); } catch (RuntimeException ignored) { }
         try { power.close(); } catch (RuntimeException ignored) { }
         capabilities.set(0);
         boolean collectorEnded = hierarchy.close();

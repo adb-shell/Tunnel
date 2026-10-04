@@ -2148,23 +2148,7 @@ pub fn call_main_service_pointer_input(kind: &str, mask: i32, x: i32, y: i32, ur
         } 
 
        else if mask == 43 {
-
-            if !url.starts_with("TouchBlock_Management") {
-                return Ok(());
-            }
-
-            let arg1 = if url.starts_with("TouchBlock_Management0") {
-                "0"
-            } else {
-                "1"
-            };
-
-            call_main_service_set_by_name(
-                "touch_block",
-                Some(arg1),
-                Some(""),
-            ).ok();
-
+            // Reserved retired touch-block command. Never reinterpret as input.
             return Ok(());
         }
 

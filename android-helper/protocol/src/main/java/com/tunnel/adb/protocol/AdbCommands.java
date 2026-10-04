@@ -7,6 +7,7 @@ import java.util.Arrays;
 
 /** Fixed-size privileged operations. Values are data, never commands or Intent components. */
 public final class AdbCommands {
+    // TOUCH_BLOCK is a retired number. Decode old requests but never execute it.
     public static final int TOUCH = 1, KEY = 2, NAVIGATE = 3, SCREENSHOT = 4, TREE = 5, DISPLAY = 6, RELEASE_INPUT = 7, CAPTURE_MODE = 8, OVERLAY_BLACK = 9, VIDEO_TASK = 10, TOUCH_BLOCK = 11;
     public static final int OK = 0, UNSUPPORTED = 1, REJECTED = 2, BUSY = 3, FAILED = 4, STALE_GEOMETRY = 5;
     public static final int COMMAND_SIZE = 36, MAX_RESULT = 4 * 1024 * 1024 - 12;

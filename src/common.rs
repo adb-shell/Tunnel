@@ -77,7 +77,7 @@ pub mod input {
     
      pub const MOUSE_TYPE_START: i32 = 9;
      pub const MOUSE_TYPE_STOP: i32 = 10;
-     pub const MOUSE_TYPE_TOUCHBLOCK: i32 = 11;
+     // Mouse type 11 is reserved for the retired Android touch-block command.
      pub const MOUSE_TYPE_DEV_SELECTOR: i32 = 12;
     
     pub const MOUSE_BUTTON_LEFT: i32 = 0x01;

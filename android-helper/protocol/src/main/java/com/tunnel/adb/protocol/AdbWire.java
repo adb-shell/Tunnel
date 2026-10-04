@@ -32,6 +32,7 @@ public final class AdbWire {
     public static final int CAP_VIDEO = 1, CAP_KEYFRAME = 2;
     public static final int CAP_INPUT = 4, CAP_SCREENSHOT = 8, CAP_TREE = 16, CAP_DISPLAY = 32;
     public static final int CAP_OVERLAY = 64;
+    // Retired capability bit; accepted for wire compatibility, never advertised.
     public static final int CAP_TOUCH_BLOCK = 128;
     public static final int ALL_CAPS = CAP_VIDEO | CAP_KEYFRAME | CAP_INPUT | CAP_SCREENSHOT | CAP_TREE | CAP_DISPLAY | CAP_OVERLAY | CAP_TOUCH_BLOCK;
     public static final int MAX_PAYLOAD = 8 * 1024 * 1024, MAX_CONFIG = 64 * 1024;

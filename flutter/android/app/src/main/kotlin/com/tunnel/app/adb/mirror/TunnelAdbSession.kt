@@ -37,6 +37,7 @@ internal class TunnelAdbSession(
         fun packet(packet: AdbWire.Packet): Boolean
         fun capabilities(mask: Int)
         fun videoState(taskId: Int, state: Int)
+        fun videoDiagnostic(taskId: Int, code: String)
         fun effectsState(applied: Int)
         fun ended(reason: String, cleanupComplete: Boolean)
     }
@@ -50,6 +51,7 @@ internal class TunnelAdbSession(
     private val writeLock = Any()
     private val ids = AtomicLong()
     private val lastKeyframeRequest = AtomicLong()
+    private val keyframePending = AtomicBoolean()
     private val videoStalled = AtomicBoolean()
     // Never let a slow JNI/remote consumer back up the authenticated loopback
     // reader. Four bounded records; overflow keeps only config + a fresh IDR.
@@ -97,9 +99,16 @@ internal class TunnelAdbSession(
     }
 
     fun keyframe() {
+        keyframePending.set(true)
+        flushKeyframeRequest()
+    }
+
+    private fun flushKeyframeRequest() {
+        if (!keyframePending.get() || control == null || closed.get() || capturePaused) return
         val now = SystemClock.elapsedRealtime()
         val last = lastKeyframeRequest.get()
         if (now - last < 500 || !lastKeyframeRequest.compareAndSet(last, now)) return
+        if (!keyframePending.getAndSet(false)) return
         try { write(AdbWire.REQUEST_KEYFRAME) } catch (_: Exception) { fail("CONTROL_FAILED") }
     }
 
@@ -202,7 +211,7 @@ internal class TunnelAdbSession(
                     // Loss of frames is telemetry, never an implicit OFF. The
                     // helper retains this task and retries its provider/codec.
                     if (videoStalled.compareAndSet(false, true)) events.videoState(task, 2)
-                    keyframe()
+                    keyframePending.set(true)
                 }
                 pending.entries.filter { now - it.value.since > 10_000 }.forEach { entry ->
                     if (pending.remove(entry.key, entry.value))
@@ -248,7 +257,7 @@ internal class TunnelAdbSession(
                 "CLASSPATH='$remoteJar' exec app_process / ${PackagedAdbHelper.ENTRY_POINT}")).start()
             process = child
             checkOpen()
-            drain(child.inputStream); drain(child.errorStream)
+            drain(child.inputStream); drain(child.errorStream, diagnostics = true)
             val secret = ByteArray(32).also(random::nextBytes)
             try {
                 failureStage = "HELPER_BOOTSTRAP_FAILED"
@@ -289,7 +298,15 @@ internal class TunnelAdbSession(
                     }
                 }
                 launch("heartbeat") {
-                    while (!closed.get()) { write(AdbWire.PING); Thread.sleep(1_000) }
+                    var nextPing = 0L
+                    while (!closed.get()) {
+                        val now = SystemClock.elapsedRealtime()
+                        if (now >= nextPing) { write(AdbWire.PING); nextPing = now + 1_000 }
+                        // The watchdog never waits for writeLock/socket I/O. This
+                        // existing writer also coalesces throttled keyframe requests.
+                        flushKeyframeRequest()
+                        Thread.sleep(100)
+                    }
                 }
                 keyframe()
                 failureStage = "HELPER_VIDEO_CHANNEL_FAILED"
@@ -380,15 +397,42 @@ internal class TunnelAdbSession(
         try { stream.write(AdbWire.Packet.of(kind, 0, epoch, 0, ++sequence, 0, 0, 0, bytes)) }
         finally { writeSince = 0 }
     }
-    private fun drain(input: InputStream) = launch("drain") {
+    private fun drain(input: InputStream, diagnostics: Boolean = false) = launch("drain") {
         try {
             val buffer = ByteArray(2048); var window = SystemClock.elapsedRealtime(); var bytes = 0
+            val line = StringBuilder(128)
+            var discardLine = false
             while (!closed.get()) {
                 val n = input.read(buffer); if (n < 0) break
                 if (SystemClock.elapsedRealtime() - window > 60_000) { window = SystemClock.elapsedRealtime(); bytes = 0 }
                 bytes += n; if (bytes > 64 * 1024) throw IOException("HELPER_OUTPUT_LIMIT")
+                if (diagnostics) for (i in 0 until n) {
+                    val ch = buffer[i].toInt() and 255
+                    if (ch == 10) {
+                        if (!discardLine) readVideoDiagnostic(line.toString())
+                        line.setLength(0); discardLine = false
+                    } else if (ch != 13) {
+                        // Never retain arbitrary native logs, identifiers or screen text.
+                        if (ch !in 32..126 || line.length >= 127) {
+                            line.setLength(0); discardLine = true
+                        } else if (!discardLine) line.append(ch.toChar())
+                    }
+                }
             }
         } finally { try { input.close() } catch (_: Exception) { } }
+    }
+    private fun readVideoDiagnostic(line: String) {
+        val parts = line.split(':')
+        if (parts.size != 3 || parts[0] != "TUNNEL_ADB_VIDEO") return
+        val task = parts[1].toIntOrNull() ?: return
+        if (task <= 0 || task != videoTaskId || capturePaused || closed.get()) return
+        val code = parts[2]
+        if (code !in setOf("FRAME_ACQUIRE_FAILED", "BITMAP_ENCODER_UNSUPPORTED",
+                "ENCODER_OUTPUT_STALLED", "ENCODER_FAILED", "HARDWARE_H264_UNAVAILABLE",
+                "ENCODER_SIZE_UNSUPPORTED", "CODEC_CONFIG_TOO_LARGE", "NAL_FORMAT_UNSUPPORTED",
+                "NAL_FORMAT_INVALID", "PARTIAL_ACCESS_UNIT_UNSUPPORTED", "CODEC_BUFFER_INVALID",
+                "CODEC_PTS_INVALID", "CODEC_DIMENSIONS_CHANGED", "ENCODER_ENDED")) return
+        events.videoDiagnostic(task, code)
     }
     private fun launch(name: String, body: () -> Unit) {
         val thread = Thread({ try { body() } catch (_: Exception) { if (!closed.get()) fail("HELPER_IO_FAILED") } }, "tunnel-adb-$name")

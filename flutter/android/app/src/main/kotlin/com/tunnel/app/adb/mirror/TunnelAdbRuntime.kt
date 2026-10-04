@@ -25,15 +25,11 @@ object TunnelAdbRuntime {
         fun accessibilityBound(): Boolean
         fun normalCaptureReady(): Boolean
         fun normalGeometry(): Pair<Int, Int>
-        fun prepareAdbTouch(action: Int, ready: () -> Unit) { ready() }
-        fun finishAdbTouch(action: Int) {}
         fun setAdbCaptureCommitted(committed: Boolean)
         fun setNormalScreenShare(enabled: Boolean): Boolean = false
         fun accessibilityNavigation(action: String): Boolean = false
         fun openLocalAccessibilitySettings() {}
         fun openUrl(url: String): Boolean = false
-        fun setOverlay(blockTouch: Boolean, black: Boolean): Boolean = false
-        fun clearOwnedOverlay() {}
     }
 
     private const val MAX_NUMBER = 9007199254740991L
@@ -56,11 +52,11 @@ object TunnelAdbRuntime {
     private var source = "NONE"
     private var candidateSource = "ADB_LIVE"
     private var pendingConfig: AdbWire.Packet? = null
-    private var pendingKey: AdbWire.Packet? = null
     private var lastConfig: AdbWire.Packet? = null
     private var configSent = false
     private var freezeFrames = false
     private var error = ""
+    private var videoDiagnostic = ""
     private var operationId = ""
     private var videoReady = false
     private var mask = 0
@@ -70,10 +66,12 @@ object TunnelAdbRuntime {
     private var session: TunnelAdbSession? = null
     private var stopping = false
     private var committed = false
-    private var baseLive = false
-    private var frameOverride = 0
+    private var videoSources = AdbVideoSources()
+    private val baseLive get() = videoSources.live
+    private val snapshotEnabled get() = videoSources.snapshot
+    private val hierarchyEnabled get() = videoSources.hierarchy
     private var capturePaused = false
-    private var requestedMode = 0
+    private var requestedMode = 3
     // Control is owned by the authorized connection, not by any video task.
     private var helperOwner = 0
     private var helperStarting = false
@@ -82,15 +80,12 @@ object TunnelAdbRuntime {
     private var videoTaskCounter = 0
     private var issuedTaskId = 0
     private var videoDispatchRetries = 0
-    private var snapshotEnabled = false
-    private var hierarchyEnabled = false
     private var videoRecoveryPending = false
     private var scheduledRecoveryEpoch = -1L
     private var videoRequested = false
     private var geometryRevision = 0L
     private var geometryKey = ""
     private var displayedGeometry: Pair<Int, Int>? = null
-    private var displayedSource = "normal"
     private var globalInputSequence = 0L
     private var globalTouchGeneration = 0L
     private data class InputWork(val active: TunnelAdbSession, val geometry: Long, val args: IntArray,
@@ -104,10 +99,6 @@ object TunnelAdbRuntime {
     private var blackEnabled = false
     private var blackVersion = 0L
     private var blackSentVersion = -1L
-    private var touchBlockRequested = false
-    private var touchBlockEnabled = false
-    private var touchBlockVersion = 0L
-    private var touchBlockSentVersion = -1L
     private val actionWorker = java.util.concurrent.ThreadPoolExecutor(3, 3, 0L,
         java.util.concurrent.TimeUnit.MILLISECONDS, java.util.concurrent.ArrayBlockingQueue<Runnable>(32),
         java.util.concurrent.ThreadFactory { task -> Thread(task, "tunnel-adb-scoped-actions").apply { isDaemon = true } })
@@ -154,7 +145,7 @@ object TunnelAdbRuntime {
     private fun hasConsent(connId: Int): Boolean = connId > 0 && consentOwner == connId && "video" in scopes
     private fun clearConsentLocked() {
         AdbScreenShareRequest.clear()
-        snapshotEnabled = false; hierarchyEnabled = false
+        videoSources = AdbVideoSources()
         consentOwner = 0; scopes = emptySet(); consentOperationId = ""
         pendingOwner = 0; pendingScopes = emptySet()
     }
@@ -240,40 +231,33 @@ object TunnelAdbRuntime {
                         pendingOwner = connId; pendingScopes = knownScopes
                         return@synchronized snapshot("SESSION_ADB_AUTHORIZATION_REQUIRED")
                     }
-                    videoRecoveryPending = false
                     val action = payload.optString("sourceAction")
-                    if (action.isNotEmpty()) {
-                        when (action) {
-                            "ignore_on" -> { require("snapshot" in scopes); snapshotEnabled = true }
-                            "ignore_off" -> snapshotEnabled = false
-                            "hierarchy_on" -> { require("hierarchy" in scopes); hierarchyEnabled = true }
-                            "hierarchy_off" -> hierarchyEnabled = false
-                            "live_off" -> baseLive = false
-                            else -> return@synchronized snapshot("REQUEST_INVALID")
-                        }
+                    val sourceAction = if (action.isNotEmpty()) {
+                        if (action !in setOf("ignore_on", "ignore_off", "hierarchy_on", "hierarchy_off", "live_off", "resume"))
+                            return@synchronized snapshot("REQUEST_INVALID")
+                        action
                     } else {
-                        val mode = when (payload.optString("initialSource", "ADB_CAPTURE")) {
-                            "ADB_CAPTURE" -> 0
-                            "IGNORE_CAPTURE" -> 1
-                            "HIERARCHY_CAPTURE" -> 2
+                        when (payload.optString("initialSource", "ADB_CAPTURE")) {
+                            "ADB_CAPTURE" -> "live_on"
+                            "IGNORE_CAPTURE" -> "ignore_on"
+                            "HIERARCHY_CAPTURE" -> "hierarchy_on"
                             else -> return@synchronized snapshot("REQUEST_INVALID")
                         }
-                        if ((mode == 1 && "snapshot" !in scopes) || (mode == 2 && "hierarchy" !in scopes))
-                            return@synchronized snapshot("SCOPE_DENIED")
-                        // Starting live video does not cancel independently enabled effects.
-                        if (mode == 0) baseLive = true
-                        if (mode == 1) snapshotEnabled = true
-                        if (mode == 2) hierarchyEnabled = true
                     }
+                    if ((sourceAction == "ignore_on" && "snapshot" !in scopes) ||
+                        (sourceAction == "hierarchy_on" && "hierarchy" !in scopes))
+                        return@synchronized snapshot("SCOPE_DENIED")
+                    videoSources = videoSources.apply(sourceAction)
+                    videoRecoveryPending = false
                     controlRetryCount = 0; controlRetryWindow = SystemClock.elapsedRealtime()
                     owner = connId; lastVideoOwner = connId
                     epoch = requestedEpoch; generation = requestedGeneration; operationId = id
-                    freezeFrames = false; pendingConfig = null; pendingKey = null
+                    freezeFrames = false; pendingConfig = null
                     lastConfig = null; configSent = false
-                    frameOverride = selectedOverride(); capturePaused = false; requestedMode = frameOverride
+                    capturePaused = false; requestedMode = videoSources.mode
                     videoRequested = requestedMode != 3
                     videoTaskId = nextTaskId(); issuedTaskId = 0; videoDispatchRetries = 0
-                    revision = 0; error = ""; stopping = false
+                    revision = 0; error = ""; videoDiagnostic = ""; stopping = false
                     phase = "PREPARING"; videoReady = false
                     // Keep the currently displayed source until the replacement's first real frame.
                     lastEncodedFrameAt = 0; lastInputSequence = 0
@@ -306,8 +290,10 @@ object TunnelAdbRuntime {
                             pendingConfig = null
                             configSent = forward(configuration)
                             if (!configSent) { session?.keyframe(); return@synchronized snapshot("VIDEO_BACKPRESSURE") }
-                            pendingKey?.let { if (forward(it)) { videoReady = true; phase = "READY" } }
-                            pendingKey = null
+                            // Frames received while frozen were discarded. Replaying
+                            // only their IDR followed by today's P-frames loses the
+                            // intermediate references. Start a fresh GOP instead.
+                            session?.keyframe()
                         }
                         "heartbeat" -> { requireKeys(payload, emptySet()) }
                         "keyframe" -> { requireKeys(payload, emptySet()); session?.keyframe() }
@@ -322,7 +308,7 @@ object TunnelAdbRuntime {
                             if (phase != "WAITING_PRESENTED" || !videoReady) return@synchronized snapshot("NOT_READY")
                             phase = "COMMITTED"; committed = true; hooks?.setAdbCaptureCommitted(true)
                             source = candidateSource
-                            displayedGeometry = width to height; displayedSource = source
+                            displayedGeometry = width to height
                             inputGeometry()
                         }
                         "video_failed" -> { requireKeys(payload, emptySet()); failLocked("PC_VIDEO_FAILED") }
@@ -465,9 +451,7 @@ object TunnelAdbRuntime {
                 if (pausedByUs && bits and AdbWire.CAP_INPUT == 0) { hooks?.setAccessibilityPaused(false); pausedByUs = false }
                 session?.let { active ->
                     if (blackSentVersion != blackVersion)
-                        effectOperation(active, id, "overlay-resume", true, blackRequested, blackVersion)
-                    if (touchBlockSentVersion != touchBlockVersion)
-                        effectOperation(active, id, "touch-block-resume", false, touchBlockRequested, touchBlockVersion)
+                        effectOperation(active, id, "overlay-resume", blackRequested, blackVersion)
                 }
                 dispatchVideoTaskLocked()
                 val resume = videoRecoveryPending && bits != 0
@@ -486,11 +470,19 @@ object TunnelAdbRuntime {
             }
             notice?.let { hooks?.onState(id, it) }
         }
+        override fun videoDiagnostic(taskId: Int, code: String) {
+            val notice = synchronized(lock) {
+                if (helperOwner != id || helperEpoch != expectedEpoch || taskId != videoTaskId || owner != id || requestedMode == 3) return
+                videoDiagnostic = code
+                snapshot()
+            }
+            // Diagnostic only: keep the requested source, authorization and input alive.
+            hooks?.onState(id, notice)
+        }
         override fun effectsState(applied: Int) {
             val notice = synchronized(lock) {
                 if (helperOwner != id || helperEpoch != expectedEpoch) return
                 blackEnabled = applied and 1 != 0
-                touchBlockEnabled = applied and 2 != 0
                 actionNotice(id, "effects-state")
             }
             hooks?.onState(id, notice)
@@ -499,7 +491,10 @@ object TunnelAdbRuntime {
             var notice: String? = null
             val accepted = synchronized(lock) {
                 if (helperOwner != id || helperEpoch != expectedEpoch || owner != id || packet.taskId != videoTaskId || stopping || requestedMode == 3) return true
-                if (packet.kind == AdbWire.VIDEO_FRAME) lastEncodedFrameAt = SystemClock.elapsedRealtime()
+                if (packet.kind == AdbWire.VIDEO_FRAME) {
+                    lastEncodedFrameAt = SystemClock.elapsedRealtime()
+                    if (videoDiagnostic.isNotEmpty()) { videoDiagnostic = ""; notice = snapshot() }
+                }
                 if (packet.kind == AdbWire.VIDEO_CONFIG) {
                     if (requestedMode == 3) return true
                     capturePaused = false; session?.setCapturePaused(false)
@@ -510,13 +505,17 @@ object TunnelAdbRuntime {
                         candidateSource = when (packet.flags) { 2 -> "ADB_SNAPSHOT"; 4 -> "ADB_HIERARCHY"; 8 -> "ADB_SNAPSHOT_HIERARCHY"; else -> "ADB_LIVE" }
                         phase = "PREPARING"; videoReady = false
                         if (replacement) {
-                            phase = "RECONFIGURE"; freezeFrames = true; pendingConfig = packet; pendingKey = null
+                            phase = "RECONFIGURE"; freezeFrames = true; pendingConfig = packet
                             notice = snapshot()
                         }
                     }
                 }
                 if (capturePaused) true else if (freezeFrames) {
-                    if (packet.kind == AdbWire.VIDEO_FRAME && packet.flags and AdbWire.FLAG_KEY_FRAME != 0) pendingKey = packet
+                    true
+                } else if (packet.kind == AdbWire.VIDEO_FRAME && !videoReady &&
+                    packet.flags and AdbWire.FLAG_KEY_FRAME == 0) {
+                    // Reconfiguration dropped a GOP tail. Wait for its requested
+                    // fresh IDR instead of feeding undecodable dependent frames.
                     true
                 } else {
                     val sent = if (packet.kind == AdbWire.VIDEO_CONFIG) {
@@ -541,13 +540,12 @@ object TunnelAdbRuntime {
                 // Pending command failures may already have stopped the old task.
                 // Recovery follows user intent, not that failed task's mode.
                 val resume = owner == id && videoRequested
-                session = null; helperStarting = false; controlReady = false; mask = 0; blackEnabled = false; touchBlockEnabled = false
-                blackSentVersion = -1; touchBlockSentVersion = -1
+                session = null; helperStarting = false; controlReady = false; mask = 0; blackEnabled = false
+                blackSentVersion = -1
                 if (owner == id && requestedMode != 3) failLocked(reason)
                 videoRecoveryPending = resume
                 // Transport failure removes readiness, never the connection's grant.
                 error = if (cleanupComplete) reason else "CLEANUP_INCOMPLETE"
-                hooks?.finishAdbTouch(3)
                 scheduleControlRecoveryLocked(id, expectedEpoch)
                 snapshot()
             }
@@ -623,12 +621,11 @@ object TunnelAdbRuntime {
         videoRecoveryPending = false
         videoRequested = false
         lastEncodedFrameAt = 0
-        phase = "IDLE"; error = reason; videoReady = false; stopping = false
-        pendingConfig = null; pendingKey = null; freezeFrames = false; lastConfig = null; configSent = false
-        // The menu closes all ADB picture providers. Overlay, touch protection
-        // and shell/input authority remain independently enabled.
-        snapshotEnabled = false; hierarchyEnabled = false
-        frameOverride = 0; baseLive = false
+        phase = "IDLE"; error = reason; videoDiagnostic = ""; videoReady = false; stopping = false
+        pendingConfig = null; freezeFrames = false; lastConfig = null; configSent = false
+        // Explicit legacy stop/revoke closes every source. The live menu sends
+        // live_off, retaining snapshot/hierarchy until their own OFF commands.
+        videoSources = AdbVideoSources()
         requestedMode = 3; videoTaskId = nextTaskId(); issuedTaskId = 0
         dispatchVideoTaskLocked()
         restoreHooks()
@@ -637,8 +634,8 @@ object TunnelAdbRuntime {
     }
     private fun failLocked(reason: String) {
         lastEncodedFrameAt = 0
-        phase = "FAILED"; error = reason; videoReady = false; stopping = false
-        pendingConfig = null; pendingKey = null; freezeFrames = false; lastConfig = null; configSent = false
+        phase = "FAILED"; error = reason; videoDiagnostic = ""; videoReady = false; stopping = false
+        pendingConfig = null; freezeFrames = false; lastConfig = null; configSent = false
         requestedMode = 3; videoTaskId = nextTaskId(); issuedTaskId = 0
         dispatchVideoTaskLocked()
         restoreHooks()
@@ -660,8 +657,8 @@ object TunnelAdbRuntime {
         val notice = JSONObject().put("v", 1).put("kind", "action").put("phase", "ACTION_RESULT")
             .put("operationId", id).put("requestOperationId", id).put("operationComplete", complete)
             .put("generation", 0).put("epoch", 0).put("code", code)
+            .put("sourceGeneration", generation)
             .put("overlayBlack", blackEnabled).put("overlayBlackRequested", blackRequested)
-            .put("touchBlocked", touchBlockEnabled).put("touchBlockRequested", touchBlockRequested)
             .put("baseLiveRequested", baseLive).put("snapshotEnabled", snapshotEnabled).put("hierarchyEnabled", hierarchyEnabled)
             .put("resumeVideo", videoRecoveryPending && controlReady && mask != 0).put("resumeGeneration", generation)
             .put("localAdbReady", TunnelAdbManager.snapshot().shellReady)
@@ -725,21 +722,20 @@ object TunnelAdbRuntime {
             return@synchronized actionNotice(connId, id,
                 if (hooks?.setNormalScreenShare(action == "share_start") == true) "" else "LOCAL_ACTION_REQUIRED")
         }
-        if (action in setOf("overlay_black_on", "overlay_black_off", "touch_block_on", "touch_block_off")) {
-            val black = action.startsWith("overlay_")
-            if ((if (black) "overlay" else "input") !in scopes)
+        if (action in setOf("overlay_black_on", "overlay_black_off")) {
+            if ("overlay" !in scopes)
                 return@synchronized actionNotice(connId, id, "SCOPE_DENIED")
             val enabled = action.endsWith("_on")
-            val version = if (black) { blackRequested = enabled; ++blackVersion }
-                else { touchBlockRequested = enabled; ++touchBlockVersion }
+            blackRequested = enabled
+            val version = ++blackVersion
             if (!enabled && session == null && !helperStarting) {
-                if (black) blackEnabled = false else touchBlockEnabled = false
+                blackEnabled = false
                 return@synchronized actionNotice(connId, id)
             }
             ensureControlLocked(connId)
             val active = session
             if (active != null && controlReady) {
-                effectOperation(active, connId, id, black, enabled, version)
+                effectOperation(active, connId, id, enabled, version)
                 return@synchronized actionNotice(connId, id, complete = false)
             }
             return@synchronized actionNotice(connId, id, "ADB_CONTROL_STARTING")
@@ -784,25 +780,18 @@ object TunnelAdbRuntime {
     }
 
     private fun effectOperation(active: TunnelAdbSession, connId: Int, id: String,
-                                black: Boolean, enabled: Boolean, version: Long) {
-        if (black) blackSentVersion = version else touchBlockSentVersion = version
-        val command = if (black) AdbCommands.OVERLAY_BLACK else AdbCommands.TOUCH_BLOCK
-        active.operation(command, if (enabled) 1 else 0).whenComplete { result, failure ->
-            val touchFailure = if (!black && failure == null) result.bodyCopy().toString(Charsets.US_ASCII) else ""
-            val knownTouchFailure = touchFailure.takeIf { it in setOf(
-                "INPUT_PERMISSION_DENIED", "INPUT_DEVICE_BUSY", "INPUT_DEVICE_CHANGED", "INPUT_IOCTL_UNAVAILABLE",
-                "INPUT_ENUMERATION_UNAVAILABLE", "INPUT_IDENTITY_UNAVAILABLE", "INPUT_TOUCH_CLASSIFICATION_UNAVAILABLE",
-                "INPUT_DEVICE_NOT_EXCLUSIVELY_TOUCH", "INPUT_BITMAP_FORMAT_UNSUPPORTED", "INPUT_BITMAP_INVALID",
-                "INPUT_ATTRIBUTE_INVALID", "PHYSICAL_TOUCH_BLOCK_UNSUPPORTED", "PHYSICAL_TOUCH_BLOCK_FAILED") }
+                                enabled: Boolean, version: Long) {
+        blackSentVersion = version
+        active.operation(AdbCommands.OVERLAY_BLACK, if (enabled) 1 else 0).whenComplete { result, failure ->
             val code = if (failure == null && result.code == AdbCommands.OK) ""
-                else if (black) "OVERLAY_UNAVAILABLE" else knownTouchFailure ?: "PHYSICAL_TOUCH_BLOCK_UNAVAILABLE"
+                else "OVERLAY_UNAVAILABLE"
             val notice = synchronized(lock) {
                 // Old helper/old toggle results cannot overwrite the latest intent.
                 if (session !== active || helperOwner != connId ||
-                    version != (if (black) blackVersion else touchBlockVersion))
+                    version != blackVersion)
                     return@synchronized actionNotice(connId, id, "ACTION_CANCELLED")
                 if (code.isEmpty()) {
-                    if (black) blackEnabled = enabled else touchBlockEnabled = enabled
+                    blackEnabled = enabled
                 }
                 actionNotice(connId, id, code)
             }
@@ -810,12 +799,6 @@ object TunnelAdbRuntime {
         }
     }
 
-    private fun selectedOverride(): Int = when {
-        snapshotEnabled && hierarchyEnabled -> 4
-        hierarchyEnabled -> 2
-        snapshotEnabled -> 1
-        else -> if (baseLive) 0 else 3
-    }
     private fun nextTaskId(): Int {
         check(videoTaskCounter < Int.MAX_VALUE) { "VIDEO_TASK_LIMIT" }
         return ++videoTaskCounter
@@ -891,23 +874,24 @@ object TunnelAdbRuntime {
         blackRequested = false; blackEnabled = false; controlReady = false
         videoRecoveryPending = false
         videoRequested = false
-        touchBlockRequested = false; touchBlockEnabled = false
-        blackVersion++; touchBlockVersion++; blackSentVersion = -1; touchBlockSentVersion = -1
+        blackVersion++; blackSentVersion = -1
         helperEpoch += 1; helperOwner = 0; helperStarting = false
         val old = session; session = null; mask = 0; old?.close()
-        globalInputSequence = 0; geometryKey = ""; displayedGeometry = null; displayedSource = "normal"; hooks?.finishAdbTouch(3)
+        globalInputSequence = 0; geometryKey = ""; displayedGeometry = null
         if (pausedByUs) { hooks?.setAccessibilityPaused(false); pausedByUs = false }
     }
     private fun inputGeometry(): Pair<Int, Int> {
         val geometry = displayedGeometry ?: hooks?.normalGeometry() ?: (0 to 0)
         val physical = hooks?.normalGeometry() ?: (0 to 0)
-        val key = "${geometry.first}:${geometry.second}:$displayedSource:${physical.first}:${physical.second}"
-        if (key != geometryKey) { geometryKey = key; geometryRevision += 1; globalTouchGeneration += 1; session?.operation(AdbCommands.RELEASE_INPUT); hooks?.finishAdbTouch(3) }
+        // Source labels do not change normalized coordinates. Only real geometry
+        // changes cancel a held gesture when video/screenshot/layout is replaced.
+        val key = "${geometry.first}:${geometry.second}:${physical.first}:${physical.second}"
+        if (key != geometryKey) { geometryKey = key; geometryRevision += 1; globalTouchGeneration += 1; session?.operation(AdbCommands.RELEASE_INPUT) }
         return geometry
     }
     @JvmStatic fun normalPresented(connId: Int) = synchronized(lock) {
         if (connId != consentOwner && connId != lastVideoOwner) return@synchronized
-        displayedGeometry = null; displayedSource = "normal"; inputGeometry()
+        displayedGeometry = null; inputGeometry()
     }
     @JvmStatic fun inputStatus(connId: Int): String = synchronized(lock) {
         val size = inputGeometry()
@@ -928,21 +912,17 @@ object TunnelAdbRuntime {
                 globalInputSequence = sequence
                 InputWork(session!!, geometryRevision, args, globalTouchGeneration, request.optString("operationId").take(64))
             } catch (_: Exception) {
-                session?.operation(AdbCommands.RELEASE_INPUT); hooks?.finishAdbTouch(3); return
+                session?.operation(AdbCommands.RELEASE_INPUT); return
             }
         }
         try { inputWorker.execute {
             val active = work.active; val args = work.args
             val touch = args[0] == AdbCommands.TOUCH
             try {
-                val ready = java.util.concurrent.CompletableFuture<Unit>()
-                if (touch) hooks?.prepareAdbTouch(args[1]) { ready.complete(Unit) } else ready.complete(Unit)
-                // Never wait for the main/UI thread while holding the runtime monitor.
-                ready.get(500, java.util.concurrent.TimeUnit.MILLISECONDS)
                 val result = synchronized(lock) {
                     if (session !== active || connId != helperOwner || !inputReady() || work.geometry != geometryRevision ||
                         (touch && work.touchGeneration != globalTouchGeneration)) {
-                        hooks?.finishAdbTouch(3); return@execute
+                        return@execute
                     }
                     active.operation(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
                 }.get(3, java.util.concurrent.TimeUnit.SECONDS)
@@ -954,7 +934,6 @@ object TunnelAdbRuntime {
                     })
                     return@execute
                 }
-                if (touch) hooks?.finishAdbTouch(args[1])
             } catch (_: Exception) {
                 cancelInputWork(connId, work, "INPUT_OPERATION_TIMEOUT")
             }
@@ -969,7 +948,6 @@ object TunnelAdbRuntime {
             work.active.operation(AdbCommands.RELEASE_INPUT)
             actionNotice(connId, work.operationId, code)
         }
-        hooks?.finishAdbTouch(3)
         hooks?.onState(connId, notice)
     }
     private fun scheduleControlRecoveryLocked(connId: Int, expectedEpoch: Long) {
@@ -1009,11 +987,11 @@ object TunnelAdbRuntime {
         .put("adbVideoPresent", framePresent(0)).put("adbSpecialPresent", framePresent(1, 4))
         .put("videoStopped", phase == "IDLE" || (stopping && error == "STOPPED"))
         .put("overlayBlack", blackEnabled).put("overlayBlackRequested", blackRequested)
-        .put("touchBlocked", touchBlockEnabled).put("touchBlockRequested", touchBlockRequested)
         .put("snapshotEnabled", snapshotEnabled).put("hierarchyEnabled", hierarchyEnabled)
-        .put("frameOverride", when (frameOverride) { 1 -> "screenshot"; 2 -> "hierarchy"; 4 -> "screenshot_hierarchy"; else -> "none" })
+        .put("frameOverride", when (videoSources.mode) { 1 -> "screenshot"; 2 -> "hierarchy"; 4 -> "screenshot_hierarchy"; else -> "none" })
         .put("localAdbReady", TunnelAdbManager.snapshot().shellReady)
-        .put("videoReady", videoReady).put("inputReady", inputReady()).put("code", code ?: error)
+        .put("videoReady", videoReady).put("inputReady", inputReady())
+        .put("code", code ?: error.ifEmpty { videoDiagnostic })
         .put("operationRejected", !code.isNullOrEmpty())
         .put("accessibilityBound", hooks?.accessibilityBound() == true).put("accessibilityPaused", pausedByUs)
         .put("pendingConsentConnId", pendingOwner).put("pendingScopes", org.json.JSONArray(pendingScopes.toList()))
@@ -1026,8 +1004,7 @@ object TunnelAdbRuntime {
             .put("snapshotSelectable", "snapshot" in scopes).put("hierarchySelectable", "hierarchy" in scopes)
             .put("display", "display" in scopes && mask and AdbWire.CAP_DISPLAY != 0)
             .put("accessibility", "accessibility" in scopes)
-            .put("overlay", "overlay" in scopes && (mask and AdbWire.CAP_OVERLAY != 0))
-            .put("touchBlock", "input" in scopes && (mask and AdbWire.CAP_TOUCH_BLOCK != 0)))
+            .put("overlay", "overlay" in scopes && (mask and AdbWire.CAP_OVERLAY != 0)))
         .toString()
 
     private fun requireKeys(value: JSONObject, allowed: Set<String>) {

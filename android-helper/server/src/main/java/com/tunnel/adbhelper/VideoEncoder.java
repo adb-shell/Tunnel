@@ -37,6 +37,7 @@ final class VideoEncoder {
     private int currentMode;
     private long deliveredFrames;
     private Server.Lifecycle.VideoTask currentTask;
+    private DisplayCapture.Snapshot previousDisplay;
 
     VideoEncoder(AdbWire.Bootstrap options, Server.Lifecycle lifecycle, AdbWire.Session output) {
         this.options = options;
@@ -56,11 +57,13 @@ final class VideoEncoder {
             long before = deliveredFrames;
             boolean retry = false;
             try { captureOnce(); }
+            catch (TaskReplaced replacement) { /* The new source retains input/effects authority. */ }
             catch (DisplayChanged replacement) { lifecycle.displayChanged(); }
             catch (Exception videoFailure) {
                 // Keep the selected task alive across transient codec/display
                 // errors. captureOnce's finally releases every old resource before
                 // the next attempt; there is still exactly one encoder owner.
+                lifecycle.videoFailure(currentTask, failureCode(videoFailure));
                 lifecycle.videoTaskInterrupted(currentTask);
                 failures = deliveredFrames > before ? 1 : Math.min(5, failures + 1);
                 retry = true;
@@ -80,6 +83,27 @@ final class VideoEncoder {
     }
 
     private static final class DisplayChanged extends Exception { }
+    private static final class TaskReplaced extends IOException { }
+
+    private static String failureCode(Exception failure) {
+        String code = failure.getMessage();
+        if (code != null) switch (code) {
+            case "BITMAP_ENCODER_UNSUPPORTED":
+            case "ENCODER_OUTPUT_STALLED":
+            case "HARDWARE_H264_UNAVAILABLE":
+            case "ENCODER_SIZE_UNSUPPORTED":
+            case "CODEC_CONFIG_TOO_LARGE":
+            case "NAL_FORMAT_UNSUPPORTED":
+            case "NAL_FORMAT_INVALID":
+            case "PARTIAL_ACCESS_UNIT_UNSUPPORTED":
+            case "CODEC_BUFFER_INVALID":
+            case "CODEC_PTS_INVALID":
+            case "CODEC_DIMENSIONS_CHANGED":
+            case "ENCODER_ENDED": return code;
+            default: break;
+        }
+        return "ENCODER_FAILED";
+    }
 
     private void captureOnce() throws Exception {
         DisplayCapture capture = null;
@@ -91,6 +115,11 @@ final class VideoEncoder {
             ensureRunning();
             capture = new DisplayCapture();
             DisplayCapture.Snapshot snapshot = capture.snapshot();
+            // Changing the selected picture is not a geometry change. Preserve
+            // held input across live/screenshot/hierarchy replacement, but still
+            // cancel it if the display rotated while a prior task was stopping.
+            if (previousDisplay != null && !previousDisplay.sameAs(snapshot)) lifecycle.displayChanged();
+            previousDisplay = snapshot;
             MediaCodecInfo selected = findEncoder();
             MediaCodecInfo.VideoCapabilities caps = selected.getCapabilitiesForType(MIME).getVideoCapabilities();
             int alignment = Math.max(2, Math.max(caps.getWidthAlignment(), caps.getHeightAlignment()));
@@ -150,7 +179,11 @@ final class VideoEncoder {
         while (!lifecycle.stopped()) {
             lifecycle.videoProgress();
             long now = SystemClock.elapsedRealtime();
-            if (currentTask != lifecycle.videoTask()) throw new DisplayChanged();
+            if (currentTask != lifecycle.videoTask()) throw new TaskReplaced();
+            if (now >= nextDisplayCheck) {
+                if (!initial.sameAs(capture.snapshot())) throw new DisplayChanged();
+                nextDisplayCheck = now + 250;
+            }
             if (painter != null) {
                 Bitmap bitmap = lifecycle.takeBitmap(currentTask);
                 if (bitmap != null) {
@@ -159,10 +192,6 @@ final class VideoEncoder {
                         lastBitmapSubmitted = SystemClock.elapsedRealtime();
                     } finally { bitmap.recycle(); }
                 }
-            }
-            if (now >= nextDisplayCheck) {
-                if (!initial.sameAs(capture.snapshot())) throw new DisplayChanged();
-                nextDisplayCheck = now + 250;
             }
             if (now - lastKeyRequest >= 500 && lifecycle.takeKeyframeRequest()) {
                 Bundle bundle = new Bundle();
@@ -218,8 +247,8 @@ final class VideoEncoder {
                             if (info.presentationTimeUs < lastPts || info.presentationTimeUs < 0) {
                                 throw new IOException("CODEC_PTS_INVALID");
                             }
-                            send(AdbWire.Packet.of(AdbWire.VIDEO_FRAME, key ? AdbWire.FLAG_KEY_FRAME : 0,
-                                    options.epoch, configRevision, ++sequence, info.presentationTimeUs, width, height, currentTask.id, bytes));
+                            send(AdbWire.VIDEO_FRAME, key ? AdbWire.FLAG_KEY_FRAME : 0,
+                                    configRevision, info.presentationTimeUs, width, height, bytes);
                             lifecycle.frameSent(currentTask);
                             deliveredFrames++;
                             lastOutput = SystemClock.elapsedRealtime();
@@ -241,8 +270,7 @@ final class VideoEncoder {
     private void publishConfiguration(H264AnnexB configuration, int width, int height) throws IOException {
         byte[] next = configuration.configuration();
         if (next != null && !Arrays.equals(next, sentConfig)) {
-            send(AdbWire.Packet.of(AdbWire.VIDEO_CONFIG, currentMode * 2, options.epoch, ++configRevision, ++sequence,
-                    0, width, height, currentTask.id, next));
+            send(AdbWire.VIDEO_CONFIG, currentMode * 2, ++configRevision, 0, width, height, next);
             if (sentConfig != null) Arrays.fill(sentConfig, (byte) 0);
             sentConfig = next;
             waitForKey = true;
@@ -250,15 +278,31 @@ final class VideoEncoder {
         }
     }
 
-    private void send(AdbWire.Packet packet) throws IOException {
+    private void send(int kind, int flags, long revision, long pts, int width, int height, byte[] bytes) throws IOException {
+        // A task replacement may discard this frame, but must not consume a wire
+        // sequence number. The local channel requires contiguous sequences across
+        // ALL tasks: assigning ++sequence before ensureRunning() broke the next
+        // hierarchy/screenshot/live task whenever replacement hit this boundary.
         ensureRunning();
+        long nextSequence = sequence + 1;
+        AdbWire.Packet packet = AdbWire.Packet.of(kind, flags, options.epoch, revision,
+                nextSequence, pts, width, height, currentTask.id, bytes);
         lifecycle.videoWriteStarted();
-        try { output.write(packet); } finally { lifecycle.videoWriteFinished(); }
+        try {
+            // Once serialization begins, finish this record even if task changes.
+            // APK filters the complete old record by taskId. An interrupted write
+            // cannot be retried on an authenticated, sequence-checked channel.
+            output.write(packet);
+            sequence = nextSequence;
+        } catch (IOException brokenChannel) {
+            lifecycle.stop("VIDEO_CHANNEL_FAILED");
+            throw brokenChannel;
+        } finally { lifecycle.videoWriteFinished(); }
     }
 
     private void ensureRunning() throws IOException {
         if (lifecycle.stopped()) throw new IOException("STOPPED");
-        if (currentTask != lifecycle.videoTask()) throw new IOException("TASK_REPLACED");
+        if (currentTask != lifecycle.videoTask()) throw new TaskReplaced();
     }
 
     private static byte[] copy(ByteBuffer source, int limit) throws IOException {

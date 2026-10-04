@@ -111,6 +111,9 @@ final class HierarchyFrame {
         final int depth, layer;
         final Rect parent;
         final boolean password;
+        int nextChild = -1;
+        Rect bounds;
+        boolean effectivePassword;
         Entry(AccessibilityNodeInfo node, int depth, int layer, Rect parent, boolean password) {
             this.node = node; this.depth = depth; this.layer = layer; this.parent = parent; this.password = password;
         }
@@ -158,44 +161,57 @@ final class HierarchyFrame {
             // Binder. Give returned roots a traversal budget of their own.
             deadline = SystemClock.uptimeMillis() + COLLECT_BUDGET_MS;
             int visited = 0;
-            while (!pending.isEmpty() && visited < MAX_NODES && SystemClock.uptimeMillis() < deadline) {
+            while (!pending.isEmpty() && visited < MAX_NODES
+                    && (SystemClock.uptimeMillis() < deadline || pending.peekFirst().nextChild < 0)) {
                 Entry entry = pending.removeFirst();
                 AccessibilityNodeInfo node = entry.node;
-                visited++;
+                boolean retained = false;
                 try {
-                    Rect bounds = new Rect(); node.getBoundsInScreen(bounds);
-                    boolean password = entry.password || node.isPassword();
-                    // Password containers can expose labels through descendants too.
-                    String text = "";
-                    if (!password && frame.textBudget > 0) {
-                        CharSequence label = node.getText();
-                        if (label == null || label.length() == 0) label = node.getContentDescription();
-                        if (label != null) {
-                            int length = Math.min(Math.min(label.length(), MAX_LABEL), frame.textBudget);
-                            text = label.subSequence(0, length).toString().replace('\n', ' ').replace('\r', ' ');
-                            frame.textBudget -= length;
+                    if (entry.nextChild < 0) {
+                        visited++;
+                        entry.bounds = new Rect(); node.getBoundsInScreen(entry.bounds);
+                        entry.effectivePassword = entry.password || node.isPassword();
+                        // Password containers can expose labels through descendants too.
+                        String text = "";
+                        if (!entry.effectivePassword && frame.textBudget > 0) {
+                            CharSequence label = node.getText();
+                            if (label == null || label.length() == 0) label = node.getContentDescription();
+                            if (label != null) {
+                                int length = Math.min(Math.min(label.length(), MAX_LABEL), frame.textBudget);
+                                text = label.subSequence(0, length).toString().replace('\n', ' ').replace('\r', ' ');
+                                frame.textBudget -= length;
+                            }
                         }
+                        // Like the existing accessibility hierarchy renderer, draw
+                        // returned screen bounds even underneath a local overlay.
+                        if (!entry.bounds.isEmpty() && Rect.intersects(entry.bounds, new Rect(0, 0, width, height))) {
+                            frame.views.add(new View(entry.bounds, entry.parent, text, entry.depth, entry.layer,
+                                    node.isClickable() || node.isLongClickable() || node.isEditable(),
+                                    entry.effectivePassword, false));
+                            frame.hasContent = true;
+                        }
+                        entry.nextChild = 0;
                     }
-                    // Like the existing accessibility hierarchy renderer, draw
-                    // returned nodes with screen bounds. isVisibleToUser can be
-                    // false for content beneath a local overlay or another window.
-                    if (!bounds.isEmpty() && Rect.intersects(bounds, new Rect(0, 0, width, height))) {
-                        frame.views.add(new View(bounds, entry.parent, text, entry.depth, entry.layer,
-                                node.isClickable() || node.isLongClickable() || node.isEditable(), password, false));
-                        frame.hasContent = true;
-                    }
-                    if (entry.depth < MAX_DEPTH) {
-                        int count = Math.min(node.getChildCount(), MAX_CHILDREN);
-                        for (int i = 0; i < count && pending.size() + visited < MAX_NODES
-                                && SystemClock.uptimeMillis() < deadline; i++) {
-                            try {
-                                AccessibilityNodeInfo child = node.getChild(i);
-                                if (child != null) pending.add(new Entry(child, entry.depth + 1, entry.layer, bounds, password));
-                            } catch (RuntimeException staleChild) { /* Continue the remaining nodes/windows. */ }
+                    if (entry.depth < MAX_DEPTH && entry.nextChild < Math.min(node.getChildCount(), MAX_CHILDREN)
+                            && pending.size() + visited < MAX_NODES && SystemClock.uptimeMillis() < deadline) {
+                        // Visit/draw each returned child immediately, as the app's
+                        // accessibility renderer does. Fetching every sibling first
+                        // could spend the entire budget in getChild(), then recycle
+                        // all of them unseen and draw only the root on every frame.
+                        // The loop may render this already-returned child's local
+                        // fields after the deadline, but never fetch another child.
+                        AccessibilityNodeInfo child = null;
+                        try { child = node.getChild(entry.nextChild++); }
+                        catch (RuntimeException staleChild) { /* Resume the next sibling. */ }
+                        pending.addFirst(entry);
+                        retained = true;
+                        if (child != null) {
+                            pending.addFirst(new Entry(child, entry.depth + 1, entry.layer,
+                                    entry.bounds, entry.effectivePassword));
                         }
                     }
                 } catch (RuntimeException staleNode) { /* Never fail the video task for a stale node. */ }
-                finally { recycle(node); }
+                finally { if (!retained) recycle(node); }
             }
             frame.truncated |= !pending.isEmpty() || visited >= MAX_NODES || SystemClock.uptimeMillis() >= deadline;
         } finally {

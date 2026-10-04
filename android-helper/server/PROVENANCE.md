@@ -56,7 +56,9 @@ Tunnel 自有 Bootstrap 增加 initialMode，记录从 70 扩为 74 字节；新
 
 本次为 Tunnel 自有协议修改：Bootstrap 保持 74 字节，视频包头增加 taskId 后为 56 字节；VIDEO_TASK 替换或停止视频任务，VIDEO_STATE 单独报告任务结果。控制 helper 持续存活，同模式再次开启也会重建视频任务；编码、截图失败不撤销远程授权。只有进程或认证通道故障才回收该 helper，APK 保留独立授权并有界重建。仍仅有一个 UiAutomation 所有者，不新增上游代码；新增协议回归测试源码，正式编译及真机验证尚未执行。
 
-## 当前协议 6：独立效果与物理防触
+## 协议 6 来源：独立效果与已退役的物理防触
+
+防触功能现已移除，以下物理防触资料仅作历史来源记录，`PhysicalTouchBlock` 不再随 helper 编译；TOUCH_BLOCK 编号保留并返回不支持。
 
 新增 Tunnel 自有 `HierarchyFrame`、`PhysicalTouchBlock`，未复制外部实现。TOUCH_BLOCK 与 EFFECTS_STATE、截图+节点组合源同步 APK/helper/Gradle；画面与控制分别工作，黑屏/防触按独立意愿维护。节点配置参照 [UiAutomation.getWindows](https://developer.android.com/reference/android/app/UiAutomation#getWindows())，空/stale 窗口不会关闭节点源。
 

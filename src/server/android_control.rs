@@ -95,7 +95,7 @@ pub fn parse(json: &str) -> Option<Request> {
                 if !["ADB_CAPTURE", "IGNORE_CAPTURE", "HIERARCHY_CAPTURE"].contains(&source.as_str()?) { return None; }
             }
             if let Some(action) = payload.get("sourceAction") {
-                if !["ignore_on", "ignore_off", "hierarchy_on", "hierarchy_off", "live_off"].contains(&action.as_str()?) { return None; }
+                if !["ignore_on", "ignore_off", "hierarchy_on", "hierarchy_off", "live_off", "resume"].contains(&action.as_str()?) { return None; }
             }
         }
         "accessibility_action" => {
@@ -117,7 +117,7 @@ pub fn parse(json: &str) -> Option<Request> {
             let action = payload.get("action")?.as_str()?;
             if !["back", "home", "recents", "volume_up", "volume_down", "ignore_on",
                 "ignore_off", "hierarchy_on", "hierarchy_off", "display_on", "display_off",
-                "share_start", "share_stop", "touch_block_on", "touch_block_off",
+                "share_start", "share_stop",
                 "overlay_black_on", "overlay_black_off", "open_url"].contains(&action) {
                 return None;
             }
@@ -1098,7 +1098,7 @@ mod tests {
                 "payload":{"initialSource":source}}).to_string()).is_some());
         }
         assert!(parse(r#"{"v":1,"op":"start","operationId":"s","payload":{"initialSource":"AUTO"}}"#).is_none());
-        for action in ["ignore_on", "ignore_off", "hierarchy_on", "hierarchy_off", "live_off"] {
+        for action in ["ignore_on", "ignore_off", "hierarchy_on", "hierarchy_off", "live_off", "resume"] {
             assert!(parse(&json!({"v":1,"op":"start","operationId":"s",
                 "payload":{"sourceAction":action}}).to_string()).is_some());
         }
@@ -1144,7 +1144,6 @@ pub fn is_legacy_side_action(mouse: &hbb_common::message_proto::MouseEvent) -> b
         39 => "HardwareKeyboard_Management|",
         40 => "SUPPORTED_ABIS_Management",
         41 => "Benchmarks_Management",
-        43 => "TouchBlock_Management",
         _ => return false,
     };
     mouse.url.starts_with(prefix)

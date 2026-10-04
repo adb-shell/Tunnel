@@ -104,7 +104,6 @@ fn tunnel_status_json_or_none_sync() -> Option<String> {
                 || trimmed.contains("\"ignore\"")
                 || trimmed.contains("\"blank\"")
                 || trimmed.contains("\"penetrate\"")
-                || trimmed.contains("\"touchblock\"")
                 || trimmed.contains("\"screenshot\"")
                 || trimmed.contains("\"accessibility\"");
             if !has_any_key {
@@ -2384,7 +2383,8 @@ impl Connection {
                 Some(message::Union::MouseEvent(mut me)) => {
                     #[cfg(target_os = "android")]
                     {
-                        if !self.peer_keyboard_enabled() { return true; }
+                        // Android mask 43 belonged to the retired touch-block feature.
+                        if me.mask == 43 || !self.peer_keyboard_enabled() { return true; }
                         let side_action = super::android_control::is_legacy_side_action(&me);
                         if side_action && !super::android_control::legacy_side_allowed(self.inner.id()) { return true; }
                         if !side_action && (super::android_control::route_mouse(self.inner.id(), &me, self.adb_access().control_error().is_none())
