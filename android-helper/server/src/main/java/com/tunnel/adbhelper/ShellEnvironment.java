@@ -82,6 +82,10 @@ final class ShellEnvironment {
         } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
             throw new IllegalStateException("SHELL_CONTEXT_UNAVAILABLE");
         }
+        // app_process does not run ActivityThread.handleBindApplication's font
+        // setup. Initialize before workers draw hierarchy labels; on failure the
+        // hierarchy renderer must keep line/screenshot output but omit text.
+        ShellFonts.prepare();
     }
 
     private static void setField(Class<?> type, Object instance, String name, Object value)
