@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
@@ -56,22 +57,46 @@ final class HierarchyFrame {
         private int emptyPasses;
         private int width, height, rotation = -1;
         private HierarchyFrame latest;
+        private final Map<Integer, AccessibilityEvent> events = new LinkedHashMap<>();
+        private volatile long inputUntil;
+        private long nextInputPauseAt; // written only by the input worker
 
-        synchronized void contentChanged(int type) {
+        void inputActivity() {
+            long now = SystemClock.uptimeMillis();
+            // Reserve time for input without starving frames during a long drag.
+            if (now >= nextInputPauseAt) {
+                inputUntil = now + 120;
+                nextInputPauseAt = now + 350;
+            }
+        }
+
+        synchronized void contentChanged(AccessibilityEvent event) {
+            int type = event.getEventType();
             int changes = AccessibilityEvent.TYPE_WINDOWS_CHANGED | AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
                     | AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED | AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
                     | AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED | AccessibilityEvent.TYPE_VIEW_FOCUSED
                     | AccessibilityEvent.TYPE_VIEW_SCROLLED;
-            // Events only wake an already requested hierarchy source. Never query
-            // event sources or retain input text on the shared callback/input loop.
+            // Copy at most one event per window while hierarchy is requested.
+            // getSource() is Binder work and belongs exclusively to the collector.
             if (closed || worker == null || (type & changes) == 0
                     || SystemClock.uptimeMillis() - lastRequestedAt > FRESH_MS) return;
+            int id = event.getWindowId();
+            if (id >= 0) {
+                AccessibilityEvent old = events.put(id, AccessibilityEvent.obtain(event));
+                if (old != null) old.recycle();
+                if (events.size() > MAX_WINDOWS) {
+                    Integer first = events.keySet().iterator().next();
+                    events.remove(first).recycle();
+                }
+            }
             dirty = true; pending = true; notifyAll();
         }
 
         synchronized void invalidate() {
             revision++; pending = false; latest = null; completedAt = 0; emptyPasses = 0;
             lastRequestedAt = 0; dirty = true; nextCollectAt = 0;
+            for (AccessibilityEvent event : events.values()) event.recycle();
+            events.clear();
             notifyAll();
         }
 
@@ -117,6 +142,7 @@ final class HierarchyFrame {
                     int w, h, empty;
                     boolean changed;
                     UiAutomation source;
+                    Map<Integer, AccessibilityEvent> changes;
                     synchronized (this) {
                         while (!closed) {
                             if (collectorRevision != revision) {
@@ -124,6 +150,7 @@ final class HierarchyFrame {
                             }
                             if (!pending) { wait(); continue; }
                             long delay = nextCollectAt - SystemClock.uptimeMillis();
+                            delay = Math.max(delay, inputUntil - SystemClock.uptimeMillis());
                             if (delay <= 0) break;
                             wait(delay);
                         }
@@ -131,6 +158,7 @@ final class HierarchyFrame {
                         pending = false; expected = revision;
                         w = width; h = height; source = automation; empty = emptyPasses;
                         changed = dirty; dirty = false;
+                        changes = new HashMap<>(events); events.clear();
                     }
                     long started = SystemClock.uptimeMillis();
                     if ((changed || empty > 0 || started - lastCacheClear >= 500)
@@ -138,9 +166,11 @@ final class HierarchyFrame {
                         Queries.clearCache(source); lastCacheClear = started;
                     }
                     HierarchyFrame frame;
-                    try { frame = collector.collect(source, w, h, () -> isCurrent(expected), (empty & 1) != 0,
-                            partial -> publish(expected, partial)); }
+                    try { frame = collector.collect(source, w, h,
+                            () -> isCurrent(expected) && SystemClock.uptimeMillis() >= inputUntil,
+                            (empty & 1) != 0, changes, partial -> publish(expected, partial)); }
                     catch (RuntimeException unavailable) { frame = new HierarchyFrame(w, h); }
+                    finally { for (AccessibilityEvent event : changes.values()) event.recycle(); }
                     synchronized (this) {
                         if (closed) return;
                         long finished = SystemClock.uptimeMillis();
@@ -151,7 +181,7 @@ final class HierarchyFrame {
                         // Slow windows get their own cooldown in Collector. Do not
                         // delay the IME and every other window for the same timeout.
                         nextCollectAt = finished + (elapsed > PASS_BUDGET_MS ? 200 : 100);
-                        if (revision == expected) {
+                        if (revision == expected && finished >= inputUntil) {
                             emptyPasses = frame.semanticContent ? 0 : 1 + emptyPasses % 2;
                             publish(expected, frame);
                         }
@@ -200,7 +230,8 @@ final class HierarchyFrame {
         private final Map<Integer, Long> attempted = new HashMap<>(), retryAfter = new HashMap<>();
 
         HierarchyFrame collect(UiAutomation automation, int width, int height,
-                               BooleanSupplier current, boolean activeFirst, Consumer<HierarchyFrame> publish) {
+                               BooleanSupplier current, boolean activeFirst,
+                               Map<Integer, AccessibilityEvent> events, Consumer<HierarchyFrame> publish) {
             List<AccessibilityWindowInfo> windows = null;
             List<AccessibilityWindowInfo> ordered = new ArrayList<>();
             try {
@@ -248,27 +279,80 @@ final class HierarchyFrame {
                     HierarchyFrame part = new HierarchyFrame(width, height);
                     part.selectedWindowId = id;
                     AccessibilityNodeInfo root = null;
-                    View focused = null;
+                    AccessibilityNodeInfo focusRoot = null;
                     try {
-                        root = id == selected && activeFirst
-                                ? Queries.activeRoot(automation) : Queries.windowRoot(window);
+                        try {
+                            root = id == selected && activeFirst
+                                    ? Queries.activeRoot(automation) : Queries.windowRoot(window);
+                        } catch (RuntimeException unavailable) { /* Event-source fallback remains available. */ }
+                        // A missing window root is common during app transitions;
+                        // retry through the active-window route in this pass.
+                        if (root == null && id == selected && !activeFirst && current.getAsBoolean()) {
+                            try { root = Queries.activeRoot(automation); }
+                            catch (RuntimeException unavailable) { /* Continue to event-source fallback. */ }
+                        }
                         if (root != null && root.getWindowId() == id) {
-                            // The input field often lies after a large WebView/list.
-                            // Refresh it independently rather than hoping a bounded
-                            // traversal reaches it before its deadline.
-                            if (id == selected && current.getAsBoolean()) focused = focusedView(root, window.getLayer());
+                            if (id == selected) focusRoot = AccessibilityNodeInfo.obtain(root);
                             AccessibilityNodeInfo owned = root; root = null;
                             boolean content = collectRoot(part, owned, window.getLayer(), current);
-                            if (focused != null) {
-                                View fresh = focused;
-                                part.views.removeIf(view -> view.bounds.equals(fresh.bounds));
-                                part.views.add(fresh);
-                                content = true; part.hasContent = true; part.semanticContent = true;
-                            }
                             recordContent(part, id, content);
+                            // Publish before another potentially slow Binder call.
+                            if (part.hasContent) {
+                                cache.put(id, part);
+                                publish.accept(compose(ordered, width, height, selected));
+                            }
+                        }
+                        AccessibilityEvent event = events.get(id);
+                        if (event != null && current.getAsBoolean()
+                                && SystemClock.uptimeMillis() - event.getEventTime() <= FRESH_MS) {
+                            AccessibilityNodeInfo source = null;
+                            try {
+                                source = event.getSource();
+                                if (source != null && source.getWindowId() == id && current.getAsBoolean()) {
+                                    // Virtual views may be reachable from events
+                                    // while their window root is still incomplete.
+                                    HierarchyFrame extra = new HierarchyFrame(width, height);
+                                    AccessibilityNodeInfo owned = source; source = null;
+                                    collectRoot(extra, owned, window.getLayer(), current);
+                                    // An event source may itself be the only useful
+                                    // virtual view, not a child of our traversal root.
+                                    boolean content = !extra.views.isEmpty();
+                                    if (content) {
+                                        Set<Rect> freshBounds = new HashSet<>();
+                                        for (View view : extra.views) freshBounds.add(view.bounds);
+                                        part.views.removeIf(view -> freshBounds.contains(view.bounds));
+                                        int keep = WINDOW_NODES - extra.views.size();
+                                        if (part.views.size() > keep) {
+                                            part.views.subList(keep, part.views.size()).clear();
+                                            part.truncated = true;
+                                        }
+                                        part.views.addAll(extra.views);
+                                        part.hasContent = true;
+                                        part.semanticContent |= extra.semanticContent;
+                                        part.truncated |= extra.truncated;
+                                        recordContent(part, id, true);
+                                    }
+                                }
+                            } finally { if (source != null) recycle(source); }
+                        }
+                        if (focusRoot != null && current.getAsBoolean()
+                                && SystemClock.uptimeMillis() - started < COLLECT_BUDGET_MS) {
+                            View focused = focusedView(focusRoot, window.getLayer());
+                            if (focused != null) {
+                                part.views.removeIf(view -> view.bounds.equals(focused.bounds));
+                                if (part.views.size() >= WINDOW_NODES) {
+                                    part.views.remove(part.views.size() - 1); part.truncated = true;
+                                }
+                                part.views.add(focused);
+                                part.hasContent = true; part.semanticContent = true;
+                                recordContent(part, id, true);
+                            }
                         }
                     } catch (RuntimeException unavailable) { /* Other windows remain usable. */ }
-                    finally { if (root != null) recycle(root); }
+                    finally {
+                        if (root != null) recycle(root);
+                        if (focusRoot != null) recycle(focusRoot);
+                    }
                     long finished = SystemClock.uptimeMillis();
                     if (!current.getAsBoolean()) break;
                     // A timeout is local to this window, not to ADB/input/video.

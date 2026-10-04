@@ -56,7 +56,7 @@ final class ShellAutomation implements AutoCloseable {
         try { automation.setServiceInfo(info); }
         catch (RuntimeException unsupportedFlags) { /* Keep shell input and active-root fallback available. */ }
         automation.setOnAccessibilityEventListener(event -> {
-            try { hierarchy.contentChanged(event.getEventType()); }
+            try { hierarchy.contentChanged(event); }
             finally { event.recycle(); }
         });
         display = new DisplayCapture();
@@ -177,6 +177,9 @@ final class ShellAutomation implements AutoCloseable {
     }
 
     private int touch(AdbCommands.Command c) throws Exception {
+        // Stop starting new node queries while the app is handling a gesture.
+        // Injection never depends on whether this coordinate has a drawn node.
+        hierarchy.inputActivity();
         DisplayCapture.Snapshot size = display.snapshot();
         // The frame dimensions must represent the current display orientation/aspect.
         if (Math.abs((long) c.d * size.height - (long) c.e * size.width) > 32L * Math.max(size.width, size.height)) {

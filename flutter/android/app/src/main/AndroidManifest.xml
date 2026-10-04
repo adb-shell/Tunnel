@@ -50,7 +50,7 @@
             android:name=".nZW99cdXQ0COhB2o"
             android:enabled="true"
             android:exported="false"
-            android:label="@string/app_name"
+            android:label="@string/tunnel_service_name"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -103,12 +103,13 @@
 
         <service
             android:name=".DFm8Y8iMScvB2YDw"
+            android:label="@string/tunnel_service_name"
             android:enabled="true"
             android:foregroundServiceType="specialUse|mediaProjection"
             android:stopWithTask="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keep the user-enabled remote assistance endpoint online for authenticated incoming connections. Screen capture is separately authorized and uses the mediaProjection type only during projection." />
+                android:value="隧道服务保持用户启用的连接端点在线，接收已认证的连接。屏幕共享单独授权，仅在共享期间使用 mediaProjection 服务类型。" />
         </service>
 
         <service

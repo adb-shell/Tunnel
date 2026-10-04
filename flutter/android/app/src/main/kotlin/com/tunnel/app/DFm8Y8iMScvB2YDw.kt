@@ -1985,12 +1985,12 @@ class DFm8Y8iMScvB2YDw : Service() {
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationChannel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channelId = DEFAULT_NOTIFY_CHANNEL
-            val channelName = getString(R.string.app_name)
+            val channelName = getString(R.string.tunnel_service_name)
             val channel = NotificationChannel(
                 channelId,
                 channelName, NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "保持远程连接服务运行"
+                description = getString(R.string.tunnel_service_running)
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_PRIVATE
                 enableLights(false)
@@ -2062,8 +2062,8 @@ class DFm8Y8iMScvB2YDw : Service() {
             .setAutoCancel(false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText(if (projectionActive) "正在共享屏幕" else "正在保持远程连接服务")
+            .setContentTitle(getString(R.string.tunnel_service_name))
+            .setContentText(getString(if (projectionActive) R.string.tunnel_service_sharing else R.string.tunnel_service_running))
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setColor(Color.rgb(0, 113, 255))

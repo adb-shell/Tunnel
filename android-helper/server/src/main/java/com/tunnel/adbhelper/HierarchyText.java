@@ -12,11 +12,25 @@ import android.text.StaticLayout;
 import android.text.TextDirectionHeuristics;
 import android.text.TextPaint;
 import android.text.TextUtils;
-import android.text.style.ForegroundColorSpan;
+import android.text.style.MetricAffectingSpan;
 
 /** Bounded semantic-label layout; shaping stays intact when digits change color. */
 final class HierarchyText {
+    private static final float DIGIT_SCALE = 1.08f;
     private HierarchyText() { }
+
+    private static final class DigitSpan extends MetricAffectingSpan {
+        @Override public void updateMeasureState(TextPaint paint) {
+            paint.setTextSize(paint.getTextSize() * DIGIT_SCALE);
+            // Keep the explicitly loaded shell typeface; StyleSpan can fall
+            // back to the uninitialized default font on some app_process ROMs.
+            paint.setFakeBoldText(true);
+        }
+        @Override public void updateDrawState(TextPaint paint) {
+            updateMeasureState(paint);
+            paint.setColor(Color.RED);
+        }
+    }
 
     static CharSequence coloredDigits(String text) {
         SpannableString styled = new SpannableString(text);
@@ -26,12 +40,12 @@ final class HierarchyText {
             if (Character.isDigit(cp)) {
                 if (run < 0) run = offset;
             } else if (run >= 0) {
-                styled.setSpan(new ForegroundColorSpan(Color.RED), run, offset, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                styled.setSpan(new DigitSpan(), run, offset, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 run = -1;
             }
             offset += Character.charCount(cp);
         }
-        if (run >= 0) styled.setSpan(new ForegroundColorSpan(Color.RED), run, text.length(),
+        if (run >= 0) styled.setSpan(new DigitSpan(), run, text.length(),
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         return styled;
     }
@@ -50,8 +64,8 @@ final class HierarchyText {
         paint.setTextSize(Math.min(14f / scale, height * .75f));
         Paint.FontMetrics metrics = paint.getFontMetrics();
         float fontHeight = metrics.descent - metrics.ascent;
-        if (fontHeight > height) paint.setTextSize(paint.getTextSize() * height / fontHeight);
-        fontHeight = Math.max(1f, paint.descent() - paint.ascent());
+        if (fontHeight * DIGIT_SCALE > height) paint.setTextSize(paint.getTextSize() * height / (fontHeight * DIGIT_SCALE));
+        fontHeight = Math.max(1f, (paint.descent() - paint.ascent()) * DIGIT_SCALE);
         int maxLines = Math.max(1, Math.min(8, (int) (height / fontHeight)));
         paint.setShadowLayer(1.5f / scale, 0, 0, Color.BLACK);
         CharSequence styled = coloredDigits(text);
@@ -81,26 +95,33 @@ final class HierarchyText {
 
     private static void drawSimple(Canvas canvas, String text, Rect bounds, float padding, TextPaint paint) {
         int save = canvas.save();
+        float baseSize = paint.getTextSize();
         try {
             canvas.clipRect(bounds);
             float left = bounds.left + padding, x = left;
-            float y = bounds.top + padding - paint.ascent();
-            float lineHeight = Math.max(1f, paint.descent() - paint.ascent());
+            float y = bounds.top + padding - paint.ascent() * DIGIT_SCALE;
+            float lineHeight = Math.max(1f, (paint.descent() - paint.ascent()) * DIGIT_SCALE);
             int lines = 1;
             for (int start = 0; start < text.length();) {
                 int cp = text.codePointAt(start), end = start + Character.charCount(cp);
+                boolean digit = Character.isDigit(cp);
+                paint.setTextSize(baseSize * (digit ? DIGIT_SCALE : 1f));
+                paint.setFakeBoldText(digit);
                 float advance = paint.measureText(text, start, end);
                 if (cp == '\n' || (x > left && x + advance > bounds.right - padding)) {
                     x = left; y += lineHeight;
                     if (++lines > 8 || y + paint.descent() > bounds.bottom) break;
                 }
                 if (cp != '\n') {
-                    paint.setColor(Character.isDigit(cp) ? Color.RED : Color.WHITE);
+                    paint.setColor(digit ? Color.RED : Color.WHITE);
                     canvas.drawText(text, start, end, x, y, paint);
                     x += advance;
                 }
                 start = end;
             }
-        } finally { canvas.restoreToCount(save); }
+        } finally {
+            paint.setTextSize(baseSize); paint.setFakeBoldText(false);
+            canvas.restoreToCount(save);
+        }
     }
 }

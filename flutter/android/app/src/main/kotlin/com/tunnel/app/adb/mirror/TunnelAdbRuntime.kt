@@ -90,6 +90,20 @@ object TunnelAdbRuntime {
     private var globalTouchGeneration = 0L
     private data class InputWork(val active: TunnelAdbSession, val geometry: Long, val args: IntArray,
                                  val touchGeneration: Long, val operationId: String)
+    // Keep the newest not-yet-dispatched MOVE, but never merge across a DOWN,
+    // UP, key, geometry revision or helper replacement.
+    private var queuedMove: InputTask? = null
+    private class InputTask(val connId: Int, var work: InputWork) : Runnable {
+        var started = false // guarded by lock, like work and queuedMove
+        override fun run() {
+            val selected = synchronized(lock) {
+                started = true
+                if (queuedMove === this) queuedMove = null
+                work
+            }
+            executeInputWork(connId, selected)
+        }
+    }
     private var controlRetryCount = 0
     private var controlRetryWindow = 0L
     private val inputWorker = java.util.concurrent.ThreadPoolExecutor(1, 1, 0L,
@@ -878,6 +892,7 @@ object TunnelAdbRuntime {
         helperEpoch += 1; helperOwner = 0; helperStarting = false
         val old = session; session = null; mask = 0; old?.close()
         globalInputSequence = 0; geometryKey = ""; displayedGeometry = null
+        queuedMove = null
         if (pausedByUs) { hooks?.setAccessibilityPaused(false); pausedByUs = false }
     }
     private fun inputGeometry(): Pair<Int, Int> {
@@ -899,9 +914,9 @@ object TunnelAdbRuntime {
             .put("width", size.first).put("height", size.second).put("revision", geometryRevision).toString()
     }
     @JvmStatic fun globalInput(connId: Int, json: String) {
-        val work = synchronized(lock) {
+        synchronized(lock) {
             if (connId != helperOwner || !inputReady() || json.length > 8192) return
-            try {
+            val work = try {
                 val request = JSONObject(json)
                 requireKeys(request, setOf("v", "op", "operationId", "sequence", "geometryRevision", "payload"))
                 require(number(request, "v") == 1L && request.getString("op") == "input")
@@ -914,31 +929,45 @@ object TunnelAdbRuntime {
             } catch (_: Exception) {
                 session?.operation(AdbCommands.RELEASE_INPUT); return
             }
-        }
-        try { inputWorker.execute {
-            val active = work.active; val args = work.args
-            val touch = args[0] == AdbCommands.TOUCH
-            try {
-                val result = synchronized(lock) {
-                    if (session !== active || connId != helperOwner || !inputReady() || work.geometry != geometryRevision ||
-                        (touch && work.touchGeneration != globalTouchGeneration)) {
-                        return@execute
-                    }
-                    active.operation(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
-                }.get(3, java.util.concurrent.TimeUnit.SECONDS)
-                if (result.code != AdbCommands.OK) {
-                    cancelInputWork(connId, work, when (result.code) {
-                        AdbCommands.STALE_GEOMETRY -> "STALE_FRAME"
-                        AdbCommands.BUSY -> "HELPER_BUSY"
-                        else -> "INPUT_REJECTED"
-                    })
-                    return@execute
-                }
-            } catch (_: Exception) {
-                cancelInputWork(connId, work, "INPUT_OPERATION_TIMEOUT")
+            val isMove = work.args[0] == AdbCommands.TOUCH && work.args[1] == android.view.MotionEvent.ACTION_MOVE
+            val previous = queuedMove
+            if (isMove && previous != null && !previous.started && previous.connId == connId &&
+                previous.work.active === work.active && previous.work.geometry == work.geometry &&
+                previous.work.touchGeneration == work.touchGeneration) {
+                previous.work = work
+                return
             }
-        } } catch (_: java.util.concurrent.RejectedExecutionException) {
-            cancelInputWork(connId, work, "HELPER_BUSY")
+            val task = InputTask(connId, work)
+            queuedMove = if (isMove) task else null
+            // Enqueue under the same lock as sequence validation so callbacks
+            // from different receive threads cannot reorder a DOWN and its UP.
+            try { inputWorker.execute(task) }
+            catch (_: java.util.concurrent.RejectedExecutionException) {
+                if (queuedMove === task) queuedMove = null
+                cancelInputWork(connId, work, "HELPER_BUSY")
+            }
+        }
+    }
+    private fun executeInputWork(connId: Int, work: InputWork) {
+        val active = work.active; val args = work.args
+        val touch = args[0] == AdbCommands.TOUCH
+        try {
+            val result = synchronized(lock) {
+                if (session !== active || connId != helperOwner || !inputReady() || work.geometry != geometryRevision ||
+                    (touch && work.touchGeneration != globalTouchGeneration)) {
+                    return
+                }
+                active.operation(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
+            }.get(3, java.util.concurrent.TimeUnit.SECONDS)
+            if (result.code != AdbCommands.OK) {
+                cancelInputWork(connId, work, when (result.code) {
+                    AdbCommands.STALE_GEOMETRY -> "STALE_FRAME"
+                    AdbCommands.BUSY -> "HELPER_BUSY"
+                    else -> "INPUT_REJECTED"
+                })
+            }
+        } catch (_: Exception) {
+            cancelInputWork(connId, work, "INPUT_OPERATION_TIMEOUT")
         }
     }
     private fun cancelInputWork(connId: Int, work: InputWork, code: String) {

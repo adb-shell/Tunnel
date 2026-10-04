@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">隧道</string>
-    <string name="accessibility_service_description">官方授权</string>
+    <string name="accessibility_service_description">隧道服务：在您授权后读取界面内容并执行控制操作。</string>
+    <string name="tunnel_service_name">隧道服务</string>
+    <string name="tunnel_service_running">隧道服务运行中</string>
+    <string name="tunnel_service_sharing">隧道服务：正在共享屏幕</string>
 </resources>
