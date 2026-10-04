@@ -8,6 +8,7 @@
 - Rust `tunnel`，Flutter `flutter_hbb`；版本 5.2.1 / 5.2.1+59。
 - Native 产物：`libtunnel.so` / `tunnel.dll`；scheme：`tunnel://`。
 - 用户要求在独立工作区开发。Android 在 Linux 服务器构建，Windows 在 Windows Server 构建；本地没有完整正式构建环境。
+- 每次交付修复时，明确说明需重编安卓端、PC 端或两端，并给出对应正式构建入口。
 - 当前目标设备：OnePlus ACE 6T、iQOO Neo9，均 Android 16。Android 11–16 全覆盖尚无测试证据。
 
 ## 关键实现约束

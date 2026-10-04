@@ -24,7 +24,7 @@ import java.util.function.BooleanSupplier;
 /** One bounded, owned snapshot. Never retains framework nodes or prior screen text. */
 final class HierarchyFrame {
     private static final int MAX_WINDOWS = 32, MAX_NODES = 1024, MAX_DEPTH = 32;
-    private static final int MAX_CHILDREN = 64, MAX_LABEL = 128, TEXT_BUDGET = 16 * 1024;
+    private static final int MAX_CHILDREN = 64, MAX_LABEL = 512, TEXT_BUDGET = 16 * 1024;
     private static final long COLLECT_BUDGET_MS = 250;
     final int width, height;
     private final List<View> views = new ArrayList<>();
@@ -131,12 +131,10 @@ final class HierarchyFrame {
         final AccessibilityNodeInfo node;
         final int depth, layer;
         final Rect parent;
-        final boolean password;
         int nextChild = -1;
         Rect bounds;
-        boolean effectivePassword;
-        Entry(AccessibilityNodeInfo node, int depth, int layer, Rect parent, boolean password) {
-            this.node = node; this.depth = depth; this.layer = layer; this.parent = parent; this.password = password;
+        Entry(AccessibilityNodeInfo node, int depth, int layer, Rect parent) {
+            this.node = node; this.depth = depth; this.layer = layer; this.parent = parent;
         }
     }
     private HierarchyFrame(int width, int height) { this.width = width; this.height = height; }
@@ -154,7 +152,7 @@ final class HierarchyFrame {
             try {
                 if (!current.getAsBoolean()) return frame;
                 AccessibilityNodeInfo root = Queries.activeRoot(automation);
-                if (root != null) pending.add(new Entry(root, 0, 0, null, false));
+                if (root != null) pending.add(new Entry(root, 0, 0, null));
             } catch (RuntimeException staleWindow) { /* Interactive-window fallback below. */ }
             if (!current.getAsBoolean()) return frame;
             // A usable active root is enough to render. In particular, do not
@@ -178,7 +176,7 @@ final class HierarchyFrame {
                         if (!bounds.isEmpty()) frame.views.add(new View(bounds, null, "", 0, layer, false, false, true));
                         if (pending.isEmpty()) {
                             AccessibilityNodeInfo root = Queries.windowRoot(window);
-                            if (root != null) pending.add(new Entry(root, 0, layer, null, false));
+                            if (root != null) pending.add(new Entry(root, 0, layer, null));
                         }
                     } catch (RuntimeException staleWindow) { /* Window disappeared between enumeration and root access. */ }
                 }
@@ -195,15 +193,21 @@ final class HierarchyFrame {
                     if (entry.nextChild < 0) {
                         visited++;
                         entry.bounds = new Rect(); node.getBoundsInScreen(entry.bounds);
-                        entry.effectivePassword = entry.password || node.isPassword();
-                        // Password containers can expose labels through descendants too.
+                        // Render the text actually exposed by Android, including
+                        // password nodes. Masked/omitted OS text is not reconstructed.
                         String text = "";
-                        if (!entry.effectivePassword && frame.textBudget > 0) {
+                        if (frame.textBudget > 0) {
                             CharSequence label = node.getText();
                             if (label == null || label.length() == 0) label = node.getContentDescription();
+                            if (label == null || label.length() == 0) label = node.getHintText();
+                            if (label == null || label.length() == 0) label = node.getStateDescription();
                             if (label != null) {
                                 int length = Math.min(Math.min(label.length(), MAX_LABEL), frame.textBudget);
-                                text = label.subSequence(0, length).toString().replace('\n', ' ').replace('\r', ' ');
+                                // Do not split an emoji/supplementary character at
+                                // the bounded UTF-16 edge. Preserve real line breaks.
+                                if (length > 0 && length < label.length()
+                                        && Character.isHighSurrogate(label.charAt(length - 1))) length--;
+                                text = label.subSequence(0, length).toString().replace("\r\n", "\n").replace('\r', '\n');
                                 frame.textBudget -= length;
                             }
                         }
@@ -212,7 +216,7 @@ final class HierarchyFrame {
                         if (!entry.bounds.isEmpty() && Rect.intersects(entry.bounds, new Rect(0, 0, width, height))) {
                             frame.views.add(new View(entry.bounds, entry.parent, text, entry.depth, entry.layer,
                                     node.isClickable() || node.isLongClickable() || node.isEditable(),
-                                    entry.effectivePassword, false));
+                                    node.isPassword(), false));
                             frame.hasContent = true;
                         }
                         entry.nextChild = 0;
@@ -232,8 +236,7 @@ final class HierarchyFrame {
                         pending.addFirst(entry);
                         retained = true;
                         if (child != null) {
-                            pending.addFirst(new Entry(child, entry.depth + 1, entry.layer,
-                                    entry.bounds, entry.effectivePassword));
+                            pending.addFirst(new Entry(child, entry.depth + 1, entry.layer, entry.bounds));
                         }
                     }
                 } catch (RuntimeException staleNode) { /* Never fail the video task for a stale node. */ }
@@ -309,13 +312,11 @@ final class HierarchyFrame {
             paint.setStrokeWidth((view.window ? 1.7f : view.clickable ? 1.2f : .7f) / scale);
             paint.setColor(view.window ? 0xFFFFC857 : view.clickable ? 0xFF55E4EF : 0xFF8299AA);
             canvas.drawRect(bounds, paint);
-            if (drawText && !view.password && !view.text.isEmpty() && !view.window) {
-                canvas.save(); canvas.clipRect(bounds);
-                paint.setStyle(Paint.Style.FILL); paint.setColor(Color.WHITE);
-                paint.setShadowLayer(2f / scale, 0, 0, Color.BLACK);
-                canvas.drawText(view.text, bounds.left + 2f / scale,
-                        bounds.top + 2f / scale - paint.ascent(), paint);
-                paint.clearShadowLayer(); canvas.restore();
+            if (drawText && !view.text.isEmpty() && !view.window) {
+                // A label/layout failure must not discard the whole frame or
+                // interrupt input. Other nodes and the screenshot remain valid.
+                try { HierarchyText.draw(canvas, view.text, bounds, scale, typeface); }
+                catch (RuntimeException invalidLabel) { }
             }
         }
         canvas.restore();
@@ -342,7 +343,7 @@ final class HierarchyFrame {
         for (View view : views) {
             JSONObject node = new JSONObject().put("left", view.bounds.left).put("top", view.bounds.top)
                     .put("right", view.bounds.right).put("bottom", view.bounds.bottom).put("depth", view.depth)
-                    .put("layer", view.layer).put("window", view.window).put("text", view.password ? "" : view.text)
+                    .put("layer", view.layer).put("window", view.window).put("text", view.text)
                     .put("clickable", view.clickable).put("password", view.password);
             int length = node.toString().getBytes(StandardCharsets.UTF_8).length + 1;
             if (bytes + length > 240 * 1024) { truncated = true; break; }
