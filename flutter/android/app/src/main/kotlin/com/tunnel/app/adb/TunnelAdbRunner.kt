@@ -23,6 +23,8 @@ class TunnelAdbRunner(context: Context) {
     @Volatile private var pairing = false
     @Volatile private var paired = false
     @Volatile private var verified = false
+    @Volatile private var verifiedAt = 0L
+    private var retryAfter = 0L
     @Volatile private var lastError = ""
     @Volatile private var deadline = Long.MAX_VALUE
     @Volatile private var phase = "IDLE"
@@ -33,7 +35,7 @@ class TunnelAdbRunner(context: Context) {
     fun processEnvironment(): Map<String, String> = spec.environment
     fun selectedLocalSerial(): String? = selectedSerial?.takeIf { LocalAdbTargetPolicy.validate(it) != null }
 
-    fun startServer() = action {
+    @Synchronized fun startServer() = action {
         requireReadyBinary()
         requireSuccess(run(listOf("start-server"), 8_000), "SERVER_START_FAILED")
         val previous = selectedLocalSerial()
@@ -42,15 +44,39 @@ class TunnelAdbRunner(context: Context) {
             .map { it.trim().split(Regex("\\s+")) }
             .filter { it.size >= 2 && it[1] == "device" }
             .map { it[0] }.filter { LocalAdbTargetPolicy.validate(it) != null }.toList() else emptyList()
-        if (previous != null && verify(previous)) return@action
+        if (previous != null && (verify(previous) || connectEndpoint(previous))) return@action
         for (candidate in candidates.take(4)) if (verify(candidate)) return@action
         val endpoints = TunnelAdbDnsDiscover(app).discoverEndpoints(TunnelAdbDnsDiscover.Kind.CONNECT, cancelled = ::cancelled)
         for (endpoint in endpoints.take(12)) if (connectEndpoint(endpoint)) return@action
         throw Failure("CONNECT_ADDRESS_REQUIRED")
     }
 
+    /** Worker-only liveness check/reconnect. A busy probe is not revoked authorization. */
+    @Synchronized fun recoverTransport(): String? {
+        val serial = selectedLocalSerial()
+        val now = SystemClock.elapsedRealtime()
+        if (serial != null && verified && now - verifiedAt < 1_000) return serial
+        if (now < retryAfter) return null
+        if (serial != null) {
+            val result = LocalAdbIdentityProbe(app).probe(serial)
+            if (result.shellIdentityVerified) {
+                verified = true; verifiedAt = SystemClock.elapsedRealtime()
+                lastError = ""
+                return serial
+            }
+            if (result.reason == com.tunnel.app.adb.probe.AdbProbeReason.BUSY) {
+                lastError = "ADB_PROBE_BUSY"
+                return null
+            }
+        }
+        verified = false
+        startServer()
+        if (!verified) retryAfter = SystemClock.elapsedRealtime() + 3_000
+        return selectedLocalSerial()?.takeIf { verified }
+    }
+
     /** Explicit connection-port entry, never the pairing-code dialog's port. */
-    fun connect(endpoint: String) = action {
+    @Synchronized fun connect(endpoint: String) = action {
         requireReadyBinary()
         requireSuccess(run(listOf("start-server"), 8_000), "SERVER_START_FAILED")
         for (candidate in endpointCandidates(endpoint)) if (connectEndpoint(candidate)) return@action
@@ -58,11 +84,9 @@ class TunnelAdbRunner(context: Context) {
     }
 
     /** Port, exact local host:port, or 'auto' for _adb-tls-pairing (code still required). */
-    fun pair(port: String, pairingCode: String, connectionPort: Int? = null,
+    @Synchronized fun pair(port: String, pairingCode: String, connectionPort: Int? = null,
              progress: (String) -> Unit = {}) = action {
-        paired = false
-        verified = false
-        selectedSerial = null
+        // Pairing a new code must not erase an already verified transport.
         requireReadyBinary()
         if (!Regex("[0-9]{6}").matches(pairingCode)) throw Failure("PAIR_CODE_INVALID")
         if (connectionPort != null && connectionPort !in 1..65535) throw Failure("CONNECT_PORT_INVALID")
@@ -129,7 +153,7 @@ class TunnelAdbRunner(context: Context) {
     }
 
     /** Start the real, verified ADB shell; never substitute the app's ordinary shell UID. */
-    fun startLocalShell() {
+    @Synchronized fun startLocalShell() {
         if (terminal?.running == true) return
         var retained: Closeable? = null
         action(retainLease = { it === retained }) { lease ->
@@ -139,7 +163,8 @@ class TunnelAdbRunner(context: Context) {
             terminal = LocalAdbTerminal.start(spec, target, lease, ::appendRaw) { cleanExit ->
                 // An explicit local stop leaves the underlying adb transport available.
                 // An unexpected client failure cannot continue claiming a live shell.
-                if (!cleanExit) { verified = false; selectedSerial = null }
+                // A shell child exiting says nothing about adbd or its stored key.
+                if (!cleanExit) append("终端进程退出；ADB 传输将独立检测。")
                 append("本地 ADB 终端已关闭，可由 PC 接管。")
             }
             retained = lease
@@ -178,7 +203,7 @@ class TunnelAdbRunner(context: Context) {
         lastError = if (terminal?.interrupt() == true) "" else "TERMINAL_NOT_RUNNING"
     }
 
-    fun discover(): Map<String, Any> {
+    @Synchronized fun discover(): Map<String, Any> {
         var pairingEndpoints = emptyList<String>()
         var connectEndpoints = emptyList<String>()
         action(invalidateOnFailure = false) {
@@ -205,7 +230,7 @@ class TunnelAdbRunner(context: Context) {
         phase = phase, terminalRunning = terminal?.running == true,
     )
 
-    private fun action(invalidateOnFailure: Boolean = true, retainLease: (Closeable) -> Boolean = { false },
+    private fun action(invalidateOnFailure: Boolean = false, retainLease: (Closeable) -> Boolean = { false },
                        body: (Closeable) -> Unit) {
         val lease = LocalAdbAccess.acquire(false) ?: run { lastError = "ADB_BUSY"; append("ADB_BUSY"); return }
         val thread = Thread.currentThread()
@@ -242,6 +267,7 @@ class TunnelAdbRunner(context: Context) {
         val changed = !verified || selectedSerial != result.trustedTarget?.serial
         selectedSerial = result.trustedTarget?.serial
         verified = selectedSerial != null
+        if (verified) { verifiedAt = SystemClock.elapsedRealtime(); retryAfter = 0 }
         if (verified && changed) append("已核实本机 ADB shell 身份（uid 2000）。")
         return verified
     }

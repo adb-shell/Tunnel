@@ -609,7 +609,8 @@ impl Connection {
 
                 _ = adb_timer.tick(), if cfg!(target_os = "android") => {
                     #[cfg(target_os = "android")]
-                    if let Some(message) = super::android_control::poll(id, conn.adb_access()) {
+                    if let Some(message) = super::android_control::poll(id, conn.adb_access(), conn.lr.option.as_ref()
+                        .and_then(|o| o.supported_decoding.as_ref()).map_or(false, |d| d.ability_h264 > 0)) {
                         if let Some(message::Union::Misc(misc)) = &message.union {
                             if let Some(misc::Union::AndroidVideoBarrier(barrier)) = &misc.union {
                                 // Discard old source frames before this ordered source barrier.

@@ -228,32 +228,33 @@ mod endpoint {
             Some(&packet.to_string())).is_ok()
     }
 
-    #[derive(Clone, Copy, PartialEq)]
-    enum Phase { Preparing, Activating, AwaitingPresentation, Presented, Active, Frozen, Rollback }
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    enum Phase { Preparing, AwaitingPresentation, Active, Rollback }
 
+    #[derive(Clone)]
     struct Lease {
-        conn: i32, epoch: u64, generation: u64, operation_id: String, phase: Phase,
-        revision: u64, sequence: u64, input_sequence: u64, client_input_sequence: u64, width: u32, height: u32,
-        deadline: Instant, normal_ready: bool,
-        touch_down: bool, mouse_position: Option<(i32, i32)>,
-        barrier_sent: bool, present_min_sequence: u64,
-        failure_code: String,
-        explicitly_stopped: bool,
+        conn: i32, epoch: u64, capture_epoch: u64, generation: u64, operation_id: String, phase: Phase,
+        revision: u64, sequence: u64, width: u32, height: u32,
+        normal_ready: bool, barrier_sent: bool, present_min_sequence: u64,
+        needs_key: bool, refresh_at: Instant, status_at: Instant,
     }
 
     #[derive(Default)]
     struct State {
-        subscribers: HashSet<i32>, lease: Option<Lease>, next_epoch: u64,
+        subscribers: HashSet<i32>,
+        // One phone capture, independent presentation/egress for each controller.
+        lease: Option<Lease>, viewers: HashMap<i32, Lease>, next_epoch: u64,
         barriers: VecDeque<(i32, Message)>, normal_refresh: HashSet<i32>,
-        rates: HashMap<i32, (Instant, u32)>,
-        // Pairing and its scoped authorization exist independently of a video lease.
-        // Keep the connection tracked until disconnect/revocation, including after success.
-        pairing_connections: HashSet<i32>,
-        inputs: HashMap<i32, GlobalInput>,
-        // Survives video completion so delayed requests cannot resurrect an old task.
-        generations: HashMap<i32, u64>,
+        rates: HashMap<i32, (Instant, u32)>, inputs: HashMap<i32, GlobalInput>,
+        generations: HashMap<i32, u64>, eligible: HashSet<i32>, revoked: HashSet<i32>,
+        runtime: Value, runtime_at: Option<Instant>,
     }
-    lazy_static::lazy_static! { static ref STATE: Mutex<State> = Mutex::new(State::default()); }
+    lazy_static::lazy_static! {
+        static ref STATE: Mutex<State> = Mutex::new(State::default());
+        // Serialize source mutations and local reconfiguration without holding
+        // STATE across JNI callbacks. Per-PC frame reads do not own capture.
+        static ref COMMANDS: Mutex<()> = Mutex::new(());
+    }
 
     fn rate_allowed(state: &mut State, conn: i32) -> bool {
         let entry = state.rates.entry(conn).or_insert((Instant::now(), 0));
@@ -283,49 +284,39 @@ mod endpoint {
 
     pub fn subscribe(conn: i32, sub: bool) -> bool {
         let mut state = STATE.lock().unwrap();
-        if sub {
-            if state.lease.as_ref().map_or(false, |lease| lease.conn != conn) { return false; }
-            state.subscribers.insert(conn);
-        } else { state.subscribers.remove(&conn); }
+        if sub { state.subscribers.insert(conn); }
+        else {
+            state.subscribers.remove(&conn); state.viewers.remove(&conn);
+            state.barriers.retain(|(id, _)| *id != conn); state.normal_refresh.remove(&conn);
+        }
         true
     }
-
-    pub fn blocks_legacy_input(conn: i32) -> bool {
-        STATE.lock().unwrap().lease.as_ref().map_or(false, |lease| lease.conn != conn)
-    }
-
-    pub fn leased() -> bool { STATE.lock().unwrap().lease.is_some() }
-
+    pub fn blocks_legacy_input(_conn: i32) -> bool { false }
+    pub fn leased() -> bool { STATE.lock().unwrap().lease.as_ref().map_or(false, |l| l.phase != Phase::Rollback) }
     pub fn capture_permitted(conn: i32) -> bool { STATE.lock().unwrap().subscribers.contains(&conn) }
-
     pub fn take_normal_refresh(conn: i32) -> bool { STATE.lock().unwrap().normal_refresh.remove(&conn) }
 
-    pub fn refresh_current_source(conn: i32, allowed: bool) -> bool {
-        let mut state = STATE.lock().unwrap();
-        let Some(lease) = state.lease.as_mut() else { return false; };
-        if lease.phase == Phase::Rollback { return false; }
-        if lease.phase == Phase::Frozen { return true; }
-        if lease.conn != conn || !allowed || lease.revision == 0 { return true; }
-        lease.input_sequence = lease.input_sequence.saturating_add(1);
-        let request = Request { v: 1, op: "keyframe".into(), operation_id: format!("refresh-{}", lease.input_sequence),
-            generation: lease.generation, epoch: lease.epoch, revision: lease.revision,
-            sequence: 0, input_frozen: true, payload: json!({}) };
-        drop(state);
-        if !forward(conn, &request) { fail_video(conn, "ANDROID_SERVICE_UNAVAILABLE"); }
+    fn signal(capture: &Lease, op: &str) -> Request {
+        Request { v: 1, op: op.into(), operation_id: capture.operation_id.clone(),
+            generation: capture.generation, epoch: capture.epoch, revision: capture.revision,
+            sequence: 0, input_frozen: true, payload: json!({}) }
+    }
+    pub fn refresh_current_source(_conn: i32, allowed: bool) -> bool {
+        if !allowed { return false; }
+        let capture = STATE.lock().unwrap().lease.clone();
+        let Some(capture) = capture.filter(|l| l.phase != Phase::Rollback) else { return false; };
+        forward(capture.conn, &signal(&capture, "keyframe"));
         true
     }
-
     pub fn permission_revoked(conn: i32) {
+        let mut state = STATE.lock().unwrap();
+        state.eligible.remove(&conn);
+        detach_viewer(&mut state, conn);
+        drop(state);
         let _ = call_main_service_set_by_name("adb_control_revoke", Some(&conn.to_string()), Some(""));
-        fail_video(conn, "ADB_CONTROL_PERMISSION_REQUIRED");
     }
-
     pub fn decoder_changed(conn: i32, h264: bool) {
-        let owner = STATE.lock().unwrap().lease.as_ref().map_or(false, |lease|
-            lease.conn == conn && !matches!(lease.phase, Phase::Rollback | Phase::Frozen));
-        if !h264 && owner {
-            fail_video(conn, "H264_DECODER_REQUIRED");
-        }
+        if !h264 { detach_viewer(&mut STATE.lock().unwrap(), conn); }
     }
 
     /// Input ownership follows the verified control helper, independently of video.
@@ -455,17 +446,16 @@ mod endpoint {
         route_mouse(conn, &MouseEvent { mask, x, y, ..Default::default() }, allowed)
     }
 
-    /// Called again immediately before egress, so already queued old frames cannot leak.
+    /// Normal frames are gated independently for each decoder, never by the PC
+    /// that happened to start the phone's shared source.
     pub fn permit_normal_video(conn: i32) -> bool {
-        STATE.lock().unwrap().lease.as_ref().map_or(true, |lease|
-            lease.conn == conn && ((lease.phase == Phase::Preparing && lease.normal_ready)
-                || (lease.phase == Phase::Rollback && lease.normal_ready)))
+        STATE.lock().unwrap().viewers.get(&conn).map_or(true, |lease|
+            (lease.phase == Phase::Preparing || lease.phase == Phase::Rollback) && lease.normal_ready)
     }
-
     pub fn decorate_normal(conn: i32, message: &Message) -> Option<Message> {
         let mut state = STATE.lock().unwrap();
-        let lease = state.lease.as_mut()?;
-        if lease.conn != conn || lease.phase != Phase::Rollback { return None; }
+        let lease = state.viewers.get_mut(&conn)?;
+        if lease.phase != Phase::Rollback { return None; }
         let mut message = message.clone();
         if let Some(message::Union::VideoFrame(ref mut video)) = message.union {
             lease.sequence = lease.sequence.saturating_add(1);
@@ -473,508 +463,415 @@ mod endpoint {
         }
         Some(message)
     }
-
     fn forward(conn: i32, request: &Request) -> bool {
         serde_json::to_string(request).ok().map_or(false, |json|
             call_main_service_set_by_name("adb_control_request", Some(&conn.to_string()), Some(&json)).is_ok())
     }
+    fn viewer_snapshot(state: &State, conn: i32) -> Value {
+        let mut value = state.runtime.clone();
+        if !value.is_object() { value = json!({}); }
+        value["v"] = json!(1);
+        value["sharedDevice"] = json!(true);
+        value["operationRejected"] = json!(false);
+        value["consentActive"] = json!(state.eligible.contains(&conn) && !state.revoked.contains(&conn)
+            && state.runtime["deviceControlEnabled"].as_bool() != Some(false));
+        value["consentConnId"] = json!(conn);
+        value["consentLifetime"] = json!("device");
+        if let Some(lease) = state.viewers.get(&conn) {
+            value["phase"] = json!(match lease.phase {
+                Phase::Preparing => "PREPARING", Phase::AwaitingPresentation => "WAITING_PRESENTED",
+                Phase::Active => "COMMITTED", Phase::Rollback => "ROLLING_BACK",
+            });
+            value["epoch"] = json!(lease.epoch);
+            value["generation"] = json!(lease.generation);
+            value["operationId"] = json!(lease.operation_id);
+            value["sourceOperationId"] = json!(lease.operation_id);
+            value["revision"] = json!(lease.revision);
+            value["sequence"] = json!(lease.sequence);
+            value["videoStopped"] = json!(lease.phase == Phase::Rollback);
+        } else {
+            value["phase"] = json!("IDLE");
+            value["epoch"] = json!(0);
+            value["generation"] = json!(0);
+        }
+        value
+    }
+    fn viewer_status(state: &State, conn: i32) -> Message {
+        message(viewer_snapshot(state, conn).to_string())
+    }
+    fn fresh_lease(conn: i32, epoch: u64, generation: u64, operation_id: String) -> Lease {
+        Lease { conn, epoch, capture_epoch: epoch, generation, operation_id, phase: Phase::Preparing,
+            revision: 0, sequence: 0, width: 0, height: 0, normal_ready: true,
+            barrier_sent: false, present_min_sequence: 0, needs_key: true,
+            refresh_at: Instant::now() - Duration::from_secs(2),
+            status_at: Instant::now() - Duration::from_secs(2) }
+    }
+    fn install_capture(state: &mut State, capture: Lease) {
+        for viewer in state.viewers.values_mut() {
+            let normal_ready = viewer.normal_ready;
+            *viewer = Lease { conn: viewer.conn, normal_ready, ..capture.clone() };
+        }
+        state.barriers.clear();
+        encoded::begin(capture.epoch);
+        state.lease = Some(capture);
+    }
+    // Used for a single viewer losing its capability. It never stops the phone.
+    fn detach_viewer(state: &mut State, conn: i32) {
+        state.barriers.retain(|(id, _)| *id != conn);
+        if let Some(viewer) = state.viewers.get_mut(&conn) {
+            viewer.phase = Phase::Rollback; viewer.sequence = 0;
+            viewer.revision = viewer.revision.max(1);
+            viewer.normal_ready = false; viewer.barrier_sent = false;
+            state.barriers.push_back((conn, barrier(viewer, 2)));
+            state.normal_refresh.insert(conn);
+        }
+    }
+    fn stop_capture(state: &mut State, operation: &str) {
+        state.next_epoch = state.next_epoch.saturating_add(1);
+        let epoch = state.next_epoch;
+        if let Some(capture) = state.lease.as_mut() {
+            capture.phase = Phase::Rollback; capture.epoch = epoch;
+            capture.generation = epoch; capture.operation_id = operation.into();
+        }
+        state.barriers.clear();
+        for (&conn, viewer) in state.viewers.iter_mut() {
+            viewer.epoch = epoch; viewer.generation = epoch; viewer.operation_id = operation.into();
+            viewer.phase = Phase::Rollback; viewer.revision = 1; viewer.sequence = 0;
+            viewer.normal_ready = false; viewer.barrier_sent = false;
+            viewer.status_at = Instant::now() - Duration::from_secs(2);
+            state.barriers.push_back((conn, barrier(viewer, 2)));
+            state.normal_refresh.insert(conn);
+        }
+        encoded::end();
+    }
 
     pub fn request(conn: i32, raw: &str, access: Access, h264: bool) -> Option<Message> {
-        let mut request = match parse(raw) { Some(request) => request,
+        let _commands = COMMANDS.lock().unwrap();
+        let mut request = match parse(raw) { Some(r) => r,
             None => return Some(message(super::request_error(raw, "MALFORMED"))) };
+        let rollback_ack = request.op == "presented" && STATE.lock().unwrap().viewers.get(&conn)
+            .map_or(false, |l| l.phase == Phase::Rollback);
+        let denied = if request.op == "status" || rollback_ack { access.view_error() } else { access.control_error() };
+        if let Some(code) = denied { return Some(error(&request.operation_id, code)); }
+        if access.control_error().is_none() {
+            if call_main_service_set_by_name("adb_control_authorized", Some(&conn.to_string()), Some("")).is_err() {
+                return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE"));
+            }
+            STATE.lock().unwrap().eligible.insert(conn);
+        }
         let mut state = STATE.lock().unwrap();
-        let rollback_ack = request.op == "presented" && state.lease.as_ref().map_or(false,
-            |lease| lease.conn == conn && lease.phase == Phase::Rollback);
-        // Returning to normal capture after keyboard revocation needs no new
-        // input authority; identity, transport and the frame ACK remain checked.
-        let denied = if request.op == "status" || request.op == "stop" || rollback_ack {
-            access.view_error()
-        } else {
-            access.control_error()
-        };
-        if let Some(code) = denied {
-            return Some(error(&request.operation_id, code));
-        }
-        if matches!(request.op.as_str(), "start" | "stop")
-            && request.generation < state.generations.get(&conn).copied().unwrap_or(0) {
-            return Some(error(&request.operation_id, "STALE_GENERATION"));
-        }
-        let now = Instant::now();
-        if !rate_allowed(&mut state, conn) {
-            drop(state);
-            return Some(error(&request.operation_id, "RATE_LIMIT"));
-        }
-        if matches!(request.op.as_str(), "pair" | "authorize" | "pair_cancel" | "revoke") {
-            if matches!(request.op.as_str(), "pair" | "authorize") && state.lease.as_ref()
-                .map_or(false, |lease| lease.conn != conn) {
-                return Some(error(&request.operation_id, "NOT_OWNER"));
-            }
-            state.pairing_connections.insert(conn);
-            // No video generation/epoch, decoder barrier or normal-capture change.
-            request.generation = 0; request.epoch = 0; request.revision = 0;
-            request.sequence = 0; request.input_frozen = false;
-            drop(state);
-            // MainService may have been recreated while the authenticated Rust
-            // connection stayed alive. Its old CM add_connection notification is
-            // not replayed on recreation. Refresh eligibility only after the
-            // current secure/remote/keyboard checks above, never from a peer field.
-            if matches!(request.op.as_str(), "pair" | "authorize")
-                && call_main_service_set_by_name("adb_control_authorized", Some(&conn.to_string()), Some("")).is_err() {
-                return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE"));
-            }
-            if !forward(conn, &request) {
-                return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE"));
-            }
-            if request.op == "revoke" { rollback(conn, &request.operation_id); }
-            return None;
-        }
+        if !rate_allowed(&mut state, conn) { return Some(error(&request.operation_id, "RATE_LIMIT")); }
         if request.op == "status" {
-            if let Some(lease) = state.lease.as_ref().filter(|lease| lease.conn == conn
-                && matches!(lease.phase, Phase::Rollback | Phase::Frozen)) {
-                let status = lease_status(lease);
-                drop(state);
-                // Keep Kotlin's real consent/permission snapshot flowing even
-                // when the Rust video transaction is waiting or frozen.
-                if !forward(conn, &request) { return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE")); }
-                return Some(status);
-            }
+            let mut response = viewer_snapshot(&state, conn);
+            response["requestOperationId"] = json!(request.operation_id);
+            drop(state);
+            forward(conn, &request); // Runtime starts only control, never capture.
+            return Some(message(response.to_string()));
         }
-        // Kotlin checks session consent/scopes for these operations independently
-        // of the video transaction. Accessibility-only actions need no ADB consent.
-        if matches!(request.op.as_str(), "side_action" | "accessibility_action" |
-            "accessibility_pause" | "accessibility_resume" | "accessibility_disable" | "accessibility_enable") {
+        if matches!(request.op.as_str(), "pair" | "authorize" | "pair_cancel" | "revoke" |
+            "side_action" | "accessibility_action" | "accessibility_pause" | "accessibility_resume" |
+            "accessibility_disable" | "accessibility_enable") {
+            if request.op == "revoke" { state.revoked.insert(conn); detach_viewer(&mut state, conn); }
+            if matches!(request.op.as_str(), "pair" | "authorize") { state.revoked.remove(&conn); }
             drop(state);
             return if forward(conn, &request) { None }
                 else { Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE")) };
         }
-        if request.op == "stop" && state.lease.is_none() {
-            state.generations.insert(conn, request.generation);
-            drop(state);
-            if !forward(conn, &request) { return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE")); }
-            return Some(message(json!({"v":1,"phase":"NORMAL","operationId":request.operation_id,
-                "epoch":request.epoch,"generation":request.generation,"videoStopped":true}).to_string()));
+        if state.revoked.contains(&conn) {
+            return Some(error(&request.operation_id, "SESSION_ADB_AUTHORIZATION_REQUIRED"));
         }
-        if request.op == "start" {
-            if !access.video_subscribed {
-                return Some(error(&request.operation_id, "ADB_VIDEO_SUBSCRIPTION_REQUIRED"));
-            }
-            if !h264 { return Some(error(&request.operation_id, "H264_DECODER_REQUIRED")); }
-            if hbb_common::config::Config::get_bool_option("allow-auto-record-incoming") {
-                return Some(error(&request.operation_id, "STOP_INCOMING_RECORDING_FIRST"));
-            }
-            let replace_video = state.lease.as_ref().map_or(false, |lease|
-                lease.conn == conn && request.generation > lease.generation);
-            if let Some(lease) = state.lease.as_ref().filter(|_| !replace_video) {
-                if lease.conn == conn && lease.generation == request.generation
-                    && lease.operation_id == request.operation_id {
-                    request.op = "status".into();
-                    request.epoch = lease.epoch;
-                    request.payload = json!({});
-                    drop(state);
-                    if !forward(conn, &request) { return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE")); }
-                    return None;
-                }
-                return Some(error(&request.operation_id, "BUSY"));
-            }
-            if state.subscribers.len() != 1 || !state.subscribers.contains(&conn) {
-                return Some(error(&request.operation_id, "MULTI_VIEWER_UNSUPPORTED"));
-            }
-            if request.generation == 0 { return Some(error(&request.operation_id, "STALE_GENERATION")); }
-            if request.generation <= state.generations.get(&conn).copied().unwrap_or(0) {
+        if request.op == "start" || request.op == "stop" {
+            let previous = state.generations.get(&conn).copied().unwrap_or(0);
+            if request.generation == 0 || request.generation <= previous {
                 return Some(error(&request.operation_id, "STALE_GENERATION"));
             }
-            if state.next_epoch >= MAX_SAFE_INTEGER - 2 { return Some(error(&request.operation_id, "EPOCH_EXHAUSTED")); }
-            // Replacing a candidate must not interrupt a normal stream which is
-            // still being displayed. Rollback may still be awaiting a decoded
-            // normal frame, so its readiness cannot bypass the old PC barrier.
-            let normal_ready = state.lease.as_ref().map_or(true, |lease|
-                lease.phase == Phase::Preparing && lease.normal_ready);
-            // Every newer explicit start supersedes this owner's old video task,
-            // including a failed or still-starting task. Consent is independent.
-            if replace_video {
-                state.lease = None;
-                state.barriers.retain(|(id, _)| *id != conn);
-                state.normal_refresh.remove(&conn);
-                encoded::end();
-            }
-            state.next_epoch = state.next_epoch.saturating_add(1);
-            state.generations.insert(conn, request.generation);
-            request.epoch = state.next_epoch;
-            state.lease = Some(Lease { conn, epoch: request.epoch, generation: request.generation,
-                operation_id: request.operation_id.clone(), phase: Phase::Preparing,
-                revision: 0, sequence: 0, input_sequence: 0, client_input_sequence: 0, width: 0, height: 0,
-                deadline: now + Duration::from_secs(60),
-                normal_ready, touch_down: false, mouse_position: None,
-                barrier_sent: false, present_min_sequence: 0, failure_code: String::new(), explicitly_stopped: false });
-            encoded::begin(request.epoch);
-        } else if request.op != "status" {
-            let lease = match state.lease.as_mut() { Some(lease) if lease.conn == conn => lease,
-                _ => return Some(error(&request.operation_id, "NOT_OWNER")) };
-            if request.op == "stop" && request.generation >= lease.generation {
-                lease.generation = request.generation;
-                request.epoch = lease.epoch;
-                // Repeated stop while waiting for MediaProjection changes the
-                // request identity too; future normal-frame ACKs must target it.
-                if lease.phase == Phase::Rollback {
-                    lease.operation_id = request.operation_id.clone();
-                    lease.barrier_sent = false;
-                    lease.normal_ready = false;
-                    let message = barrier(lease, 2);
-                    state.barriers.retain(|(id, _)| *id != conn);
-                    state.barriers.push_back((conn, message));
+            if request.op == "start" {
+                if !access.video_allowed() { return Some(error(&request.operation_id, "ADB_VIDEO_SUBSCRIPTION_REQUIRED")); }
+                if !h264 { return Some(error(&request.operation_id, "H264_DECODER_REQUIRED")); }
+                if hbb_common::config::Config::get_bool_option("allow-auto-record-incoming") {
+                    return Some(error(&request.operation_id, "STOP_INCOMING_RECORDING_FIRST"));
                 }
             }
-            let lease = state.lease.as_mut().unwrap();
-            if request.epoch != lease.epoch || request.generation != lease.generation {
-                return Some(error(&request.operation_id, "STALE_EPOCH"));
+            if state.next_epoch >= MAX_SAFE_INTEGER - 2 { return Some(error(&request.operation_id, "EPOCH_EXHAUSTED")); }
+            state.generations.insert(conn, request.generation);
+            if request.op == "start" {
+                state.next_epoch += 1;
+                request.epoch = state.next_epoch; request.generation = state.next_epoch;
+                let capture = fresh_lease(conn, request.epoch, request.generation, request.operation_id.clone());
+                install_capture(&mut state, capture.clone());
+                state.viewers.entry(conn).or_insert(capture);
+            } else {
+                stop_capture(&mut state, &request.operation_id);
+                request.epoch = state.next_epoch; request.generation = state.next_epoch;
+                if !state.viewers.contains_key(&conn) {
+                    let mut viewer = fresh_lease(conn, request.epoch, request.generation, request.operation_id.clone());
+                    viewer.phase = Phase::Rollback; viewer.revision = 1; viewer.normal_ready = false;
+                    state.barriers.push_back((conn, barrier(&viewer, 2)));
+                    state.viewers.insert(conn, viewer);
+                }
             }
-            if request.op == "video_failed" {
-                drop(state);
-                fail_video(conn, "ADB_VIDEO_DECODE_FAILED");
-                return None;
-            }
-            if lease.phase == Phase::Frozen && request.op != "stop" {
-                return if request.op == "heartbeat" { None }
-                    else { Some(error(&request.operation_id, "ADB_VIDEO_FROZEN")) };
-            }
-            if request.op == "activate" || request.op == "presented" {
-                if request.operation_id != lease.operation_id || request.revision != lease.revision
-                    || request.sequence == 0 || request.sequence > lease.sequence || !request.input_frozen {
+            drop(state);
+            if !forward(conn, &request) { return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE")); }
+            STATE.lock().unwrap().runtime_at = None;
+            refresh_runtime();
+            return Some(viewer_status(&STATE.lock().unwrap(), conn));
+        }
+        let capture = state.lease.clone();
+        let Some(viewer) = state.viewers.get_mut(&conn) else { return Some(error(&request.operation_id, "NO_VIDEO_SUBSCRIPTION")); };
+        if request.epoch != viewer.epoch || request.generation != viewer.generation {
+            return Some(error(&request.operation_id, "STALE_EPOCH"));
+        }
+        match request.op.as_str() {
+            "activate" | "presented" => {
+                if request.operation_id != viewer.operation_id || request.revision != viewer.revision ||
+                    request.sequence == 0 || request.sequence > viewer.sequence || !request.input_frozen {
                     return Some(error(&request.operation_id, "INVALID_FRAME_ACK"));
                 }
-                if request.op == "presented" && (!lease.barrier_sent || request.sequence < lease.present_min_sequence) {
-                    return Some(error(&request.operation_id, "BARRIER_NOT_SENT"));
-                }
-                if lease.phase == Phase::Active {
-                    request.op = "status".into();
-                    drop(state);
-                    if !forward(conn, &request) { return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE")); }
-                    return None;
-                }
-                // Delayed presentation still belongs to this exact generation,
-                // epoch and barrier. Network delay alone cannot expire it.
                 if request.op == "activate" {
-                    if matches!(lease.phase, Phase::Activating | Phase::AwaitingPresentation | Phase::Presented) { return None; }
-                    if lease.phase != Phase::Preparing { return Some(error(&request.operation_id, "INVALID_PHASE")); }
-                    lease.phase = Phase::Activating;
-                    lease.present_min_sequence = request.sequence;
-                    lease.deadline = now + Duration::from_secs(8);
-                    // Pin the barrier to the frame actually acknowledged by the decoder.
-                    // Runtime must confirm its input freeze before this barrier is emitted.
-                    let mut ack = metadata(lease);
-                    ack.sequence = request.sequence;
-                    let mut misc = Misc::new();
-                    misc.set_android_video_barrier(AndroidVideoBarrier { metadata: Some(ack).into(),
-                        action: 1, ..Default::default() });
-                    let mut message = Message::new();
-                    message.set_misc(misc);
-                    state.barriers.push_back((conn, message));
-                } else if lease.phase == Phase::Rollback {
-                    state.lease = None;
-                    encoded::end();
-                    drop(state);
-                    // Only a decoded/presented normal frame changes the input
-                    // geometry; stopping video itself leaves the old image visible.
-                    let _ = call_main_service_set_by_name("adb_control_normal_presented",
-                        Some(&conn.to_string()), Some(""));
-                    return Some(message(json!({"v":1,"phase":"NORMAL","operationId":request.operation_id,
-                        "epoch":request.epoch,"generation":request.generation}).to_string()));
-                } else if lease.phase != Phase::AwaitingPresentation {
-                    if lease.phase == Phase::Presented { return None; }
-                    return Some(error(&request.operation_id, "INVALID_PHASE"));
+                    if viewer.phase == Phase::Preparing {
+                        viewer.phase = Phase::AwaitingPresentation;
+                        viewer.present_min_sequence = request.sequence;
+                        let mut acknowledged = viewer.clone(); acknowledged.sequence = request.sequence;
+                        state.barriers.push_back((conn, barrier(&acknowledged, 1)));
+                    }
                 } else {
-                    lease.phase = Phase::Presented;
+                    if !viewer.barrier_sent || request.sequence < viewer.present_min_sequence {
+                        return Some(error(&request.operation_id, "BARRIER_NOT_SENT"));
+                    }
+                    if viewer.phase == Phase::Rollback {
+                        state.viewers.remove(&conn);
+                        drop(state);
+                        let _ = call_main_service_set_by_name("adb_control_normal_presented",
+                            Some(&conn.to_string()), Some(""));
+                        return Some(message(json!({"v":1,"sharedDevice":true,"phase":"NORMAL",
+                            "epoch":request.epoch,"generation":request.generation,
+                            "operationId":request.operation_id}).to_string()));
+                    }
+                    if viewer.phase == Phase::AwaitingPresentation { viewer.phase = Phase::Active; }
                 }
-            } else if request.op == "input" {
-                if lease.phase != Phase::Active || request.sequence <= lease.client_input_sequence
-                    || request.revision != lease.revision {
-                    return Some(error(&request.operation_id, "INPUT_FROZEN_OR_STALE"));
-                }
-                if request.payload.get("type").and_then(Value::as_str) == Some("touch")
-                    && (request.payload.get("width").and_then(Value::as_u64) != Some(lease.width as u64)
-                        || request.payload.get("height").and_then(Value::as_u64) != Some(lease.height as u64)) {
-                    return Some(error(&request.operation_id, "STALE_GEOMETRY"));
-                }
-                lease.client_input_sequence = request.sequence;
-                lease.input_sequence = lease.input_sequence.saturating_add(1);
-                request.sequence = lease.input_sequence;
-            } else if request.op == "heartbeat" {
-                if lease.phase == Phase::Rollback { return None; }
-            } else if request.op == "keyframe" && lease.phase == Phase::Rollback {
-                state.normal_refresh.insert(conn);
-                return None;
-            } else if request.op != "stop" && request.op != "keyframe" && lease.phase != Phase::Active {
-                return Some(error(&request.operation_id, "TRANSITION_IN_PROGRESS"));
+                return Some(viewer_status(&state, conn));
             }
+            "video_failed" => {
+                // New presentation identity for this decoder only. The phone
+                // encoder and all other readers keep their current capture epoch.
+                if let Some(capture) = capture.as_ref() {
+                    state.next_epoch = state.next_epoch.saturating_add(1);
+                    let mut replacement = fresh_lease(conn, state.next_epoch, state.next_epoch, capture.operation_id.clone());
+                    replacement.capture_epoch = capture.epoch;
+                    replacement.normal_ready = false;
+                    state.viewers.insert(conn, replacement);
+                    state.barriers.retain(|(id, _)| *id != conn);
+                }
+            }
+            "heartbeat" => return Some(viewer_status(&state, conn)),
+            "keyframe" if viewer.phase == Phase::Rollback => {
+                state.normal_refresh.insert(conn); return None;
+            }
+            "keyframe" => { viewer.needs_key = true; }
+            "input" => {
+                // Modern pointer/key messages use the independent global input
+                // route; legacy typed input is translated to that same arbiter.
+                if viewer.phase != Phase::Active { return Some(error(&request.operation_id, "INPUT_FROZEN_OR_STALE")); }
+                drop(state);
+                if let Some(geometry) = input_geometry(conn, true) {
+                    let mut state = STATE.lock().unwrap();
+                    let input = state.inputs.entry(conn).or_default();
+                    let packet = global_packet(input, geometry, request.payload);
+                    drop(state); global_forward(conn, &packet);
+                }
+                return None;
+            }
+            _ => return Some(error(&request.operation_id, "INVALID_PHASE")),
         }
-        if request.op == "stop" { state.generations.insert(conn, request.generation); }
         drop(state);
-        if !forward(conn, &request) {
-            fail_video(conn, "ANDROID_SERVICE_UNAVAILABLE");
-            return Some(error(&request.operation_id, "ANDROID_SERVICE_UNAVAILABLE"));
-        }
-        if request.op == "stop" { rollback(conn, &request.operation_id); }
+        if let Some(capture) = capture { forward(capture.conn, &signal(&capture, "keyframe")); }
         None
     }
-
-    fn lease_status_value(lease: &Lease) -> Value {
-        json!({"v":1,"phase":if lease.phase == Phase::Frozen { "FROZEN" } else { "ROLLING_BACK" },
-            "operationId":lease.operation_id,"epoch":lease.epoch,"generation":lease.generation,
-            "revision":lease.revision,"sequence":lease.sequence,"inputReady":false,
-            "code":lease.failure_code,"videoStopped":lease.explicitly_stopped})
-    }
-
-    fn lease_status(lease: &Lease) -> Message {
-        message(lease_status_value(lease).to_string())
-    }
-
-    pub fn legacy_side_allowed(conn: i32) -> bool {
-        STATE.lock().unwrap().lease.as_ref().map_or(true, |lease| lease.conn == conn)
-    }
-
-    /// Video failure ends only the video task and returns to the already-running
-    /// normal source. Pairing/control consent and the local ADB transport survive.
-    fn fail_video(conn: i32, code: &str) {
-        let operation = STATE.lock().unwrap().lease.as_ref().filter(|lease| lease.conn == conn
-            && lease.phase != Phase::Rollback).map(|lease| lease.operation_id.clone());
-        let Some(operation) = operation else { return; };
-        let _ = call_main_service_set_by_name("adb_control_abort_video", Some(&conn.to_string()), Some(code));
-        rollback(conn, &operation);
-        let mut state = STATE.lock().unwrap();
-        if let Some(lease) = state.lease.as_mut().filter(|lease| lease.conn == conn) {
-            lease.failure_code = code.to_owned();
-        }
-        state.barriers.push_back((conn, error(&operation, code)));
-    }
-
-    fn rollback(conn: i32, operation_id: &str) {
-        let mut state = STATE.lock().unwrap();
-        if state.lease.as_ref().map_or(true, |lease| lease.conn != conn) { return; }
-        state.lease.as_mut().unwrap().explicitly_stopped = true;
-        if state.lease.as_ref().map_or(false, |lease| lease.phase == Phase::Rollback) { return; }
-        if state.lease.as_ref().map_or(false, |lease| lease.normal_ready && lease.phase != Phase::Rollback) {
-            let mut lease = state.lease.take().unwrap();
-            lease.operation_id = operation_id.to_owned();
-            state.barriers.clear();
-            state.barriers.push_back((conn, barrier(&lease, 3)));
-            encoded::end();
-            return;
-        }
-        state.next_epoch = state.next_epoch.saturating_add(1);
-        let epoch = state.next_epoch;
-        let lease = state.lease.as_mut().unwrap();
-        lease.epoch = epoch;
-        lease.operation_id = operation_id.to_owned();
-        lease.phase = Phase::Rollback;
-        lease.revision = 1;
-        lease.sequence = 0;
-        lease.deadline = Instant::now() + Duration::from_secs(3);
-        lease.normal_ready = false;
-        lease.failure_code.clear();
-        lease.touch_down = false;
-        lease.mouse_position = None;
-        lease.barrier_sent = false;
-        lease.present_min_sequence = 1;
-        let message = barrier(lease, 2);
-        let status = lease_status(lease);
-        state.barriers.clear();
-        state.barriers.push_back((conn, message));
-        state.barriers.push_back((conn, status));
-        encoded::end();
-    }
-
+    pub fn legacy_side_allowed(_conn: i32) -> bool { true }
     pub fn revoke(conn: i32) {
         let mut state = STATE.lock().unwrap();
-        if state.lease.as_ref().map_or(false, |lease| lease.conn == conn) {
-            state.lease = None;
-            state.barriers.retain(|(id, _)| *id != conn);
-            encoded::end();
-        }
-        state.normal_refresh.remove(&conn);
-        state.rates.remove(&conn);
-        state.inputs.remove(&conn);
-        state.generations.remove(&conn);
-        state.pairing_connections.remove(&conn);
+        state.viewers.remove(&conn); state.subscribers.remove(&conn); state.eligible.remove(&conn); state.revoked.remove(&conn);
+        state.barriers.retain(|(id, _)| *id != conn);
+        state.normal_refresh.remove(&conn); state.rates.remove(&conn);
+        state.inputs.remove(&conn); state.generations.remove(&conn);
         drop(state);
-        // Also remove connection eligibility when a connection never acquired a lease.
         let _ = call_main_service_set_by_name("adb_control_disconnect", Some(&conn.to_string()), Some(""));
         encoded::forget_state(conn);
     }
 
-    pub fn poll(conn: i32, access: Access) -> Option<Message> {
-        let owner = STATE.lock().unwrap().lease.as_ref().map_or(false, |lease| lease.conn == conn);
-        if owner && encoded::take_state_overflow() {
-            // Congestion may drop a state notification, not the local capture
-            // task. Discard obsolete snapshots and ask for current authority and
-            // transition state; no barrier is inferred from a missing message.
-            encoded::forget_state(conn);
-            let refresh = STATE.lock().unwrap().lease.as_ref().filter(|l| l.conn == conn).map(|l|
-                Request { v: 1, op: "status".into(), operation_id: l.operation_id.clone(),
-                    generation: l.generation, epoch: l.epoch, revision: l.revision,
-                    sequence: 0, input_frozen: true, payload: json!({}) });
-            if let Some(request) = refresh { let _ = forward(conn, &request); }
+    fn refresh_runtime() {
+        let refresh = STATE.lock().unwrap().runtime_at.map_or(true, |at| at.elapsed() >= Duration::from_millis(200));
+        if !refresh { return; }
+        let Ok(raw) = call_main_service_get_by_name("adb_device_status") else { return; };
+        let Ok(value) = serde_json::from_str::<Value>(&raw) else { return; };
+        let mut state = STATE.lock().unwrap();
+        state.runtime_at = Some(Instant::now());
+        state.runtime = value.clone();
+        let Some(mut capture) = state.lease.clone().filter(|l| l.phase != Phase::Rollback) else { return; };
+        if value["epoch"].as_u64() != Some(capture.epoch) { return; }
+        if let Some(current) = state.lease.as_mut() {
+            current.revision = value["revision"].as_u64().unwrap_or(current.revision);
+            current.width = value["width"].as_u64().unwrap_or(current.width as u64) as u32;
+            current.height = value["height"].as_u64().unwrap_or(current.height as u64) as u32;
         }
-        // Permission loss revokes control consent; video failure alone does not.
-        if access.control_error().is_some() {
-            let pairing_authority = STATE.lock().unwrap().pairing_connections.remove(&conn);
-            if pairing_authority {
-                let _ = call_main_service_set_by_name("adb_control_revoke", Some(&conn.to_string()), Some(""));
+        if value["phase"].as_str() == Some("RECONFIGURE") {
+            state.next_epoch += 1;
+            capture.epoch = state.next_epoch; capture.capture_epoch = capture.epoch;
+            capture.generation = capture.epoch;
+            capture.phase = Phase::Preparing; capture.revision = 0; capture.sequence = 0;
+            capture.needs_key = true; capture.barrier_sent = false; capture.present_min_sequence = 0;
+            install_capture(&mut state, capture.clone());
+            drop(state);
+            forward(capture.conn, &signal(&capture, "reconfigure"));
+        } else if value["videoStopped"].as_bool() == Some(true) && value["phase"].as_str() == Some("IDLE") {
+            stop_capture(&mut state, &capture.operation_id);
+        }
+    }
+
+    pub fn poll(conn: i32, access: Access, h264: bool) -> Option<Message> {
+        let _commands = COMMANDS.lock().unwrap();
+        if access.view_error().is_some() { return None; }
+        if access.control_error().is_none() {
+            let newly_eligible = STATE.lock().unwrap().eligible.insert(conn);
+            if newly_eligible {
+                let _ = call_main_service_set_by_name("adb_control_authorized", Some(&conn.to_string()), Some(""));
+                let request = Request { v: 1, op: "status".into(), operation_id: "join".into(),
+                    generation: 0, epoch: 0, revision: 0, sequence: 0, input_frozen: false, payload: json!({}) };
+                forward(conn, &request);
             }
-        }
-        if !access.video_allowed() {
-            let owner = STATE.lock().unwrap().lease.as_ref().map_or(false, |l|
-                l.conn == conn && !matches!(l.phase, Phase::Rollback | Phase::Frozen));
-            if owner {
-                fail_video(conn, access.control_error().unwrap_or("ADB_VIDEO_SUBSCRIPTION_REQUIRED"));
-            }
-        }
-        let mut refresh_normal = false;
-        let refresh = {
-            let mut state = STATE.lock().unwrap();
-            state.lease.as_mut().filter(|lease| lease.conn == conn).and_then(|lease| {
-                // After an explicit stop there is no running ADB helper lease to
-                // time out. Keep accepting future normal frames indefinitely:
-                // the phone may grant/start MediaProjection later. Disconnect
-                // still cleans this state; a newer explicit start may replace it.
-                let awaiting_normal = lease.explicitly_stopped && lease.phase == Phase::Rollback;
-                if awaiting_normal && Instant::now() > lease.deadline {
-                    // A static ordinary/screenshot source or a dropped first
-                    // keyframe must not leave the PC showing the stopped ADB
-                    // image indefinitely. This refresh never starts capture or
-                    // requests new Android permissions.
-                    lease.deadline = Instant::now() + Duration::from_secs(3);
-                    refresh_normal = true;
-                }
-                if !awaiting_normal && !matches!(lease.phase, Phase::Frozen | Phase::Active)
-                    && Instant::now() > lease.deadline {
-                    // Probe the same transaction instead of stopping Android
-                    // capture. Authentication/revoke/disconnect still own its
-                    // lifetime; a late PC ACK cannot keep an obsolete task alive.
-                    lease.deadline = Instant::now() + Duration::from_secs(10);
-                    Some(Request { v: 1, op: "status".into(), operation_id: lease.operation_id.clone(),
-                        generation: lease.generation, epoch: lease.epoch, revision: lease.revision,
-                        sequence: 0, input_frozen: true, payload: json!({}) })
-                } else { None }
-            })
-        };
-        if refresh_normal { STATE.lock().unwrap().normal_refresh.insert(conn); }
-        if let Some(request) = refresh {
-            let _ = forward(conn, &request);
-        }
+        } else if STATE.lock().unwrap().eligible.contains(&conn) { permission_revoked(conn); }
+        refresh_runtime();
         if let Some(raw) = encoded::pop_state(conn) {
             if let Ok(mut value) = serde_json::from_str::<Value>(&raw) {
-                // Runtime snapshots are global; never show another connection's
-                // consent as a grant for the recipient of this status message.
-                if let (Some(owner), Some(active)) = (value.get("consentConnId").and_then(Value::as_i64),
-                    value.get("consentActive").and_then(Value::as_bool)) {
-                    value["consentActive"] = json!(active && owner == i64::from(conn));
-                }
-                if matches!(value.get("kind").and_then(Value::as_str), Some("pairing" | "action")) {
+                if matches!(value["kind"].as_str(), Some("pairing" | "action")) {
                     return if access.control_error().is_none() { Some(message(value.to_string())) } else { None };
                 }
-                let mut state = STATE.lock().unwrap();
-                if let Some(lease) = state.lease.as_ref().filter(|lease| lease.conn == conn
-                    && matches!(lease.phase, Phase::Frozen | Phase::Rollback)) {
-                    // Preserve runtime consent and capability fields, but the
-                    // stopped/frozen wire transaction owns video identity/state.
-                    if let Some(fields) = value.as_object_mut() {
-                        fields.extend(lease_status_value(lease).as_object().unwrap().clone());
-                    }
+                if value["operationRejected"].as_bool() == Some(true) {
+                    value["phase"] = json!("ERROR");
+                    value["sharedDevice"] = json!(true);
                     return Some(message(value.to_string()));
                 }
-                let mut should_rollback = false;
-                let mut normal_stop = None;
-                let mut reconfigure = None;
-                if let Some(lease) = state.lease.as_mut().filter(|lease| lease.conn == conn
-                    && !matches!(lease.phase, Phase::Frozen | Phase::Rollback)) {
-                    if value.get("operationRejected").and_then(Value::as_bool) == Some(true)
-                        && value.get("requestOperationId").and_then(Value::as_str) == Some(lease.operation_id.as_str())
-                        && value.get("requestEpoch").and_then(Value::as_u64) == Some(lease.epoch)
-                        && value.get("requestGeneration").and_then(Value::as_u64) == Some(lease.generation)
-                        && matches!(lease.phase, Phase::Preparing | Phase::Activating | Phase::Presented) {
-                        should_rollback = true;
-                    }
-                    if value.get("epoch").and_then(Value::as_u64) == Some(lease.epoch)
-                        && value.get("generation").and_then(Value::as_u64) == Some(lease.generation) {
-                        match value.get("phase").and_then(Value::as_str) {
-                            Some("IDLE") if value.get("videoStopped").and_then(Value::as_bool) == Some(true)
-                                && value.get("code").and_then(Value::as_str) == Some("STOPPED") => {
-                                // Closing the final selected source is a successful
-                                // stop, not a helper/video failure. Consent survives.
-                                normal_stop = Some(lease.operation_id.clone());
-                            }
-                            Some("COMMITTED") if lease.phase == Phase::Presented => lease.phase = Phase::Active,
-                            Some("WAITING_PRESENTED") if lease.phase == Phase::Activating => lease.phase = Phase::AwaitingPresentation,
-                            Some("RECONFIGURE") if lease.phase != Phase::Rollback => {
-                                reconfigure = Some((lease.generation, lease.operation_id.clone()));
-                            }
-                            Some("ERROR" | "REVOKED" | "STOPPED" | "FAILED" | "STOPPING" | "IDLE")
-                                if lease.phase != Phase::Rollback => should_rollback = true,
-                            _ => {}
-                        }
-                    }
-                }
-                if let Some((generation, operation_id)) = reconfigure {
-                    state.next_epoch = state.next_epoch.saturating_add(1);
-                    let epoch = state.next_epoch;
-                    let lease = state.lease.as_mut().unwrap();
-                    lease.epoch = epoch;
-                    lease.phase = Phase::Preparing;
-                    lease.revision = 0;
-                    lease.sequence = 0;
-                    lease.normal_ready = false;
-                    lease.touch_down = false;
-                    lease.mouse_position = None;
-                    lease.barrier_sent = false;
-                    lease.present_min_sequence = 0;
-                    lease.deadline = Instant::now() + Duration::from_secs(60);
-                    state.barriers.clear();
-                    encoded::begin(epoch);
-                    drop(state);
-                    // Private in-process operation: deliberately absent from parse().
-                    let request = Request { v: 1, op: "reconfigure".into(), operation_id,
-                        generation, epoch, revision: 0, sequence: 0, input_frozen: true, payload: json!({}) };
-                    if !forward(conn, &request) { fail_video(conn, "ANDROID_SERVICE_UNAVAILABLE"); }
-                    return Some(message(json!({"v":1,"phase":"PREPARING","epoch":epoch,
-                        "generation":generation,"operationId":request.operation_id,"inputReady":false}).to_string()));
-                }
-                drop(state);
-                if let Some(operation_id) = normal_stop {
-                    rollback(conn, &operation_id);
-                } else if should_rollback {
-                    fail_video(conn, value.get("code").and_then(Value::as_str)
-                        .filter(|code| !code.is_empty()).unwrap_or("ADB_VIDEO_FAILED"));
-                }
-                return Some(message(value.to_string()));
+                // Normal runtime snapshots describe the device; use this PC's
+                // presentation phase below, not another PC's commit.
             }
         }
         let mut state = STATE.lock().unwrap();
+        let allowed = access.video_allowed() && h264 && !state.revoked.contains(&conn)
+            && state.runtime["deviceControlEnabled"].as_bool() != Some(false);
+        if allowed {
+            if let Some(capture) = state.lease.clone().filter(|l| l.phase != Phase::Rollback) {
+                let restore = state.viewers.get(&conn).map_or(false, |v| v.phase == Phase::Rollback);
+                if restore {
+                    state.next_epoch = state.next_epoch.saturating_add(1);
+                    let mut viewer = fresh_lease(conn, state.next_epoch, state.next_epoch, capture.operation_id.clone());
+                    viewer.capture_epoch = capture.epoch;
+                    state.viewers.insert(conn, viewer);
+                    state.barriers.retain(|(id, _)| *id != conn);
+                } else if !state.viewers.contains_key(&conn) {
+                    state.next_epoch = state.next_epoch.saturating_add(1);
+                    let mut viewer = fresh_lease(conn, state.next_epoch, state.next_epoch, capture.operation_id.clone());
+                    viewer.capture_epoch = capture.epoch;
+                    state.viewers.insert(conn, viewer);
+                }
+            }
+        } else if state.viewers.get(&conn).map_or(false, |l| l.phase != Phase::Rollback) {
+            detach_viewer(&mut state, conn);
+        }
         if let Some(index) = state.barriers.iter().position(|(id, _)| *id == conn) {
-            if let Some(lease) = state.lease.as_mut().filter(|lease| lease.conn == conn) {
-                if lease.phase == Phase::Activating { return None; }
-                if lease.phase == Phase::Rollback { lease.normal_ready = true; }
-                else { lease.normal_ready = false; }
-                lease.barrier_sent = true;
+            if let Some(viewer) = state.viewers.get_mut(&conn) {
+                viewer.barrier_sent = true;
+                viewer.normal_ready = viewer.phase == Phase::Rollback;
             }
             return state.barriers.remove(index).map(|(_, message)| message);
         }
-        let lease = state.lease.as_mut().filter(|lease| lease.conn == conn)?;
-        if matches!(lease.phase, Phase::Rollback | Phase::Activating | Phase::Frozen) { return None; }
-        let frame = encoded::pop(lease.epoch)?;
-        lease.revision = frame.revision;
-        lease.sequence = frame.sequence;
-        lease.width = frame.width;
-        lease.height = frame.height;
-        let mut video = VideoFrame::new();
-        video.display = 0;
-        video.android_video = Some(metadata(lease)).into();
+        let Some(viewer) = state.viewers.get_mut(&conn) else { return None; };
+        if viewer.status_at.elapsed() >= Duration::from_secs(1) {
+            viewer.status_at = Instant::now();
+            return Some(viewer_status(&state, conn));
+        }
+        if viewer.phase == Phase::Rollback {
+            if viewer.refresh_at.elapsed() >= Duration::from_secs(3) {
+                viewer.refresh_at = Instant::now(); state.normal_refresh.insert(conn);
+            }
+            return None;
+        }
+        if !allowed { return None; }
+        // Activation barrier must precede frames using the active decoder.
+        if viewer.phase == Phase::AwaitingPresentation && !viewer.barrier_sent { return None; }
+        let frame = encoded::read_after(viewer.capture_epoch, viewer.sequence, viewer.needs_key);
+        let Some(frame) = frame else {
+            if viewer.refresh_at.elapsed() >= Duration::from_secs(1) {
+                viewer.refresh_at = Instant::now();
+                let capture = state.lease.clone(); drop(state);
+                if let Some(capture) = capture { forward(capture.conn, &signal(&capture, "keyframe")); }
+            }
+            return None;
+        };
+        viewer.needs_key = false;
+        viewer.revision = frame.revision; viewer.sequence = frame.sequence;
+        viewer.width = frame.width; viewer.height = frame.height;
+        let mut video = VideoFrame::new(); video.display = 0;
+        video.android_video = Some(metadata(viewer)).into();
         video.set_h264s(EncodedVideoFrames { frames: vec![EncodedVideoFrame {
             data: frame.data.into(), key: frame.key, pts: frame.pts_us / 1000, ..Default::default()
         }], ..Default::default() });
-        let mut message = Message::new();
-        message.set_video_frame(video);
+        let mut message = Message::new(); message.set_video_frame(video);
         Some(message)
     }
+
+    #[cfg(test)]
+    mod shared_viewer_tests {
+        use super::*;
+
+        #[test]
+        fn losing_one_controller_does_not_stop_the_shared_capture_or_other_viewer() {
+            let capture = fresh_lease(11, 10, 10, "capture".into());
+            let mut state = State::default();
+            state.lease = Some(capture.clone());
+            for conn in [11, 22] {
+                let mut viewer = capture.clone();
+                viewer.conn = conn; viewer.phase = Phase::Active; viewer.normal_ready = false;
+                state.viewers.insert(conn, viewer);
+            }
+            detach_viewer(&mut state, 11);
+            assert_eq!(state.lease.as_ref().unwrap().epoch, 10);
+            assert_eq!(state.viewers[&11].phase, Phase::Rollback);
+            assert_eq!(state.viewers[&22].phase, Phase::Active);
+            assert_eq!(state.barriers.len(), 1);
+            assert_eq!(state.barriers[0].0, 11);
+            assert!(!state.normal_refresh.contains(&22));
+        }
+
+        #[test]
+        fn source_change_and_explicit_stop_update_all_viewers_without_losing_permissions() {
+            let mut state = State::default();
+            state.next_epoch = 40;
+            for conn in [11, 22, 33] {
+                state.eligible.insert(conn);
+                let mut viewer = fresh_lease(conn, 30, 30, "old".into());
+                viewer.phase = Phase::Active; viewer.normal_ready = false;
+                state.viewers.insert(conn, viewer);
+            }
+            let replacement = fresh_lease(22, 40, 40, "next".into());
+            install_capture(&mut state, replacement);
+            for viewer in state.viewers.values() {
+                assert_eq!(viewer.phase, Phase::Preparing);
+                assert_eq!(viewer.capture_epoch, 40);
+                assert_eq!(viewer.sequence, 0);
+                assert!(!viewer.normal_ready);
+                assert!(viewer.needs_key);
+            }
+            stop_capture(&mut state, "stop");
+            assert_eq!(state.eligible.len(), 3);
+            assert_eq!(state.barriers.len(), 3);
+            for viewer in state.viewers.values() {
+                assert_eq!(viewer.phase, Phase::Rollback);
+                assert_eq!(viewer.epoch, 41);
+                assert!(!viewer.normal_ready); // barrier must reach each PC first
+            }
+        }
+    }
+
 }
 
 #[cfg(target_os = "android")]

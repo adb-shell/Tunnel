@@ -6,8 +6,9 @@ pub const MAX_ACCESS_UNIT: usize = 8 * 1024 * 1024;
 pub const MAX_CONFIG: usize = 64 * 1024;
 pub const MAX_STATUS: usize = 16 * 1024;
 const MAX_QUEUED_BYTES: usize = 16 * 1024 * 1024;
-const MAX_QUEUED_FRAMES: usize = 4;
+const MAX_QUEUED_FRAMES: usize = 32;
 
+#[derive(Clone)]
 pub struct Frame {
     pub epoch: u64,
     pub revision: u64,
@@ -90,11 +91,11 @@ pub fn push(epoch: u64, revision: u64, width: u32, height: u32,
         Some(size) if size <= MAX_ACCESS_UNIT => size,
         _ => return false,
     };
-    if state.frames.len() >= MAX_QUEUED_FRAMES || state.bytes + size > MAX_QUEUED_BYTES {
-        state.frames.clear();
-        state.bytes = 0;
-        state.needs_key = true;
-        if !key { return false; }
+    // Evict the oldest frames, not everybody's decoder state. A slow viewer
+    // detects its own gap and waits for a fresh IDR; fast viewers continue.
+    while state.frames.len() >= MAX_QUEUED_FRAMES || state.bytes + size > MAX_QUEUED_BYTES {
+        if let Some(old) = state.frames.pop_front() { state.bytes -= old.data.len(); }
+        else { break; }
     }
     let sequence = match state.sequence.checked_add(1) { Some(v) => v, None => return false };
     let mut data = Vec::with_capacity(size);
@@ -108,12 +109,15 @@ pub fn push(epoch: u64, revision: u64, width: u32, height: u32,
     true
 }
 
-pub fn pop(epoch: u64) -> Option<Frame> {
-    let mut state = INGRESS.lock().unwrap();
+/// Independent read cursor per controller; never drains another viewer's GOP.
+pub fn read_after(epoch: u64, sequence: u64, needs_key: bool) -> Option<Frame> {
+    let state = INGRESS.lock().unwrap();
     if state.epoch != epoch { return None; }
-    let frame = state.frames.pop_front()?;
-    state.bytes -= frame.data.len();
-    Some(frame)
+    let first = state.frames.iter().find(|f| f.sequence > sequence)?;
+    if needs_key || first.sequence != sequence.saturating_add(1) {
+        return state.frames.iter().rev().find(|f| f.sequence > sequence && f.key).cloned();
+    }
+    Some(first.clone())
 }
 
 pub fn push_state(conn_id: i32, json: String) -> bool {
@@ -147,7 +151,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ingress_owns_a_bounded_gop_and_rejects_stale_configuration() {
+    fn independent_readers_survive_join_lag_and_epoch_change() {
         let config = vec![0, 0, 0, 1, 0x67];
         let frame = vec![0, 0, 0, 1, 0x65];
         begin(73);
@@ -156,14 +160,21 @@ mod tests {
         assert!(!push(73, 2, 1280, 720, 0, false, true, frame.clone()));
         assert!(!push(73, 1, 1280, 720, 0, false, false, frame.clone()));
         assert!(push(73, 1, 1280, 720, 1, true, false, frame.clone()));
-        for pts in 2..=4 { assert!(push(73, 1, 1280, 720, pts, false, false, frame.clone())); }
-        assert!(!push(73, 1, 1280, 720, 5, false, false, frame.clone()));
-        assert!(pop(73).is_none());
-        assert!(!push(73, 1, 1280, 720, 6, false, false, frame.clone()));
-        assert!(push(73, 1, 1280, 720, 7, true, false, frame));
-        let owned = pop(73).unwrap();
-        assert_eq!(owned.data.len(), 10); // codec configuration is carried with IDR
+        let a = read_after(73, 0, true).unwrap();
+        let b = read_after(73, 0, true).unwrap();
+        assert_eq!(a.sequence, b.sequence);
+        assert_eq!(a.data.len(), 10);
+        let mut fast = a.sequence;
+        for pts in 2..=40 {
+            assert!(push(73, 1, 1280, 720, pts, false, false, frame.clone()));
+            fast = read_after(73, fast, false).unwrap().sequence;
+        }
+        // B fell outside the ring. Its loss neither clears A nor invents an IDR.
+        assert!(read_after(73, b.sequence, false).is_none());
+        assert!(push(73, 1, 1280, 720, 41, true, false, frame));
+        assert_eq!(read_after(73, b.sequence, false).unwrap().sequence, 41);
+        assert_eq!(read_after(73, fast, false).unwrap().sequence, 41);
         end();
-        assert!(pop(73).is_none());
+        assert!(read_after(73, fast, false).is_none());
     }
 }

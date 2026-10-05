@@ -68,13 +68,13 @@ class AndroidAdbPairingModel extends ChangeNotifier {
       case 'PAIRING': return '手机正在使用配对端口验证配对码…';
       case 'CONNECTING': return '正在发现连接端口并验证 shell 权限…';
       case 'VERIFYING': return '正在核验手机本地 ADB shell 权限…';
-      case 'REVOKING': return '正在撤销本连接的 ADB 授权…';
+      case 'REVOKING': return '正在停用本连接的 ADB 功能…';
       case 'CANCELLING': return '已请求手机取消，正在等待确认…';
       case 'CANCEL_UNCONFIRMED': return '取消尚未得到手机确认，请刷新 ADB 状态后重试。';
       case 'VERIFIED': return '已连接，ADB shell 权限已验证';
       case 'PAIRED_CONNECT_REQUIRED':
         return '已配对，尚未连接。请填写无线调试主页上的连接端口后重试。';
-      case 'CANCELLED': return errorCode == 'CONSENT_REVOKED' ? '本连接的 ADB 授权已撤销' :
+      case 'CANCELLED': return errorCode == 'CONSENT_REVOKED' ? '本连接的 ADB 功能已停用，手机配对及其他 PC 不受影响' :
           _timedOut ? '操作超时，手机已确认取消配对' : '手机已确认取消配对';
       case 'DISCONNECTED': return '远程连接已断开，配对请求已终止';
       case 'TIMEOUT': return '手机已接收请求，但操作超时，已请求取消。';
@@ -94,11 +94,11 @@ class AndroidAdbPairingModel extends ChangeNotifier {
       'ADB_PAIR_PORT_INVALID': '配对端口应为 1–65535，不能使用连接端口代替。',
       'ADB_PAIR_FAILED': '配对码或端口已失效。保持手机配对窗口打开，重新输入当前信息。',
       'ADB_CONNECT_REQUIRED': '自动发现未找到连接端口。请填写无线调试主页显示的连接端口。',
-      'ADB_BUSY': '手机 ADB 正被本地终端或其他操作占用。请在手机 LADB 页面停止终端，或结束正在执行的操作后重试。',
+      'ADB_BUSY': '手机正在处理配对或重连，请稍后重试；无需关闭本地终端或其他 PC。',
       'ADB_LIBRARY_MISSING': '手机未找到打包的 ADB 组件，需要重新安装包含原生套件的 APK。',
       'SEND_FAILED': '配对请求未送达，请确认远程连接仍然正常。',
       'UNAUTHORIZED': '当前远程会话未获得此操作权限。',
-      'SESSION_ADB_AUTHORIZATION_REQUIRED': '本连接尚未获得 ADB 授权，请点击“连接已配对设备并授权”。',
+      'SESSION_ADB_AUTHORIZATION_REQUIRED': '此连接的 ADB 使用已停用，可点击“已配对，连接”重新启用。',
       'STOP_ADB_VIDEO_BEFORE_PAIRING': '手机仍在处理旧版投屏请求，请更新两端程序后重试连接。',
       'PAIR_CODE_INVALID': '配对码必须是当前手机配对窗口显示的 6 位数字。',
       'PAIR_CODE_REJECTED': '手机拒绝了配对码，请保持配对窗口打开并输入最新的配对码。',

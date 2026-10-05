@@ -197,7 +197,7 @@ internal class TunnelAdbSession(
         var cleaned = false
         var processSpec: LocalAdbProcessSpec? = null
         var target: com.tunnel.app.adb.probe.LocalAdbTarget? = null
-        var failureStage = "LOCAL_ADB_REQUIRED"
+        var failureStage = "ADB_TRANSPORT_UNAVAILABLE"
         launch("watchdog") {
             while (!finished.get()) {
                 val now = SystemClock.elapsedRealtime()
@@ -224,7 +224,8 @@ internal class TunnelAdbSession(
             val spec = LocalAdbProcessSpec(context)
             processSpec = spec
             checkOpen()
-            val trusted = LocalAdbIdentityProbe(context).probe(serial).trustedTarget ?: throw SessionFailure("LOCAL_ADB_REQUIRED")
+            val identity = LocalAdbIdentityProbe(context).probe(serial)
+            val trusted = identity.trustedTarget ?: throw SessionFailure("ADB_PROBE_" + identity.reason.name)
             target = trusted
             failureStage = "HELPER_ASSET_INVALID"
             artifact = PackagedAdbHelper.load(context)
@@ -250,7 +251,8 @@ internal class TunnelAdbSession(
             failureStage = "HELPER_LISTENER_FAILED"
             val videoListener = listener()
             val controlListener = listener()
-            if (!LocalAdbIdentityProbe(context).probe(serial).shellIdentityVerified) throw SessionFailure("LOCAL_ADB_REQUIRED")
+            val beforeLaunch = LocalAdbIdentityProbe(context).probe(serial)
+            if (!beforeLaunch.shellIdentityVerified) throw SessionFailure("ADB_PROBE_" + beforeLaunch.reason.name)
             checkOpen()
             failureStage = "HELPER_PROCESS_START_FAILED"
             val child = spec.processBuilder(trusted, listOf("shell", "-T",

@@ -52,6 +52,11 @@ object TunnelAdbManager {
 
     /** Phone-local selection only. Remote requests must not provide a device selector. */
     fun selectedLocalSerial(): String? = runner?.selectedLocalSerial()
+    /** Serialize discovery/reconnect with local and remote pairing, off the UI thread. */
+    fun recoverLocalTransport(context: Context): String? {
+        val current = currentRunner(context)
+        return current.recoverTransport().also { updateFromRunner(current) }
+    }
     fun acquireMirrorLease(): Closeable? {
         val lease = LocalAdbAccess.acquire(true) ?: return null
         val ctx = appContext

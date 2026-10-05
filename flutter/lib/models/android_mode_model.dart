@@ -41,6 +41,10 @@ class AndroidModeModel extends ChangeNotifier {
   }
 
   int _generation = 0;
+  bool _sharedDevice = false;
+  int _requestGeneration = 0;
+  bool get adbAvailable => consentActive == true &&
+      (state['localAdbReady'] == true || state['inputReady'] == true);
   int _epoch = 0;
   int _revision = 0;
   int _frameSequence = 0;
@@ -88,7 +92,7 @@ class AndroidModeModel extends ChangeNotifier {
       'BITMAP_ENCODER_UNSUPPORTED': '手机截图或穿透画面的图形编码失败，正在重试。',
       'ENCODER_OUTPUT_STALLED': '手机视频编码暂时没有输出，正在重建编码器。',
       'ENCODER_FAILED': '手机视频编码失败，正在重试。',
-      'SESSION_ADB_AUTHORIZATION_REQUIRED': '请先打开远程 ADB 窗口连接并授权。',
+      'SESSION_ADB_AUTHORIZATION_REQUIRED': '此连接的 ADB 使用已停用，可在远程 ADB 窗口重新连接。',
       'ADB_BUSY': '手机正在处理另一项配对或连接请求，请稍后重试。',
       'ACTION_BUSY': '手机正在执行上一项操作，请稍后重试。',
       'ACTION_CANCELLED': '操作已随上一个 ADB 实例结束，可重新点击执行。',
@@ -104,7 +108,9 @@ class AndroidModeModel extends ChangeNotifier {
       'VIDEO_TASK_REJECTED': '本次画面请求未能启动，可直接重新开启投屏。',
       'INPUT_OPERATION_TIMEOUT': '本次输入未完成，请重新操作。',
       'INPUT_REJECTED': '手机未接受本次输入，请重新操作。',
-      'LOCAL_ADB_REQUIRED': '手机 ADB 连接已失效，请重新连接已配对设备。',
+      'LOCAL_ADB_REQUIRED': '手机本地 ADB 尚不可用，正在尝试恢复已配对连接。',
+      'ADB_TRANSPORT_UNAVAILABLE': '手机无线调试连接暂不可用，正在重连；无需重新输入配对码。',
+      'ADB_PROBE_BUSY': '手机 ADB 检测繁忙，请稍后重试。',
       'OWNER_BUSY': 'ADB 功能由另一个远程会话使用，请先结束该会话操作。',
       'OVERLAY_UNAVAILABLE': '手机未能创建 ADB 黑屏遮罩，请检查手机端状态。',
       'ADB_ACTION_FAILED': '手机执行 ADB 命令失败，请检查本地 LADB 连接。',
@@ -154,7 +160,8 @@ class AndroidModeModel extends ChangeNotifier {
       await bind.sessionPeerOption(sessionId: ffi.sessionId,
         name: 'android-control', value: jsonEncode({
           'v': 1, 'op': op, 'operationId': operationId,
-          'generation': _generation, 'epoch': _epoch, 'revision': _revision,
+          'generation': _sharedDevice && (op == 'start' || op == 'stop')
+              ? _requestGeneration : _generation, 'epoch': _epoch, 'revision': _revision,
           'sequence': sequence ?? _frameSequence, 'inputFrozen': inputFrozen,
           'payload': payload,
         }));
@@ -170,11 +177,10 @@ class AndroidModeModel extends ChangeNotifier {
   }
 
   Future<void> request(String op, {Map<String, dynamic> payload = const {}, bool automaticRecovery = false}) async {
-    final ffi = parent.target;
     final action = op == 'side_action' || op == 'accessibility_action' ||
         op.startsWith('accessibility_');
     if ((op == 'start' || (action && op != 'accessibility_action')) && consentActive != true) {
-      _report('请先通过远程 ADB 配对窗口连接并授权本连接');
+      _report('手机 ADB 尚未就绪，请检查无线调试连接');
       return;
     }
     // Side controls are independent of video transitions and carry their own
@@ -204,15 +210,6 @@ class AndroidModeModel extends ChangeNotifier {
       await _send(op, payload: payload, operation: operation);
       return;
     }
-    if (op == 'start' && ffi != null &&
-        bind.peerGetSessionsCount(id: ffi.id, connType: ffi.connType.index) > 1) {
-      _report('请只保留此设备的一个远控窗口后请求 ADB');
-      return;
-    }
-    if (_observingOtherWindow && op != 'status') {
-      _report('ADB 投屏由其他窗口控制，请在该窗口操作');
-      return;
-    }
     // Pairing owns a separate bounded client. It must not stall an already
     // authorized controller's video/effect requests or helper recovery.
     final operation = Uuid().v4();
@@ -228,6 +225,9 @@ class AndroidModeModel extends ChangeNotifier {
         _send('status');
       });
     }
+    if (_sharedDevice && (op == 'start' || op == 'stop')) {
+      _requestGeneration = (_requestGeneration > _generation ? _requestGeneration : _generation) + 1;
+    }
     if (op == 'start') {
       if (!automaticRecovery) _lastRecoveryGeneration = -1;
       // A new generation supersedes an unfinished video attempt. Stale frame
@@ -239,11 +239,11 @@ class AndroidModeModel extends ChangeNotifier {
       _canRestartStoppedVideo = false;
       state['videoStopped'] = false;
       _stopOperation = '';
-      _generation++;
+      if (!_sharedDevice) _generation++;
       _startOperation = operation;
       phase = 'REQUESTING';
     } else if (op == 'stop') {
-      _generation++;
+      if (!_sharedDevice) _generation++;
       _presentation = null;
       _presentationToken++;
       _heartbeat?.cancel();
@@ -269,6 +269,17 @@ class AndroidModeModel extends ChangeNotifier {
       update = Map<String, dynamic>.from(raw is String ? jsonDecode(raw) : raw);
     } catch (_) { return; }
     if (update['v'] != 1) return;
+    if (update['sharedDevice'] == true) _sharedDevice = true;
+    if (_sharedDevice && update['kind'] == null && update['operationRejected'] != true &&
+        update['epoch'] is int && (update['epoch'] as int) > 0 &&
+        (update['epoch'] as int) >= _epoch && update['generation'] is int &&
+        update['operationId'] is String) {
+      // The phone owns source ordering across all PCs. This window owns only
+      // its decoder/presentation ACK, including when joining an existing source.
+      _generation = update['generation'] as int;
+      _startOperation = update['operationId'] as String;
+      _observingOtherWindow = false;
+    }
     if (update['kind'] == 'video_frame') {
       // These events originate from the local decoder, never the Android
       // request state. They must not reset a pending presentation handshake.
@@ -304,7 +315,7 @@ class AndroidModeModel extends ChangeNotifier {
     // Recovery is also advertised by status polling, so a dropped action
     // notification cannot permanently strand an enabled source. Require both
     // current local consent and an explicit matching endpoint assertion.
-    if (update['resumeVideo'] == true &&
+    if (!_sharedDevice && update['resumeVideo'] == true &&
         update['resumeGeneration'] is int && update['resumeGeneration'] == _generation &&
         (update['generation'] == null || update['generation'] == 0 || update['generation'] == _generation) &&
         update['baseLiveRequested'] is bool && update['consentActive'] == true &&
@@ -408,7 +419,7 @@ class AndroidModeModel extends ChangeNotifier {
     if (const {'CANDIDATE_READY', 'PRESENT_FRAME'}.contains(next) &&
         ((number('sequence') ?? 0) == 0 || (number('revision') ?? 0) == 0)) return;
     final sourceOperation = update['sourceOperationId'] ?? update['operationId'];
-    if (const {'PREPARING', 'READY', 'CANDIDATE_READY', 'PRESENT_FRAME', 'COMMITTED'}.contains(next) &&
+    if (!_sharedDevice && const {'PREPARING', 'READY', 'CANDIDATE_READY', 'PRESENT_FRAME', 'COMMITTED'}.contains(next) &&
         epoch > 0 && (_startOperation.isEmpty ||
           (next != 'PRESENT_FRAME' && sourceOperation != _startOperation))) {
       // Multiple Flutter windows may share a Rust connection. Only the window
@@ -567,7 +578,7 @@ class AndroidModeModel extends ChangeNotifier {
 
   Future<bool> sideAction(String type, String argument) async {
     if (consentActive != true) {
-      _report('本连接尚未获得 ADB 授权，请先连接并授权');
+      _report('手机 ADB 尚未就绪，请检查无线调试连接');
       return true;
     }
     final enable = argument.contains('开') || argument == '1';
@@ -615,6 +626,8 @@ class AndroidModeModel extends ChangeNotifier {
     _stopOperation = '';
     adbActionsVisible = true;
     consentActive = null;
+    _sharedDevice = false;
+    _requestGeneration = 0;
     _heartbeat?.cancel();
     _heartbeat = null;
     _deadline?.cancel();

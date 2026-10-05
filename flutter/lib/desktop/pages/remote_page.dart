@@ -402,7 +402,7 @@ class _RemotePageState extends State<RemotePage>
               // arrival and of the accessibility toolbar visibility preference.
               AnimatedBuilder(animation: _ffi.androidModeModel,
                 builder: (context, _) => _ffi.ffiModel.isPeerAndroid &&
-                    _ffi.androidModeModel.consentActive == true &&
+                    _ffi.androidModeModel.adbAvailable &&
                     _ffi.androidModeModel.adbActionsVisible
                   ? Overlay(initialEntries: [makeMobileActionsOverlayEntry(
                       () => _ffi.androidModeModel.setAdbActionsVisible(false),

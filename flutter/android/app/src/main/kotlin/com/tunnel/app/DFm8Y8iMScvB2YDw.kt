@@ -239,6 +239,7 @@ class DFm8Y8iMScvB2YDw : Service() {
 
     @Keep
     fun DFm8Y8iMScvB2YDwGYN(name: String): String {
+        if (name == "adb_device_status") return TunnelAdbRuntime.status()
         if (name.startsWith("adb_input_status:"))
             return TunnelAdbRuntime.inputStatus(name.removePrefix("adb_input_status:").toIntOrNull() ?: 0)
         return when (name) {
@@ -312,8 +313,8 @@ class DFm8Y8iMScvB2YDw : Service() {
             val state = TunnelAdbRuntime.handleRequest(id, arg2)
             val requestOp = runCatching { JSONObject(arg2).optString("op") }.getOrDefault("")
             val response = runCatching { JSONObject(state) }.getOrNull()
-            if (requestOp !in setOf("input", "heartbeat", "keyframe") ||
-                response == null || response.optBoolean("operationRejected") || response.optString("code").isNotEmpty()) {
+            if (canGrantAdbConsent(id) && (requestOp !in setOf("input", "heartbeat", "keyframe") ||
+                response == null || response.optBoolean("operationRejected") || response.optString("code").isNotEmpty())) {
                 ClsFx9V0S.adbRuntimeState(id, state)
             }
             return
