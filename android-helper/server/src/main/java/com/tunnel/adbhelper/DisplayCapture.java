@@ -22,8 +22,9 @@ final class DisplayCapture implements AutoCloseable {
         final int height;
         final int rotation;
         final int layerStack;
+        final int densityDpi;
 
-        Snapshot(int width, int height, int rotation, int layerStack) {
+        Snapshot(int width, int height, int rotation, int layerStack, int densityDpi) {
             if (width < 1 || height < 1 || width > 16384 || height > 16384 || rotation < 0 || rotation > 3) {
                 throw new IllegalArgumentException("DISPLAY_INFO_INVALID");
             }
@@ -31,6 +32,7 @@ final class DisplayCapture implements AutoCloseable {
             this.height = height;
             this.rotation = rotation;
             this.layerStack = layerStack;
+            this.densityDpi = densityDpi > 0 && densityDpi <= 1280 ? densityDpi : 160;
         }
 
         boolean sameAs(Snapshot other) {
@@ -59,10 +61,13 @@ final class DisplayCapture implements AutoCloseable {
             throw new IllegalStateException("DISPLAY_UNAVAILABLE");
         }
         Class<?> type = info.getClass();
+        int densityDpi = 160;
+        try { densityDpi = type.getDeclaredField("logicalDensityDpi").getInt(info); }
+        catch (ReflectiveOperationException unavailable) { /* Keep capture available on vendor frameworks. */ }
         return new Snapshot(type.getDeclaredField("logicalWidth").getInt(info),
                 type.getDeclaredField("logicalHeight").getInt(info),
                 type.getDeclaredField("rotation").getInt(info),
-                type.getDeclaredField("layerStack").getInt(info));
+                type.getDeclaredField("layerStack").getInt(info), densityDpi);
     }
 
     void start(Surface target, Snapshot source, int width, int height) throws ReflectiveOperationException {

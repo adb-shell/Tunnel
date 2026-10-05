@@ -74,7 +74,7 @@ final class ShellAutomation implements AutoCloseable {
     /** Refresh only our own desired effect; transient display changes are retryable. */
     void maintainEffects() {
         if (automation == null || display == null) return;
-        try { overlay.refresh(display.snapshot().layerStack); }
+        try { overlay.refresh(display.snapshot()); }
         catch (Exception displayTransition) { /* Next periodic refresh retries without changing intent/capabilities. */ }
     }
 
@@ -162,7 +162,7 @@ final class ShellAutomation implements AutoCloseable {
                     if (!powered) removeCapabilities(AdbWire.CAP_DISPLAY);
                     return result(command, powered ? AdbCommands.OK : AdbCommands.UNSUPPORTED);
                 case AdbCommands.OVERLAY_BLACK:
-                    boolean covered = overlay.set(command.a == 1, display.snapshot().layerStack);
+                    boolean covered = overlay.set(command.a == 1, command.a == 1 ? display.snapshot() : null);
                     return result(command, covered ? AdbCommands.OK : AdbCommands.UNSUPPORTED);
                 case AdbCommands.TOUCH_BLOCK:
                     // Retired wire number: old peers cannot reactivate touch blocking.
