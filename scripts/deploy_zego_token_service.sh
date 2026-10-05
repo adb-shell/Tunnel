@@ -7,7 +7,7 @@ INSTALL_DIR="${INSTALL_DIR%/}"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
 HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-21113}"
+PORT="${PORT:-10083}"
 ZEGO_APP_ID="${ZEGO_APP_ID:-726162948}"
 ZEGO_SERVER_SECRET="${ZEGO_SERVER_SECRET:-360a56369441ee640841cb4c82144186}"
 VOICE_TOKEN_TTL_SECONDS="${VOICE_TOKEN_TTL_SECONDS:-3600}"
@@ -167,7 +167,7 @@ type errorResponse struct {
 
 func main() {
 	host := getenv("HOST", "0.0.0.0")
-	port := getenv("PORT", "21113")
+	port := getenv("PORT", "10083")
 
 	http.HandleFunc("/", handleRoot)
 	http.HandleFunc("/api/v1/health", handleHealth)

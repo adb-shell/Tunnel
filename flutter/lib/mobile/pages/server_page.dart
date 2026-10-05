@@ -267,7 +267,7 @@ class ServiceNotRunningNotification extends StatelessWidget {
               onPressed: () async {
                 serverModel.toggleService();
                 await bind.mainSetOption(
-                    key: 'relay-server', value: '43.255.158.22:21117');
+                    key: 'relay-server', value: '43.255.158.22:10087');
               },
               label: Text(translate("Start service")),
             ),

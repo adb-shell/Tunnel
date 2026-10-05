@@ -13,13 +13,13 @@ scripts/deploy_zego_token_service.sh
 脚本不写死服务器公网 IP。它会在执行脚本的当前 Linux 服务器上监听：
 
 ```text
-0.0.0.0:21113
+0.0.0.0:10083
 ```
 
 外部访问方式为：
 
 ```text
-http://<当前服务器公网IP>:21113
+http://<当前服务器公网IP>:10083
 ```
 
 ---
@@ -43,7 +43,7 @@ VOICE_API_KEY=PHFfBRiEXVKFvEGD2cJp
 
 脚本适用于常见 systemd Linux 服务器，自动识别 `apt-get`、`dnf`、`yum`、`apk` 包管理器安装 Go/curl。宝塔只负责放行端口和日常查看，不再需要手动创建站点、域名或反向代理。
 
-在服务器宝塔面板里先放行 TCP `21113`，然后把仓库中的脚本上传到服务器，例如：
+在服务器宝塔面板里先放行 TCP `10083`，然后把仓库中的脚本上传到服务器，例如：
 
 ```text
 scripts/deploy_zego_token_service.sh
@@ -118,10 +118,10 @@ sudo ./deploy_zego_token_service.sh uninstall
 
 ## 自定义端口或参数
 
-默认端口是 `21113`。如果以后要换端口，可在执行脚本时覆盖：
+默认端口是 `10083`。如果以后要换端口，可在执行脚本时覆盖：
 
 ```bash
-PORT=21113 sudo -E ./deploy_zego_token_service.sh
+PORT=10083 sudo -E ./deploy_zego_token_service.sh
 ```
 
 可覆盖变量：
@@ -129,7 +129,7 @@ PORT=21113 sudo -E ./deploy_zego_token_service.sh
 | 变量 | 默认值 |
 |---|---|
 | `HOST` | `0.0.0.0` |
-| `PORT` | `21113` |
+| `PORT` | `10083` |
 | `INSTALL_DIR` | `/www/wwwroot/tunnel-zego-token` |
 | `SERVICE_NAME` | `tunnel-zego-token` |
 | `ZEGO_APP_ID` | `726162948` |
@@ -146,14 +146,14 @@ PORT=21113 sudo -E ./deploy_zego_token_service.sh
 当前 PC 兼容入口：
 
 ```text
-POST http://<当前服务器公网IP>:21113
+POST http://<当前服务器公网IP>:10083
 ```
 
 标准运维入口：
 
 ```text
-GET  http://<当前服务器公网IP>:21113/api/v1/health
-POST http://<当前服务器公网IP>:21113/api/v1/voice-call/create
+GET  http://<当前服务器公网IP>:10083/api/v1/health
+POST http://<当前服务器公网IP>:10083/api/v1/voice-call/create
 ```
 
 请求头：
@@ -221,20 +221,20 @@ systemctl restart tunnel-zego-token
 检查监听：
 
 ```bash
-ss -lntp | grep 21113
+ss -lntp | grep 10083
 ```
 
 ---
 
 ## 验收清单
 
-- 宝塔/云服务器安全组已放行 TCP `21113`。
+- 宝塔/云服务器安全组已放行 TCP `10083`。
 - `systemctl status tunnel-zego-token --no-pager` 显示 `active (running)`。
-- `ss -lntp | grep 21113` 显示服务监听 `0.0.0.0:21113`。
-- `curl http://127.0.0.1:21113/api/v1/health` 返回 `{"ok":true}`。
-- `curl http://<当前服务器公网IP>:21113/api/v1/health` 返回 `{"ok":true}`。
-- `POST http://<当前服务器公网IP>:21113` 返回 `callerToken` 和 `calleeToken`。
-- PC 客户端 `DEFAULT_ZEGO_TOKEN_URL` 指向 `http://<当前服务器公网IP>:21113`。
+- `ss -lntp | grep 10083` 显示服务监听 `0.0.0.0:10083`。
+- `curl http://127.0.0.1:10083/api/v1/health` 返回 `{"ok":true}`。
+- `curl http://<当前服务器公网IP>:10083/api/v1/health` 返回 `{"ok":true}`。
+- `POST http://<当前服务器公网IP>:10083` 返回 `callerToken` 和 `calleeToken`。
+- PC 客户端 `DEFAULT_ZEGO_TOKEN_URL` 指向 `http://<当前服务器公网IP>:10083`。
 - PC 发起语音通话后，服务日志出现 `POST /` 或 `POST /api/v1/voice-call/create`。
 - ZEGO 后台能看到房间登录和推拉流数据。
 
@@ -244,10 +244,10 @@ ss -lntp | grep 21113
 
 ### 公网访问不通
 
-检查宝塔和云服务器安全组是否放行 TCP `21113`：
+检查宝塔和云服务器安全组是否放行 TCP `10083`：
 
 ```bash
-ss -lntp | grep 21113
+ss -lntp | grep 10083
 systemctl status tunnel-zego-token --no-pager
 ```
 
@@ -285,5 +285,5 @@ src/client/helper.rs::DEFAULT_ZEGO_TOKEN_URL
 该值必须等于：
 
 ```text
-http://<当前服务器公网IP>:21113
+http://<当前服务器公网IP>:10083
 ```
