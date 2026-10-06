@@ -1,5 +1,7 @@
 # Tunnel 网络与协议 / Network Protocol
 
+2026-10-07：产品网络配置改为源码固定值，统一入口在 `libs/hbb_common/src/config.rs`：`RENDEZVOUS_SERVERS`、`PUBLIC_RS_PUB_KEY`（`RS_PUB_KEY` 别名）、`PRODUCT_RELAY_SERVER`、`PRODUCT_API_SERVER`。ID 注册、NAT 检测、默认远控连接、API 和设置显示均读取这组配置。旧本地配置、缓存服务器列表、Windows 文件名配置、custom.txt 与旧构建环境变量不再覆盖产品默认网络。固定的四项选项不接受本地修改；设备身份、密码、配对和其他配置保留。以后换服务器须修改这组常量并重新编译对应平台。已安装 Windows 服务也需更新并重启，旧进程不会因替换前台 EXE 自动变成新版。本次源码检查不能代替服务器和两端运行验收。
+
 2026-10-03 T008：外部AndroidControl/protobuf不变。Rust仅在pair/authorize通过当前secure/authenticated/video/keyboard门后发送私有JNI `adb_control_authorized`，恢复服务重建后丢失的连接资格；该名称不在peer操作白名单。native回调仍检查连接，断线/撤权清job/grant。PC区分本地提交与手机ACK，不再假报已开始配对。
 
 2026-10-03 T005：外部AndroidControl JSON v1保持；状态consentActive/consentLifetime=session替代倒计时。端内helper wire升级VERSION3、HMAC域与manifest同步，production duration0；断线/退出/撤权撤销scopes。见 [ADB 指南](../plans/ADB_REMOTE_IMPLEMENTATION_GUIDE.md)。

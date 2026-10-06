@@ -155,6 +155,9 @@ pub fn refresh_options() {
 
 #[inline]
 pub fn get_option<T: AsRef<str>>(key: T) -> String {
+    if let Some(value) = config::product_server_option(key.as_ref()) {
+        return value.to_owned();
+    }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         let map = OPTIONS.lock().unwrap();
@@ -303,16 +306,17 @@ pub fn set_peer_option(id: String, name: String, value: String) {
 
 #[inline]
 pub fn get_options() -> String {
-    let options = {
+    let mut options = {
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         {
-            OPTIONS.lock().unwrap()
+            OPTIONS.lock().unwrap().clone()
         }
         #[cfg(any(target_os = "android", target_os = "ios"))]
         {
             Config::get_options()
         }
     };
+    config::apply_product_server_options(&mut options);
     let mut m = serde_json::Map::new();
     for (k, v) in options.iter() {
         m.insert(k.into(), v.to_owned().into());
@@ -376,7 +380,8 @@ pub fn get_sound_inputs() -> Vec<String> {
 }
 
 #[inline]
-pub fn set_options(m: HashMap<String, String>) {
+pub fn set_options(mut m: HashMap<String, String>) {
+    config::apply_product_server_options(&mut m);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         *OPTIONS.lock().unwrap() = m.clone();
@@ -388,6 +393,9 @@ pub fn set_options(m: HashMap<String, String>) {
 
 #[inline]
 pub fn set_option(key: String, value: String) {
+    if config::product_server_option(&key).is_some() {
+        return;
+    }
     if &key == "stop-service" {
         #[cfg(target_os = "macos")]
         {

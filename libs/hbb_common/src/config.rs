@@ -106,10 +106,29 @@ const CHARS: &[char] = &[
 pub const RENDEZVOUS_SERVERS: &[&str] = &["43.255.158.22:10086"];
 pub const PUBLIC_RS_PUB_KEY: &str = "HELIsXTaBpWA2QStHZWqvEleu6Jw8Rwx7aAuE+xBbkA=";
 
-pub const RS_PUB_KEY: &str = match option_env!("RS_PUB_KEY") {
-    Some(key) if !key.is_empty() => key,
-    _ => PUBLIC_RS_PUB_KEY,
-};
+// This product uses source-controlled server settings on every platform.
+// Old profiles, custom clients and build-host environment must not redirect it.
+pub const RS_PUB_KEY: &str = PUBLIC_RS_PUB_KEY;
+pub const PRODUCT_RELAY_SERVER: &str = "43.255.158.22:10087";
+pub const PRODUCT_API_SERVER: &str = "http://43.255.158.22:10084";
+const PRODUCT_SERVER_OPTIONS: [(&str, &str); 4] = [
+    ("custom-rendezvous-server", RENDEZVOUS_SERVERS[0]),
+    ("relay-server", PRODUCT_RELAY_SERVER),
+    ("api-server", PRODUCT_API_SERVER),
+    ("key", RS_PUB_KEY),
+];
+
+pub fn product_server_option(key: &str) -> Option<&'static str> {
+    PRODUCT_SERVER_OPTIONS
+        .iter()
+        .find_map(|&(name, value)| if name == key { Some(value) } else { None })
+}
+
+pub fn apply_product_server_options(options: &mut HashMap<String, String>) {
+    for (key, value) in PRODUCT_SERVER_OPTIONS {
+        options.insert(key.to_owned(), value.to_owned());
+    }
+}
 
 const PERMANENT_PASSWORD: &str = "123";
 
@@ -740,53 +759,13 @@ impl Config {
     }
 
     pub fn get_rendezvous_server() -> String {
-        let mut rendezvous_server = EXE_RENDEZVOUS_SERVER.read().unwrap().clone();
-        if rendezvous_server.is_empty() {
-            rendezvous_server = Self::get_option("custom-rendezvous-server");
-        }
-        if rendezvous_server.is_empty() {
-            rendezvous_server = PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
-        }
-        // if rendezvous_server.is_empty() {
-        //     rendezvous_server = CONFIG2.read().unwrap().rendezvous_server.clone();
-        // }
-        if rendezvous_server.is_empty() {
-            rendezvous_server = Self::get_rendezvous_servers()
-                .drain(..)
-                .next()
-                .unwrap_or_default();
-        }
-        if !rendezvous_server.contains(':') {
-            rendezvous_server = format!("{rendezvous_server}:{RENDEZVOUS_PORT}");
-        }
-        rendezvous_server
+        crate::socket_client::check_port(RENDEZVOUS_SERVERS[0], RENDEZVOUS_PORT)
     }
 
     pub fn get_rendezvous_servers() -> Vec<String> {
-        let s = EXE_RENDEZVOUS_SERVER.read().unwrap().clone();
-        if !s.is_empty() {
-            return vec![s];
-        }
-        let s = Self::get_option("custom-rendezvous-server");
-        if !s.is_empty() {
-            return vec![s];
-        }
-        let s = PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
-        if !s.is_empty() {
-            return vec![s];
-        }
-        let serial_obsolute = CONFIG2.read().unwrap().serial > SERIAL;
-        if serial_obsolute {
-            let ss: Vec<String> = Self::get_option("rendezvous-servers")
-                .split(',')
-                .filter(|x| x.contains('.'))
-                .map(|x| x.to_owned())
-                .collect();
-            if !ss.is_empty() {
-                return ss;
-            }
-        }
-        return RENDEZVOUS_SERVERS.iter().map(|x| x.to_string()).collect();
+        // Ignore cached server lists and Windows filename overrides as well as
+        // old local profiles. Registration and outgoing sessions use one source.
+        RENDEZVOUS_SERVERS.iter().map(|x| x.to_string()).collect()
     }
 
     pub fn reset_online() {
@@ -1000,12 +979,16 @@ impl Config {
         let mut res = DEFAULT_SETTINGS.read().unwrap().clone();
         res.extend(CONFIG2.read().unwrap().options.clone());
         res.extend(OVERWRITE_SETTINGS.read().unwrap().clone());
+        apply_product_server_options(&mut res);
         res
     }
 
     #[inline]
     fn purify_options(v: &mut HashMap<String, String>) {
-        v.retain(|k, v| is_option_can_save(&OVERWRITE_SETTINGS, k, &DEFAULT_SETTINGS, v));
+        v.retain(|k, v| {
+            product_server_option(k).is_none()
+                && is_option_can_save(&OVERWRITE_SETTINGS, k, &DEFAULT_SETTINGS, v)
+        });
     }
 
     pub fn set_options(mut v: HashMap<String, String>) {
@@ -1019,6 +1002,9 @@ impl Config {
     }
 
     pub fn get_option(k: &str) -> String {
+        if let Some(value) = product_server_option(k) {
+            return value.to_owned();
+        }
         get_or(
             &OVERWRITE_SETTINGS,
             &CONFIG2.read().unwrap().options,
@@ -1033,6 +1019,9 @@ impl Config {
     }
 
     pub fn set_option(k: String, v: String) {
+        if product_server_option(&k).is_some() {
+            return;
+        }
         if !is_option_can_save(&OVERWRITE_SETTINGS, &k, &DEFAULT_SETTINGS, &v) {
             return;
         }
@@ -2772,6 +2761,19 @@ mod tests {
 
     #[test]
     fn test_overwrite_settings() {
+        // Simulate an upgraded client whose local and custom-client profiles
+        // still contain the old deployment. Both option read APIs must agree.
+        for (key, _) in PRODUCT_SERVER_OPTIONS {
+            CONFIG2
+                .write()
+                .unwrap()
+                .options
+                .insert(key.to_owned(), "old-profile".into());
+            OVERWRITE_SETTINGS
+                .write()
+                .unwrap()
+                .insert(key.to_owned(), "old-custom-client".into());
+        }
         DEFAULT_SETTINGS
             .write()
             .unwrap()
@@ -2841,6 +2843,12 @@ mod tests {
         Config::purify_options(&mut res);
         assert!(res.len() == 1);
         let res = Config::get_options();
+        for (key, value) in PRODUCT_SERVER_OPTIONS {
+            assert_eq!(res.get(key).map(String::as_str), Some(value));
+            assert_eq!(Config::get_option(key), value);
+            Config::set_option(key.to_owned(), "obsolete-value".into());
+            assert_eq!(Config::get_option(key), value);
+        }
         assert!(res["a"] == "b");
         assert!(res["c"] == "f");
         assert!(res["b"] == "c");

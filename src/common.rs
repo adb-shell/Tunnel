@@ -660,44 +660,16 @@ async fn test_nat_type_() -> ResultType<bool> {
     Ok(ok)
 }
 
-pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>, bool) {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    let (mut a, mut b) = get_rendezvous_server_(ms_timeout);
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let (mut a, mut b) = get_rendezvous_server_(ms_timeout).await;
-    #[cfg(windows)]
-    if let Ok(lic) = crate::platform::get_license_from_exe_name() {
-        if !lic.host.is_empty() {
-            a = lic.host;
-        }
-    }
-    let mut b: Vec<String> = b
-        .drain(..)
-        .map(|x| socket_client::check_port(x, config::RENDEZVOUS_PORT))
+pub async fn get_rendezvous_server(_ms_timeout: u64) -> (String, Vec<String>, bool) {
+    // Do not take an old Windows service's cached server or an EXE filename
+    // override over the current product's source-controlled configuration.
+    let server = Config::get_rendezvous_server();
+    let alternatives = Config::get_rendezvous_servers()
+        .into_iter()
+        .map(|host| socket_client::check_port(host, config::RENDEZVOUS_PORT))
+        .filter(|host| host != &server)
         .collect();
-    let c = if b.contains(&a) {
-        b = b.drain(..).filter(|x| x != &a).collect();
-        true
-    } else {
-        a = b.pop().unwrap_or(a);
-        false
-    };
-    (a, b, c)
-}
-
-#[inline]
-#[cfg(any(target_os = "android", target_os = "ios"))]
-fn get_rendezvous_server_(_ms_timeout: u64) -> (String, Vec<String>) {
-    (
-        Config::get_rendezvous_server(),
-        Config::get_rendezvous_servers(),
-    )
-}
-
-#[inline]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-async fn get_rendezvous_server_(ms_timeout: u64) -> (String, Vec<String>) {
-    crate::ipc::get_rendezvous_server(ms_timeout).await
+    (server, alternatives, true)
 }
 
 #[inline]
@@ -1009,20 +981,8 @@ pub fn is_setup(name: &str) -> bool {
     name.to_lowercase().ends_with("install.exe")
 }
 
-pub fn get_custom_rendezvous_server(custom: String) -> String {
-    #[cfg(windows)]
-    if let Ok(lic) = crate::platform::windows::get_license_from_exe_name() {
-        if !lic.host.is_empty() {
-            return lic.host.clone();
-        }
-    }
-    if !custom.is_empty() {
-        return custom;
-    }
-    if !config::PROD_RENDEZVOUS_SERVER.read().unwrap().is_empty() {
-        return config::PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
-    }
-    "".to_owned()
+pub fn get_custom_rendezvous_server(_custom: String) -> String {
+    Config::get_rendezvous_server()
 }
 
 #[inline]
@@ -1043,30 +1003,8 @@ pub fn get_api_server(api: String, custom: String) -> String {
     res
 }
 
-fn get_api_server_(api: String, custom: String) -> String {
-    #[cfg(windows)]
-    if let Ok(lic) = crate::platform::windows::get_license_from_exe_name() {
-        if !lic.api.is_empty() {
-            return lic.api.clone();
-        }
-    }
-    if !api.is_empty() {
-        return api.to_owned();
-    }
-    let api = option_env!("API_SERVER").unwrap_or_default();
-    if !api.is_empty() {
-        return api.into();
-    }
-    let s0 = get_custom_rendezvous_server(custom);
-    if !s0.is_empty() {
-        let s = crate::increase_port(&s0, -2);
-        if s == s0 {
-            return format!("http://{}:{}", s, config::RENDEZVOUS_PORT - 2);
-        } else {
-            return format!("http://{}", s);
-        }
-    }
-    "http://43.255.158.22:10084".to_owned()
+fn get_api_server_(_api: String, _custom: String) -> String {
+    config::PRODUCT_API_SERVER.to_owned()
 }
 
 #[inline]
@@ -1311,26 +1249,10 @@ pub fn decode64<T: AsRef<[u8]>>(input: T) -> Result<Vec<u8>, base64::DecodeError
     base64::decode(input)
 }
 
-pub async fn get_key(sync: bool) -> String {
-    #[cfg(windows)]
-    if let Ok(lic) = crate::platform::windows::get_license_from_exe_name() {
-        if !lic.key.is_empty() {
-            return lic.key;
-        }
-    }
-    #[cfg(target_os = "ios")]
-    let mut key = Config::get_option("key");
-    #[cfg(not(target_os = "ios"))]
-    let mut key = if sync {
-        Config::get_option("key")
-    } else {
-        let mut options = crate::ipc::get_options_async().await;
-        options.remove("key").unwrap_or_default()
-    };
-    if key.is_empty() {
-        key = config::RS_PUB_KEY.to_owned();
-    }
-    key
+pub async fn get_key(_sync: bool) -> String {
+    // Pair the compiled server with its compiled public key; never mix it with
+    // a key cached for a previous deployment or encoded in an EXE filename.
+    config::RS_PUB_KEY.to_owned()
 }
 
 pub fn pk_to_fingerprint(pk: Vec<u8>) -> String {
