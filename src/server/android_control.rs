@@ -9,10 +9,11 @@ const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 /// Snapshot of trusted connection state. Pairing is a control operation, not a
 /// video subscription: a phone without a running capture must still be pairable.
+/// ADB follows remote login/control authorization, independently of transport
+/// encryption. Do not infer authorization from a connected socket alone.
 #[derive(Clone, Copy)]
 pub struct Access {
     pub authorized: bool,
-    pub secured: bool,
     pub remote: bool,
     pub closed: bool,
     pub keyboard: bool,
@@ -24,7 +25,6 @@ impl Access {
     pub fn view_error(self) -> Option<&'static str> {
         if self.closed { Some("ADB_SESSION_CLOSED") }
         else if !self.authorized { Some("ADB_SESSION_NOT_AUTHORIZED") }
-        else if !self.secured { Some("ADB_SESSION_NOT_ENCRYPTED") }
         else if !self.remote { Some("ADB_REMOTE_SESSION_REQUIRED") }
         else { None }
     }
@@ -882,7 +882,7 @@ mod tests {
     use super::*;
 
     fn controller_access() -> Access {
-        Access { authorized: true, secured: true, remote: true, closed: false,
+        Access { authorized: true, remote: true, closed: false,
             keyboard: true, disable_keyboard: false, video_subscribed: true }
     }
 
@@ -900,7 +900,6 @@ mod tests {
     fn control_denials_are_precise_and_video_cannot_grant_authority() {
         for (access, expected) in [
             (Access { authorized: false, ..controller_access() }, "ADB_SESSION_NOT_AUTHORIZED"),
-            (Access { secured: false, ..controller_access() }, "ADB_SESSION_NOT_ENCRYPTED"),
             (Access { remote: false, ..controller_access() }, "ADB_REMOTE_SESSION_REQUIRED"),
             (Access { closed: true, ..controller_access() }, "ADB_SESSION_CLOSED"),
             (Access { keyboard: false, ..controller_access() }, "ADB_CONTROL_PERMISSION_REQUIRED"),

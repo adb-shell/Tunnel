@@ -83,12 +83,7 @@ class _AndroidAdbPairingDialogState extends State<AndroidAdbPairingDialog> {
   }
 
   String? get _blockedReason {
-    final mode = widget.ffi.androidModeModel;
     if (widget.ffi.closed) return '远程连接已断开，请重新连接手机。';
-    if (widget.ffi.ffiModel.secure != true) {
-      return AndroidAdbPairingModel.channelErrorText(mode.reason) ??
-          AndroidAdbPairingModel.channelErrorText('SECURE_CHANNEL_REQUIRED');
-    }
     return null;
   }
 

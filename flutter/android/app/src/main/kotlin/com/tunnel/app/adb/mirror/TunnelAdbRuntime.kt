@@ -12,7 +12,7 @@ import com.tunnel.app.adb.probe.LocalAdbTargetPolicy
 import org.json.JSONObject
 import java.util.LinkedHashMap
 
-/** Device-owned local ADB; every remote operation still requires a secured control session. */
+/** Device-owned local ADB; every remote operation still requires an authorized control session. */
 object TunnelAdbRuntime {
     interface Hooks {
         fun sendEncoded(epoch: Long, revision: Long, width: Int, height: Int, ptsUs: Long,
@@ -220,7 +220,7 @@ object TunnelAdbRuntime {
         revokeConsent(); synchronized(lock) { pairingResults.clear(); actionResults.clear(); hooks = null; context = null }
     }
 
-    /** Rust has checked relay encryption, authentication and this connection's control permission. */
+    /** Rust has checked authentication and this connection's control permission. */
     @JvmStatic fun handleRequest(connId: Int, json: String): String {
         if (json.length > 8192 || connId <= 0) return synchronized(lock) { snapshot("REQUEST_INVALID") }
         val request = try { JSONObject(json) } catch (_: Exception) { return synchronized(lock) { snapshot("REQUEST_INVALID") } }

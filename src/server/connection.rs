@@ -1848,7 +1848,6 @@ impl Connection {
     fn adb_access(&self) -> super::android_control::Access {
         super::android_control::Access {
             authorized: self.authorized,
-            secured: self.stream.is_secured(),
             remote: self.is_remote(),
             closed: self.closed,
             keyboard: self.keyboard,

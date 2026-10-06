@@ -6,7 +6,7 @@ import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-/** Finite local pairing/connection transaction. Caller must authorize the encrypted peer first.
+/** Finite local pairing/connection transaction. Caller must authorize the remote controller first.
  * Only local port numbers and a six-digit code are accepted; no peer command/host/shell text.
  * Pairing code is transient stdin, never a command argument, preference or status field.
  */

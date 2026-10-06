@@ -541,17 +541,8 @@ impl<T: InvokeUiSession> Remote<T> {
                 self.check_clipboard_file_context();
             }
             Data::Message(msg) => {
-                if let Some(message::Union::Misc(misc)) = &msg.union {
-                    if let Some(misc::Union::AndroidControl(control)) = &misc.union {
-                        if !peer.is_secured() {
-                            let code = self.handler.lc.read().unwrap().security_failure
-                                .unwrap_or("SECURE_CHANNEL_REQUIRED");
-                            self.handler.update_android_control(crate::server::android_control::request_error(
-                                &control.json, code));
-                            return true;
-                        }
-                    }
-                }
+                // Android checks login and control permissions for every ADB
+                // request. An unencrypted remote session is allowed by policy.
                 match &msg.union {
                     Some(message::Union::Misc(misc)) => match misc.union {
                         Some(misc::Union::RefreshVideo(_)) => {
@@ -1361,7 +1352,7 @@ impl<T: InvokeUiSession> Remote<T> {
                         return true;
                     };
                     if let Some(metadata) = vf.android_video.as_ref() {
-                        if !peer.is_secured() || metadata.epoch == 0 || metadata.revision == 0
+                        if metadata.epoch == 0 || metadata.revision == 0
                             || metadata.generation == 0 || metadata.sequence == 0
                             || (metadata.phase != 3 && (metadata.width == 0 || metadata.height == 0
                                 || metadata.width > 4096 || metadata.height > 4096))
@@ -1975,12 +1966,11 @@ impl<T: InvokeUiSession> Remote<T> {
                         self.handler.update_tunnel_status(json);
                     }
                     Some(misc::Union::AndroidControl(control)) => {
-                        if control.json.len() <= 16 * 1024 && peer.is_secured() {
+                        if control.json.len() <= 16 * 1024 {
                             self.handler.update_android_control(control.json);
                         }
                     }
                     Some(misc::Union::AndroidVideoBarrier(barrier)) => {
-                        if !peer.is_secured() { return true; }
                         if !self.video_threads.contains_key(&0) { self.new_video_thread(0); }
                         if let Some(thread) = self.video_threads.get_mut(&0) {
                             if matches!(barrier.action, 2 | 3) { thread.adb_needs_key = false; }

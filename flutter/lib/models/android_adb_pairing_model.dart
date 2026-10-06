@@ -28,22 +28,25 @@ class AndroidAdbPairingModel extends ChangeNotifier {
   bool _disposed = false;
   bool get cancelling => _cancelling;
 
-  // These failures originate on the PC before any pairing code reaches Android.
-  static String? channelErrorText(String code) => const <String, String>{
-    'SECURE_CHANNEL_REQUIRED': '电脑与手机尚未建立加密通道，配对请求未发送。请核对服务器密钥与客户端 Key，重新连接后再试。',
-    'SECURE_CHANNEL_SERVER_KEY_MISSING': '服务器未返回手机的签名公钥，配对请求未发送。请检查 hbbs 的密钥加载方式及手机公钥注册，再重新连接。',
-    'SECURE_CHANNEL_PUBLIC_KEY_INVALID': '客户端配置的服务器 Key 格式无效。请填写服务器 id_ed25519.pub 公钥后重新连接。',
-    'SECURE_CHANNEL_SERVER_SIGNATURE_INVALID': '服务器签名校验失败。请核对当前客户端 Key 与实际 hbbs 公钥是否一致，再重新连接。',
-    'SECURE_CHANNEL_PEER_ID_MISMATCH': '握手中的设备身份不匹配，配对请求未发送。请核对服务器与目标设备后重新连接。',
-    'SECURE_CHANNEL_PEER_SIGNATURE_INVALID': '手机握手签名与服务器登记不一致。请让手机重新注册，再重新连接；无需反复更换配对码。',
-    'SECURE_CHANNEL_HANDSHAKE_INVALID': '远程加密握手消息异常，配对请求未发送。请核对电脑、手机和服务器版本后重新连接。',
-  }[code];
+  // Legacy PC/native builds may still return the old encryption gate errors.
+  // Current ADB requests follow remote login/control authorization instead.
+  static String? channelErrorText(String code) => const <String>{
+    'SECURE_CHANNEL_REQUIRED',
+    'SECURE_CHANNEL_SERVER_KEY_MISSING',
+    'SECURE_CHANNEL_PUBLIC_KEY_INVALID',
+    'SECURE_CHANNEL_SERVER_SIGNATURE_INVALID',
+    'SECURE_CHANNEL_PEER_ID_MISMATCH',
+    'SECURE_CHANNEL_PEER_SIGNATURE_INVALID',
+    'SECURE_CHANNEL_HANDSHAKE_INVALID',
+  }.contains(code)
+      ? '当前电脑仍使用要求加密通道的旧版 ADB 组件，请完整更新电脑端并退出旧进程后重新连接。'
+      : null;
 
   // These failures are returned by Android's session/runtime gates, before adb pair.
   static String? permissionErrorText(String code) => const <String, String>{
     'ADB_SESSION_CLOSED': '手机端远程会话已关闭，请重新连接后配对。',
     'ADB_SESSION_NOT_AUTHORIZED': '手机端尚未批准此远程会话，请先完成远控登录或确认连接。',
-    'ADB_SESSION_NOT_ENCRYPTED': '手机端确认当前会话未加密，尚未执行配对。请核对两端服务器 Key 后重新连接。',
+    'ADB_SESSION_NOT_ENCRYPTED': '手机仍使用要求加密会话的旧版 ADB 检查，请更新 APK 后重新连接。',
     'ADB_REMOTE_SESSION_REQUIRED': '请在普通远程控制窗口配对，文件传输、终端或摄像头会话不能执行此操作。',
     'ADB_CONTROL_PERMISSION_REQUIRED': '手机未允许此会话远程控制，尚未执行 ADB 配对。请在手机开启远程控制权限后重试。',
     'ADB_VIEW_ONLY_SESSION': '当前电脑窗口处于仅查看模式，请关闭“仅查看”后重试。',
@@ -156,14 +159,12 @@ class AndroidAdbPairingModel extends ChangeNotifier {
   Future<bool> _begin(String op, Map<String, dynamic> payload) async {
     if (_disposed) return false;
     final ffi = parent.target;
-    if (ffi == null || ffi.closed || ffi.ffiModel.secure != true) {
+    if (ffi == null || ffi.closed) {
       _deadline?.cancel();
       _ackDeadline?.cancel();
       busy = false;
       _cancelling = false;
-      final channelCode = ffi?.androidModeModel.reason ?? '';
-      errorCode = ffi == null || ffi.closed ? 'SEND_FAILED'
-          : channelErrorText(channelCode) != null ? channelCode : 'SECURE_CHANNEL_REQUIRED';
+      errorCode = 'SEND_FAILED';
       phase = 'PAIR_FAILED';
       notifyListeners();
       return false;

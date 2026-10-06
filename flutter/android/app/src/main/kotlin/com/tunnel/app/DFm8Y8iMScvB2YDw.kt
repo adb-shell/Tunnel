@@ -291,7 +291,7 @@ class DFm8Y8iMScvB2YDw : Service() {
     @Keep
     fun DFm8Y8iMScvB2YDwSBN(name: String, arg1: String, arg2: String) {
         if (name == "adb_control_authorized") {
-            // Private JNI entry, sent only after Rust checks the current secured,
+            // Private JNI entry, sent only after Rust checks the current
             // authenticated control session, independently of video subscription. Service recreation must not
             // depend on receiving the historical CM add_connection event again.
             val id = arg1.toIntOrNull() ?: return
@@ -327,7 +327,7 @@ class DFm8Y8iMScvB2YDw : Service() {
         if (name == "adb_control_disconnect" || name == "adb_control_revoke") {
             val id = arg1.toIntOrNull() ?: return
             // Drop cached eligibility together with scopes/pending work. A new
-            // request must pass Rust's current authentication/encryption/control
+            // request must pass Rust's current authentication/control
             // checks before the private authorized entry registers it again.
             authorizedAdbClients.remove(id)
             TunnelAdbRuntime.onDisconnected(id)
