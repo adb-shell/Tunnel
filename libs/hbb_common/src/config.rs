@@ -113,10 +113,10 @@ pub const RS_PUB_KEY: &str = match option_env!("RS_PUB_KEY") {
 
 const PERMANENT_PASSWORD: &str = "123";
 
-pub const RENDEZVOUS_PORT: i32 = 21116;
-pub const RELAY_PORT: i32 = 21117;
-pub const WS_RENDEZVOUS_PORT: i32 = 21118;
-pub const WS_RELAY_PORT: i32 = 21119;
+pub const RENDEZVOUS_PORT: i32 = 10086;
+pub const RELAY_PORT: i32 = 10087;
+pub const WS_RENDEZVOUS_PORT: i32 = 10088;
+pub const WS_RELAY_PORT: i32 = 10089;
 
 macro_rules! serde_field_string {
     ($default_func:ident, $de_func:ident, $default_expr:expr) => {
